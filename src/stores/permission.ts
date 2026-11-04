@@ -23,6 +23,13 @@ export const usePermissionStore = defineStore("permission", () => {
    * 生成动态路由
    */
   async function generateRoutes(): Promise<RouteRecordRaw[]> {
+    if (import.meta.env.VITE_DYNAMIC_ROUTES_ENABLED === "false") {
+      routes.value = [...constantRoutes];
+      mixLayoutSideMenus.value = [];
+      isRouteGenerated.value = true;
+      return [];
+    }
+
     try {
       const routeData = await MenuAPI.getRoutes();
       const menuRoutes = buildRoutes(routeData);

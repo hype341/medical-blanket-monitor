@@ -12,7 +12,7 @@
 
 ## 2. 核心约束
 
-- 一个床位可以绑定一个毯子传感器和多路摄像头。
+- 当前部署只有一路摄像头。有视频监护的床位由一个毯子传感器与这一路摄像头成组绑定。
 - 一个活跃绑定必须关联明确的床位，不能只关联病房。
 - 护士权限按病区分配，普通护士不能查看未授权病区。
 - 摄像头源地址、用户名和密码只允许保存在后端，禁止下发到浏览器。
@@ -33,7 +33,7 @@
 - 毯子传感器与摄像头设备档案。
 - 床位、传感器、摄像头和患者的绑定管理。
 - 传感器实时数据、历史数据和通信状态。
-- 摄像头实时预览和多路设备切换。
+- 单路摄像头实时预览、录像回放和告警片段定位。
 - 护士工作台、设备列表、绑定管理和基础系统管理。
 - Nginx、Spring Boot、MySQL、Redis、MQTT 和媒体服务的部署边界。
 
@@ -123,58 +123,25 @@ Bed 0..1 -> Patient
 `device_binding`：
 
 - `id`, `bed_id`, `sensor_device_id`, `camera_id`
-- `role`: `PRIMARY_SENSOR`, `PRIMARY_CAMERA`, `AUXILIARY_CAMERA`
+- `role`: `PRIMARY_SENSOR`, `PRIMARY_CAMERA`
 - `active_from`, `active_to`
 - `status`, `created_by`
 
 绑定记录保留历史。查询当前关系时只返回 `status=ACTIVE` 且当前时间位于有效区间内的记录。重新绑定不会覆盖旧记录。
 
-### 5.4 传感器指标
+### 5.4 传感器展示与数据处理
 
-设备模板定义指标，不对代码写死：
+当前毯子传感器没有温度、电量或其他已验证的业务指标。前端只显示一个传感器设备图形、设备名称、设备编号和连接状态，不展示推测出来的实时数值。
 
-```json
-{
-  "metrics": [
-    {
-      "key": "surfaceTemperature",
-      "label": "毯面温度",
-      "unit": "°C",
-      "dataType": "NUMBER",
-      "precision": 1
-    },
-    {
-      "key": "bodyTemperature",
-      "label": "体表温度",
-      "unit": "°C",
-      "dataType": "NUMBER",
-      "precision": 1
-    },
-    {
-      "key": "pressure",
-      "label": "压力",
-      "unit": "kPa",
-      "dataType": "NUMBER",
-      "precision": 2
-    }
-  ]
-}
-```
+传感器原始消息和历史数据保留通用接口：
 
-历史表使用读数行模型：
+- `SensorTelemetrySource` 接收标准化 MQTT 遥测消息。
+- `SensorDataProcessor` 接收遥测消息并返回识别结果。
+- `CameraFrameSource` 接收标准化视频帧。
+- `VideoFrameProcessor` 接收视频帧并返回识别结果。
+- 传感器图形刷新频率可配置为 1 Hz、5 Hz、10 Hz 或 25 Hz。
 
-`sensor_reading`：
-
-- `id`, `sensor_device_id`, `bed_id`
-- `metric_key`, `value_number`, `value_text`, `unit`
-- `observed_at`, `received_at`
-
-最新值写入 Redis：
-
-```text
-sensor:latest:{deviceKey}
-sensor:status:{deviceKey}
-```
+后续离床、跌倒或厂商定义的其他识别规则均以处理器插件接入，不修改传感器图形和床位业务模型。识别结果使用统一的 `DataFinding` 结构，包含编码、严重程度、标题、详情、床位、设备和时间等字段。
 
 ## 6. 角色与权限
 
@@ -183,8 +150,10 @@ sensor:status:{deviceKey}
 | 查看授权病区实时数据 | 是 | 是 | 是 |
 | 查看授权病区摄像头 | 是 | 是 | 是 |
 | 查看历史曲线 | 是 | 是 | 是 |
-| 管理床位设备绑定 | 否 | 授权病区 | 全部 |
-| 管理设备档案 | 否 | 授权病区 | 全部 |
+| 新增床位 | 是 | 是 | 是 |
+| 修改患者信息和患者状态 | 授权病区 | 授权病区 | 全部 |
+| 管理床位设备绑定 | 否 | 否 | 全部 |
+| 管理设备档案 | 否 | 否 | 全部 |
 | 管理用户与病区权限 | 否 | 否 | 全部 |
 | 创建公开 API 密钥 | 否 | 否 | 全部 |
 
@@ -197,8 +166,8 @@ sensor:status:{deviceKey}
 - `/login`：账号密码登录。
 - `/overview`：病区安全总览，显示床位状态、告警、在线率。
 - `/beds`：护士工作台，按病区、病房筛选床位卡片。
-- `/beds/:bedId`：床位详情，左侧视频，右侧传感器实时指标和趋势。
-- `/monitor`：多路视频墙，只展示当前用户有权访问的摄像头。
+- `/beds/:bedId`：床位详情，左侧视频、回放与告警，右侧传感器图形、刷新频率和识别扩展位。
+- `/monitor`：当前唯一摄像头的实时监控与回放入口。
 - `/devices/sensors`：毯子传感器列表与状态。
 - `/devices/cameras`：摄像头列表、接入协议、媒体路径和连通状态。
 - `/bindings`：床位设备绑定管理。
@@ -210,10 +179,10 @@ sensor:status:{deviceKey}
 1. 护士登录。
 2. 系统返回其负责病区。
 3. 工作台按病房分组显示床位卡片。
-4. 卡片展示最新传感器指标、设备在线状态和摄像头缩略状态。
+4. 卡片展示传感器设备图形、连接状态和是否完成摄像头成组绑定。
 5. 点击卡片进入床位详情。
-6. 详情页并行加载传感器最新值、历史曲线和对应摄像头播放清单。
-7. 摄像头可切换主视角和辅助视角。
+6. 详情页并行加载传感器连接状态、摄像头播放清单、录像分段和告警时间线。
+7. 当前没有实时数据或录像时显示明确空状态，不生成模拟数值或假进度。
 
 ### 7.3 视觉方向
 
@@ -284,6 +253,27 @@ Authorization: Bearer {jwt}
 
 摄像头源凭证永远不进入播放地址。
 
+### 8.4 录像回放与告警片段
+
+MediaMTX 负责持续生成录像分段，后端提供分段索引和短期播放地址。前端时间轴按服务端保留期滚动前进，过期分段从时间轴消失。
+
+前端回放接口：
+
+```ts
+interface RecordingTimelineSource {
+  query(cameraKey: string, startAt: string, endAt: string): Promise<RecordingSegment[]>
+}
+
+interface RecordingClipService {
+  requestClip(
+    alarm: AlarmEnvelope,
+    window: { startAt: string; endAt: string },
+  ): Promise<{ clipId: string; status: "PENDING" | "READY" | "FAILED" }>
+}
+```
+
+回放时间轴支持向前和向后定位、播放暂停、按时间拖动以及点击告警点跳转。当前未接入录像时只显示“暂无录像片段”，不生成假进度。
+
 ## 9. MQTT 与 WebSocket
 
 ### 9.1 Topic
@@ -332,7 +322,42 @@ medical-blanket/v1/+/+/+/sensor/+/telemetry
 - 接收时间与设备观测时间分开保存。
 - MQTT 入站成功后，先更新 Redis 和 WebSocket，再异步批量写 MySQL。
 
-### 9.3 WebSocket
+### 9.3 告警主题
+
+告警主题：
+
+```text
+medical-blanket/v1/{hospitalCode}/{wardCode}/{bedCode}/alarm/{alarmCode}
+```
+
+告警消息：
+
+```json
+{
+  "alarmId": "alarm-01",
+  "code": "SENSOR_STATE_CHANGED",
+  "level": "WARNING",
+  "status": "OPEN",
+  "title": "传感器状态异常",
+  "detail": "设备上报状态变化",
+  "sensorKey": "blanket-001",
+  "cameraKey": "camera-01",
+  "bedId": "bed-a-01",
+  "occurredAt": "2026-11-04T17:04:20+08:00"
+}
+```
+
+Java 后端收到告警后：
+
+1. 保存告警编码、标题、详情、设备和发生时间。
+2. 通过 WebSocket 推送到已授权病区的护士工作台。
+3. 按默认“前 30 秒、后 60 秒”时间窗请求 MediaMTX 生成独立录像片段。
+4. 保存片段索引、存储位置、创建状态和保留截止时间。
+5. 前端在告警时间线和录像时间轴同一时间点显示定位标记。
+
+告警状态为 `OPEN`、`ACKNOWLEDGED` 或 `RESOLVED`。未解决告警统一显示红色；护士标记解决后写入 `resolvedAt`，告警卡片和对应时间轴标记变为绿色。
+
+### 9.4 WebSocket
 
 浏览器连接：
 
@@ -349,11 +374,9 @@ medical-blanket/v1/+/+/+/sensor/+/telemetry
   "deviceKey": "blanket-001",
   "observedAt": "2026-11-04T16:30:00+08:00",
   "status": "ONLINE",
-  "metrics": {
-    "surfaceTemperature": 33.4,
-    "bodyTemperature": 36.7,
-    "pressure": 4.82
-  }
+  "metrics": {},
+  "events": [],
+  "displayRefreshFps": 1
 }
 ```
 
@@ -382,7 +405,7 @@ GET    /api/v1/beds/{bedId}/monitor
 GET    /api/v1/beds/{bedId}/sensor-readings?from=&to=
 ```
 
-`/beds/{bedId}/monitor` 一次返回床位、最新传感器指标、在线状态和所有已绑定摄像头的播放清单，减少护士详情页的串行请求。
+`/beds/{bedId}/monitor` 一次返回床位、传感器图形所需的设备信息、在线状态、唯一摄像头播放清单、录像分段和告警摘要，减少护士详情页的串行请求。
 
 ### 10.3 设备与绑定
 
@@ -415,7 +438,7 @@ GET /api/public/v1/cameras/{cameraKey}/playback?key={apiKey}
 - Redis 不可用：业务查询回退 MySQL 最新快照，并显示“实时状态暂不可用”。
 - EMQX 离线：床位数据保留最后更新时间，状态超过阈值后变为 `STALE`。
 - MediaMTX 离线：摄像头显示离线，传感器数据仍正常工作。
-- 某一路摄像头失败：只影响该摄像头，不阻塞床位详情其他内容。
+- 当前摄像头失败：只影响实时画面、回放和告警片段，不阻塞传感器图形。
 - WebSocket 断开：前端继续使用最近一次快照，并显示重连状态。
 - MQTT 消息重复：按 `messageId` 丢弃重复写入。
 - 绑定冲突：同一床位同一角色只能有一个活跃主传感器或主摄像头。
@@ -461,8 +484,8 @@ GET /api/public/v1/cameras/{cameraKey}/playback?key={apiKey}
 ### 里程碑 A：业务骨架与护士工作台
 
 - 将现有前端品牌改为“医用智能毯安全监护平台”。
-- 建立医院、病区、病房、床位、设备、绑定的前端页面与 Mock 数据。
-- 完成多摄像头播放器适配器和模拟视频墙。
+- 建立医院、病区、病房、床位、设备成组绑定的前端页面与 Mock 数据。
+- 完成单路摄像头播放器、滚动回放时间线和告警时间线。
 - 完成护士按病区查看床位与视频详情的交互。
 
 ### 里程碑 B：Java 主控与数据库
@@ -484,6 +507,7 @@ GET /api/public/v1/cameras/{cameraKey}/playback?key={apiKey}
 - 根据摄像头可达后的实际协议录入 RTSP/RTMP/SRT 来源。
 - 实现 WebRTC、HLS、FLV 多协议播放和 Nginx `/live` 代理。
 - 增加媒体断流、重连和线路自动降级。
+- 配置滚动录像保留；告警消息触发告警前 30 秒至后 60 秒的片段保存。
 
 ### 里程碑 E：生产加固
 
@@ -501,8 +525,16 @@ GET /api/public/v1/cameras/{cameraKey}/playback?key={apiKey}
 
 - 平台名称使用“医用智能毯安全监护平台”。
 - 业务绑定粒度使用床位。
-- 一个床位允许一个毯子传感器和多路摄像头。
+- 当前只登记一路摄像头，不提供侧视角或多路切换。
+- 一个毯子传感器与摄像头按床位成组绑定。
+- 当前传感器没有温度、压力或电量指标，页面只显示传感器设备图形。
+- 传感器图形帧率可填写，范围为 0.1–10 帧/秒，并提供 1、2、5、10 帧/秒快捷选项。
+- 护士可以新增床位，并维护授权病区内的患者信息和患者状态。
+- 只有管理员可以修改摄像头与传感器的绑定关系。
 - 护士权限按病区分配。
 - 摄像头接入使用标准协议适配层，不依赖特定厂商页面。
 - 前端播放协议优先 WebRTC，其次 HLS，最后 HTTP-FLV。
+- MQTT 告警主题记录事件内容、发生时间和对应摄像头，并触发录像片段保存。
+- 未解决告警显示红色，标记解决后显示绿色和解决时间。
+- 录像时间轴滚动前进，超出服务端保留期的片段从查询结果和界面中消失。
 - 第一阶段先建立通用业务骨架，待摄像头网络可达后录入真实媒体参数。

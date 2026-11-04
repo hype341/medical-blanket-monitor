@@ -10,6 +10,7 @@ interface ImportMetaEnv {
   readonly VITE_AI_ENABLED?: string;
   readonly VITE_OIDC_ENABLED?: string;
   readonly VITE_MOCK_ENABLED?: string;
+  readonly VITE_DYNAMIC_ROUTES_ENABLED?: string;
 }
 
 interface ImportMeta {

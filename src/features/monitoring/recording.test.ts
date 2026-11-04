@@ -1,0 +1,70 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildClipWindow,
+  findPlaybackSegment,
+  parseAlarmMessage,
+  pruneExpiredSegments,
+} from "./recording";
+
+const segments = [
+  {
+    id: "segment-01",
+    cameraKey: "camera-01",
+    startAt: "2026-11-04T17:00:00+08:00",
+    endAt: "2026-11-04T17:05:00+08:00",
+    playbackUrl: "/live/recordings/camera-01/segment-01/index.m3u8",
+  },
+  {
+    id: "segment-02",
+    cameraKey: "camera-01",
+    startAt: "2026-11-04T17:05:00+08:00",
+    endAt: "2026-11-04T17:10:00+08:00",
+    playbackUrl: "/live/recordings/camera-01/segment-02/index.m3u8",
+  },
+];
+
+describe("alarm MQTT contract", () => {
+  it("parses an alarm with its camera, bed and occurrence time", () => {
+    const alarm = parseAlarmMessage(
+      JSON.stringify({
+        alarmId: "alarm-01",
+        code: "TEMPERATURE_HIGH",
+        level: "WARNING",
+        title: "传感器状态异常",
+        detail: "设备上报状态变化",
+        sensorKey: "blanket-001",
+        cameraKey: "camera-01",
+        bedId: "bed-a-01",
+        occurredAt: "2026-11-04T17:04:20+08:00",
+      }),
+    );
+
+    expect(alarm?.cameraKey).toBe("camera-01");
+    expect(alarm?.occurredAt).toBe("2026-11-04T17:04:20+08:00");
+    expect(alarm?.status).toBe("OPEN");
+  });
+});
+
+describe("recording clip window", () => {
+  it("keeps the configured time before and after an alarm", () => {
+    expect(
+      buildClipWindow("2026-11-04T17:04:20+08:00", {
+        beforeSeconds: 30,
+        afterSeconds: 60,
+      }),
+    ).toEqual({
+      startAt: "2026-11-04T17:03:50+08:00",
+      endAt: "2026-11-04T17:05:20+08:00",
+    });
+  });
+});
+
+describe("rolling recording timeline", () => {
+  it("finds the segment containing a requested timestamp", () => {
+    expect(findPlaybackSegment(segments, "2026-11-04T17:07:00+08:00")?.id).toBe("segment-02");
+  });
+
+  it("removes segments outside the server retention window", () => {
+    expect(pruneExpiredSegments(segments, "2026-11-04T17:10:00+08:00", 6)).toEqual([segments[1]]);
+  });
+});

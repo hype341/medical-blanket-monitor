@@ -5,6 +5,7 @@ node_modules/
 dist/
 dist-ssr/
 stats.html
+test-results/
 
 # Local env files
 *.local

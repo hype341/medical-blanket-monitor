@@ -65,8 +65,64 @@ export const constantRoutes: RouteRecordRaw[] = [
     path: "/",
     name: "/",
     component: Layout,
-    redirect: "/dashboard",
+    redirect: "/overview",
     children: [
+      {
+        path: "overview",
+        name: "SafetyOverview",
+        component: () => import("@/features/monitoring/views/OverviewView.vue"),
+        meta: {
+          title: "安全总览",
+          icon: "homepage",
+          affix: true,
+        },
+      },
+      {
+        path: "beds",
+        name: "BedMonitoring",
+        component: () => import("@/features/monitoring/views/BedListView.vue"),
+        meta: {
+          title: "床位监护",
+          icon: "table",
+        },
+      },
+      {
+        path: "beds/:bedId",
+        name: "BedMonitoringDetail",
+        component: () => import("@/features/monitoring/views/BedDetailView.vue"),
+        meta: {
+          title: "床位详情",
+          icon: "table",
+          hidden: true,
+        },
+      },
+      {
+        path: "monitor",
+        name: "MonitoringVideoWall",
+        component: () => import("@/features/monitoring/views/VideoWallView.vue"),
+        meta: {
+          title: "实时监控",
+          icon: "monitor",
+        },
+      },
+      {
+        path: "bindings",
+        name: "DeviceBindings",
+        component: () => import("@/features/monitoring/views/BindingsView.vue"),
+        meta: {
+          title: "设备绑定",
+          icon: "api",
+        },
+      },
+      {
+        path: "devices/cameras",
+        name: "CameraManagement",
+        component: () => import("@/features/monitoring/views/CameraListView.vue"),
+        meta: {
+          title: "摄像头管理",
+          icon: "scan",
+        },
+      },
       {
         path: "dashboard",
         component: () => import("@/views/dashboard/index.vue"),
@@ -78,6 +134,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           icon: "homepage",
           affix: true,
           keepAlive: true,
+          hidden: true,
         },
       },
       {

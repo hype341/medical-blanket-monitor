@@ -18,27 +18,27 @@
         <div class="login-brand__hero">
           <el-tag class="login-brand__tag" type="primary" effect="plain" round>
             <span class="login-brand__tag-dot" />
-            Enterprise Ready
+            Medical Safety
           </el-tag>
-          <h1 class="login-brand__title">开箱即用的企业级中后台解决方案</h1>
+          <h1 class="login-brand__title">让每一张病床的状态与画面清晰可见</h1>
           <div class="login-brand__features">
             <div class="login-brand__feature">
               <span class="login-brand__feature-mark">
                 <span class="login-brand__feature-icon i-svg:security" />
               </span>
-              <span class="login-brand__feature-text">安全可靠</span>
+              <span class="login-brand__feature-text">毯温感知</span>
             </div>
             <div class="login-brand__feature">
               <span class="login-brand__feature-mark">
                 <el-icon class="login-brand__feature-icon"><Clock /></el-icon>
               </span>
-              <span class="login-brand__feature-text">高效稳定</span>
+              <span class="login-brand__feature-text">视频联动</span>
             </div>
             <div class="login-brand__feature">
               <span class="login-brand__feature-mark">
                 <span class="login-brand__feature-icon i-svg:flexible" />
               </span>
-              <span class="login-brand__feature-text">灵活扩展</span>
+              <span class="login-brand__feature-text">病区协同</span>
             </div>
           </div>
         </div>
@@ -126,18 +126,21 @@
               </el-form>
 
               <div class="login-card__demo">
-                <div class="login-card__demo-title">
-                  工作流演示账号 · 密码统一 123456，点击直接填入
-                </div>
+                <div class="login-card__demo-title">演示账号密码统一为 123456</div>
                 <div class="flex flex-wrap gap-8px">
                   <button
-                    v-for="account in demoAccounts"
-                    :key="account.username"
                     type="button"
                     class="login-card__demo-chip"
-                    @click="fillDemoAccount(account)"
+                    @click="fillDemoAccount('admin')"
                   >
-                    {{ account.label }}
+                    管理员演示
+                  </button>
+                  <button
+                    type="button"
+                    class="login-card__demo-chip"
+                    @click="fillDemoAccount('nurse')"
+                  >
+                    护士演示
                   </button>
                 </div>
               </div>
@@ -170,7 +173,7 @@
           </transition>
         </div>
 
-        <div class="login-footer">Copyright © 2021-2026 youlai.tech</div>
+        <div class="login-footer">医用智能毯安全监护平台 · 医疗数据仅限授权人员使用</div>
       </div>
     </div>
   </div>
@@ -184,6 +187,7 @@ import type { FormInstance } from "element-plus";
 import AuthAPI, { OIDC_AUTHORIZATION_URL } from "@/api/auth";
 import type { LoginRequest } from "@/api/auth";
 import router from "@/router";
+import { useMonitoringStore } from "@/features/monitoring/store";
 import { useUserStore } from "@/stores";
 import { AuthStorage } from "@/utils/auth";
 import { appConfig } from "@/settings";
@@ -192,6 +196,7 @@ import QrCodeLogin from "./components/QrCodeLogin.vue";
 import logo from "@/assets/images/logo.png";
 
 const userStore = useUserStore();
+const monitoringStore = useMonitoringStore();
 const route = useRoute();
 const component = ref<"login" | "resetPwd" | "qrcode">("login");
 
@@ -205,7 +210,7 @@ const UserIcon = markRaw(User);
 const LockIcon = markRaw(Lock);
 
 const loginFormData = ref<LoginRequest>({
-  username: "youlai",
+  username: "admin",
   password: "123456",
   captchaId: "",
   captchaCode: "",
@@ -221,20 +226,11 @@ const loginRules = computed(() => ({
   captchaCode: [{ required: true, trigger: "blur", message: "请输入验证码" }],
 }));
 
-// 工作流演示账号，与 workflow.sql 预置数据一致
-const demoAccounts = [
-  { username: "employee", label: "员工·发起" },
-  { username: "dept_manager", label: "部门主管·审批" },
-  { username: "manager", label: "总经理" },
-  { username: "finance", label: "财务" },
-  { username: "clerk", label: "行政" },
-];
-
 /**
  * 填充演示账号
  */
-function fillDemoAccount(account: { username: string }): void {
-  loginFormData.value.username = account.username;
+function fillDemoAccount(username: "admin" | "nurse"): void {
+  loginFormData.value.username = username;
   loginFormData.value.password = "123456";
 }
 
@@ -265,6 +261,9 @@ async function handleLoginSubmit() {
   try {
     await userStore.login(loginFormData.value).then(
       async () => {
+        const isNurse = loginFormData.value.username === "nurse";
+        monitoringStore.setActiveRole(isNurse ? "NURSE" : "ADMIN");
+        monitoringStore.setCurrentWardIds(isNurse ? ["ward-a"] : ["ward-a", "ward-b"]);
         const redirectPath = (route.query.redirect as string) || "/";
         await router.push(decodeURIComponent(redirectPath));
       },

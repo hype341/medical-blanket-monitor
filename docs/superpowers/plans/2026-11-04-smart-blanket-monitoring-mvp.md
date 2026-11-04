@@ -1,8 +1,10 @@
 # 医用智能毯安全监护平台前端 MVP 实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** 将现有视频测试页改造成可演示的医院智能毯监护前端 MVP，包含多摄像头、传感器数据、床位绑定和按病区访问的护士工作台。
+> **执行修订（2026-11-04）：** 执行期间用户确认当前只有一路摄像头，取消侧视角和多路视频墙；毯子传感器没有温度、压力或电量指标，只显示设备图形，图形帧率可填写 0.1–10 帧/秒；护士可新增床位并维护患者信息和状态，设备绑定仅管理员可修改；告警未解决为红色、解决后为绿色；录像采用滚动时间轴，并为 MQTT 告警保存前后片段。最终实现以上述修订和设计文档为准。
+
+**Goal:** 将现有视频测试页改造成可演示的医院智能毯监护前端 MVP，包含单路摄像头、传感器设备图形、床位成组绑定、滚动回放、告警时间线和按病区访问的护士工作台。
 
 **Architecture:** 在 vue3-element-admin 的 Layout 内增加一组产品静态路由，域模型与展示组件分离。业务数据先由 Mock 数据集和 Pinia store 提供，接口形态遵循 [平台设计](../../specs/2026-11-04-smart-blanket-monitoring-platform-design.md)，后续 Java API 可原位替换。
 
@@ -44,7 +46,7 @@
 - Produces: `selectPlaybackProtocol(playback): "webrtc" | "hls" | "flv" | null`
 - Produces: `filterBedSummaries(summaries, filters): BedMonitorSummary[]`
 
-- [ ] **Step 1: 安装测试工具**
+- [x] **Step 1: 安装测试工具**
 
 Run:
 
@@ -70,7 +72,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 2: 写失败的选择器测试**
+- [x] **Step 2: 写失败的选择器测试**
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -115,7 +117,7 @@ describe("selectPlaybackProtocol", () => {
 });
 ```
 
-- [ ] **Step 3: 运行测试并确认失败**
+- [x] **Step 3: 运行测试并确认失败**
 
 Run:
 
@@ -125,7 +127,7 @@ corepack pnpm exec vitest run src/features/monitoring/selectors.test.ts
 
 Expected: FAIL，提示找不到 `selectors` 模块。
 
-- [ ] **Step 4: 写最小类型和选择器实现**
+- [x] **Step 4: 写最小类型和选择器实现**
 
 类型至少包含：
 
@@ -138,7 +140,7 @@ export type PlaybackProtocol = "webrtc" | "hls" | "flv";
 
 `selectPlaybackProtocol` 固定按 WebRTC、HLS、FLV 的地址可用性选择。`getBedMonitorSummary` 只使用 `ACTIVE` 绑定。
 
-- [ ] **Step 5: 运行测试并确认通过**
+- [x] **Step 5: 运行测试并确认通过**
 
 Run:
 
@@ -164,7 +166,7 @@ Expected: PASS。
 - Produces: `store.currentWardIds`
 - Produces: `store.updateBinding(input)`
 
-- [ ] **Step 1: 写失败的病区过滤和绑定更新测试**
+- [x] **Step 1: 写失败的病区过滤和绑定更新测试**
 
 ```ts
 import { createPinia, setActivePinia } from "pinia";
@@ -193,7 +195,7 @@ describe("monitoring store", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -203,7 +205,7 @@ corepack pnpm exec vitest run src/features/monitoring/store.test.ts
 
 Expected: FAIL，提示找不到 `store` 模块。
 
-- [ ] **Step 3: 写 Mock 数据**
+- [x] **Step 3: 写 Mock 数据**
 
 数据不少于：
 
@@ -214,11 +216,11 @@ Expected: FAIL，提示找不到 `store` 模块。
 - 10 路摄像头，其中至少 2 张床位绑定多路摄像头。
 - 在线、离线、数据陈旧和告警状态各至少一条。
 
-- [ ] **Step 4: 写最小 Pinia store**
+- [x] **Step 4: 写最小 Pinia store**
 
 `visibleBeds` 按 `currentWardIds` 过滤。`updateBinding` 只结束目标床位的现有活跃绑定，然后创建新绑定，不影响其他床位。
 
-- [ ] **Step 5: 运行测试并确认通过**
+- [x] **Step 5: 运行测试并确认通过**
 
 Run:
 
@@ -246,7 +248,7 @@ Expected: PASS。
 - Consumes: Task 2 页面组件路径。
 - Produces: 静态产品路由 `/overview`, `/beds`, `/beds/:bedId`, `/monitor`, `/bindings`, `/devices/cameras`
 
-- [ ] **Step 1: 写失败的路由契约检查**
+- [x] **Step 1: 写失败的路由契约检查**
 
 在 `selectors.test.ts` 增加路由导入测试：
 
@@ -262,19 +264,19 @@ it("registers hospital product routes", () => {
 
 Expected: FAIL，因为路由尚未注册。
 
-- [ ] **Step 2: 注册路由并设置产品首页**
+- [x] **Step 2: 注册路由并设置产品首页**
 
 根路径重定向到 `/overview`。导航标题依次为“安全总览”“床位监护”“视频墙”“设备绑定”“摄像头管理”。
 
-- [ ] **Step 3: 关闭模板动态演示菜单**
+- [x] **Step 3: 关闭模板动态演示菜单**
 
 增加 `VITE_DYNAMIC_ROUTES_ENABLED`。开发和生产都设为 `false`，让当前产品菜单完全由静态产品路由提供；保留原代码路径供接入 Java 动态权限菜单时重新启用。
 
-- [ ] **Step 4: 更新品牌文案**
+- [x] **Step 4: 更新品牌文案**
 
 浏览器标题、登录页主标题、侧边栏名称统一使用“医用智能毯安全监护平台”。登录默认账号改为 `admin`。
 
-- [ ] **Step 5: 运行路由测试和类型检查**
+- [x] **Step 5: 运行路由测试和类型检查**
 
 Run:
 
@@ -304,7 +306,7 @@ Expected: 两条命令均退出码 0。
 - Produces: 安全总览统计和床位卡片。
 - Produces: `/beds/:bedId` 床位详情。
 
-- [ ] **Step 1: 写失败的浏览器流程测试**
+- [x] **Step 1: 写失败的浏览器流程测试**
 
 Playwright 流程：
 
@@ -345,19 +347,19 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 2: 实现总览**
+- [x] **Step 2: 实现总览**
 
 总览显示：监测床位数、在线传感器数、视频在线数、异常/离线数、病区状态和最近告警。
 
-- [ ] **Step 3: 实现床位列表**
+- [x] **Step 3: 实现床位列表**
 
 按病区、病房和状态筛选。每张卡片显示病房床位、传感器状态、关键指标和已绑定摄像头数量。
 
-- [ ] **Step 4: 实现床位详情**
+- [x] **Step 4: 实现床位详情**
 
 详情左右分栏：左侧视频区域，右侧传感器指标和趋势。窄屏改为上下布局。未接入视频显示“摄像头待接入”，不显示虚构画面。
 
-- [ ] **Step 5: 运行浏览器测试**
+- [x] **Step 5: 运行浏览器测试**
 
 Run:
 
@@ -384,7 +386,7 @@ Expected: PASS。
 - Produces: `<UniversalVideoPlayer :camera="camera" :playback="playback" />`
 - Produces: `getPlaybackCandidates(playback): PlaybackCandidate[]`
 
-- [ ] **Step 1: 安装媒体依赖**
+- [x] **Step 1: 安装媒体依赖**
 
 Run:
 
@@ -394,7 +396,7 @@ corepack pnpm add hls.js flv.js
 
 Expected: 两个依赖出现在 `dependencies`。
 
-- [ ] **Step 2: 写失败的协议候选测试**
+- [x] **Step 2: 写失败的协议候选测试**
 
 ```ts
 it("returns protocols in WebRTC, HLS, FLV order", () => {
@@ -412,15 +414,15 @@ it("omits protocols without a URL", () => {
 
 Expected: FAIL，因为 `usePlayback` 尚不存在。
 
-- [ ] **Step 3: 实现播放器**
+- [x] **Step 3: 实现播放器**
 
 WebRTC 使用 WHEP；HLS 动态导入 `hls.js`；FLV 动态导入 `flv.js`。协议失败时切换下一候选，全部失败则显示离线状态和重试按钮。组件卸载时释放播放器和媒体连接。
 
-- [ ] **Step 4: 实现视频墙**
+- [x] **Step 4: 实现视频墙**
 
 视频墙按病房筛选，支持 1/4/9 宫格。每路卡片显示摄像头名称、病区病房床位、协议和状态。空地址显示待接入。
 
-- [ ] **Step 5: 运行协议测试和浏览器测试**
+- [x] **Step 5: 运行协议测试和浏览器测试**
 
 Run:
 
@@ -445,7 +447,7 @@ Expected: PASS。
 - Consumes: `store.updateBinding(input)`。
 - Produces: 按床位查看和修改传感器、主摄像头、辅助摄像头。
 
-- [ ] **Step 1: 写失败的绑定成功提示测试**
+- [x] **Step 1: 写失败的绑定成功提示测试**
 
 ```ts
 await page.getByText("设备绑定").first().click();
@@ -456,15 +458,15 @@ await expect(page.getByText("绑定已保存")).toBeVisible();
 
 Expected: FAIL，因为绑定页尚不存在。
 
-- [ ] **Step 2: 实现绑定列表**
+- [x] **Step 2: 实现绑定列表**
 
 按病房床位显示传感器、主摄像头和辅助摄像头。没有绑定时显示“未绑定”。
 
-- [ ] **Step 3: 实现绑定编辑**
+- [x] **Step 3: 实现绑定编辑**
 
 每个床位选择传感器、主摄像头和辅助摄像头。保存前检查主摄像头不能与辅助摄像头重复。
 
-- [ ] **Step 4: 运行 store 和浏览器测试**
+- [x] **Step 4: 运行 store 和浏览器测试**
 
 Run:
 
@@ -487,7 +489,7 @@ Expected: PASS。
 - Consumes: 已完成前端页面。
 - Produces: Nginx 可部署的医院监护前端。
 
-- [ ] **Step 1: 运行完整静态检查**
+- [x] **Step 1: 运行完整静态检查**
 
 Run:
 
@@ -497,7 +499,7 @@ corepack pnpm run check
 
 Expected: 退出码 0。
 
-- [ ] **Step 2: 运行完整单元测试**
+- [x] **Step 2: 运行完整单元测试**
 
 Run:
 
@@ -507,7 +509,7 @@ corepack pnpm exec vitest run
 
 Expected: 0 failures。
 
-- [ ] **Step 3: 构建生产包**
+- [x] **Step 3: 构建生产包**
 
 Run:
 
@@ -517,7 +519,7 @@ corepack pnpm run build
 
 Expected: 退出码 0。
 
-- [ ] **Step 4: 启动 Mock 开发服务并执行 Playwright**
+- [x] **Step 4: 启动 Mock 开发服务并执行 Playwright**
 
 Run:
 
@@ -528,7 +530,7 @@ corepack pnpm exec playwright test ui-monitoring.spec.ts --project=chromium
 
 Expected: 登录、总览、床位详情、视频墙和绑定流程全部通过。
 
-- [ ] **Step 5: 部署到 `192.168.86.128`**
+- [x] **Step 5: 部署到 `192.168.86.128`**
 
 Run:
 
@@ -549,7 +551,7 @@ systemctl reload nginx
 
 Expected: 首页 HTTP 200，静态资源 HTTP 200，Nginx 配置测试成功。
 
-- [ ] **Step 6: 检查最终变更**
+- [x] **Step 6: 检查最终变更**
 
 Run:
 
