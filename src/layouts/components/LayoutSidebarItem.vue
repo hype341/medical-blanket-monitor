@@ -30,6 +30,16 @@
       </AppLink>
     </template>
 
+    <template v-else-if="!item.meta?.title">
+      <LayoutSidebarItem
+        v-for="child in item.children"
+        :key="child.path"
+        :is-nest="true"
+        :item="child"
+        :base-path="resolvePath(child.path)"
+      />
+    </template>
+
     <el-sub-menu v-else :index="resolvePath(item.path)" :data-path="item.path" teleported>
       <template #title>
         <template v-if="item.meta">

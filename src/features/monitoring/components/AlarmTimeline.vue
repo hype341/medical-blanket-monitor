@@ -33,14 +33,19 @@
           </p>
           <small v-if="alarm.resolvedAt">解决于 {{ formatTime(alarm.resolvedAt) }}</small>
         </div>
-        <button
-          v-if="alarm.status !== 'RESOLVED'"
-          type="button"
-          @click="emit('resolve', alarm.alarmId)"
-        >
-          标记已解决
-        </button>
-        <button v-else type="button" @click="emit('remove', alarm.alarmId)">删除记录</button>
+        <div class="alarm-timeline__actions">
+          <button type="button" class="is-playback" @click="emit('open-recording', alarm)">
+            查看回放
+          </button>
+          <button
+            v-if="alarm.status !== 'RESOLVED'"
+            type="button"
+            @click="emit('resolve', alarm.alarmId)"
+          >
+            标记已解决
+          </button>
+          <button v-else type="button" @click="emit('remove', alarm.alarmId)">删除记录</button>
+        </div>
       </li>
     </ol>
 
@@ -80,6 +85,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   resolve: [alarmId: string];
   remove: [alarmId: string];
+  "open-recording": [alarm: AlarmEnvelope];
 }>();
 
 const unresolvedCount = computed(
@@ -486,6 +492,19 @@ function formatTime(value: string): string {
   }
 }
 
+.alarm-timeline__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  justify-content: flex-end;
+
+  button.is-playback {
+    color: #2d6d5e;
+    border-color: #a9cdbf;
+  }
+}
+
 .alarm-timeline__list li[data-status="RESOLVED"] button {
   color: #2d7d62;
   border-color: #a9cdbf;
@@ -504,6 +523,10 @@ function formatTime(value: string): string {
 
   .alarm-timeline__list button {
     justify-self: start;
+  }
+
+  .alarm-timeline__actions {
+    justify-content: flex-start;
   }
 }
 </style>

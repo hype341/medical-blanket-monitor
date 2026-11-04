@@ -69,6 +69,7 @@
           :topic="summary.alarmTopic ?? ''"
           @resolve="store.resolveAlarm"
           @remove="store.removeAlarm"
+          @open-recording="openAlarmRecording"
         />
       </section>
 
@@ -214,12 +215,14 @@ const playbackPositionAt = ref("");
 let recordingTimer: ReturnType<typeof setInterval> | null = null;
 const alarms = computed(() => store.alarms.filter((alarm) => alarm.bedId === route.params.bedId));
 
-function openRecordingAt(targetAt: string): void {
+function openRecordingAt(targetAt: string): boolean {
   const segment = findPlaybackSegment(recordingSegments.value, targetAt, 2_000);
   if (segment) {
     recordingAt.value = targetAt;
     playbackPositionAt.value = targetAt;
+    return true;
   }
+  return false;
 }
 
 function returnToLive(): void {
@@ -232,7 +235,13 @@ function seekRecording(targetAt: string): void {
 }
 
 function selectAlarm(alarm: AlarmEnvelope): void {
-  openRecordingAt(alarm.occurredAt);
+  openAlarmRecording(alarm);
+}
+
+function openAlarmRecording(alarm: AlarmEnvelope): void {
+  if (!openRecordingAt(alarm.occurredAt)) {
+    ElMessage.warning("该告警时刻暂无对应录像片段");
+  }
 }
 
 function savePatient(input: PatientUpdateInput): void {

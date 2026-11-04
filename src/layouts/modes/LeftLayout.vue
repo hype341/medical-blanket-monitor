@@ -7,10 +7,6 @@
     >
       <div :class="{ 'has-logo': showLogo }" class="layout-sidebar__inner">
         <LayoutLogo v-if="showLogo" :collapse="!isSidebarOpen" />
-        <div v-if="isSidebarOpen" class="layout-sidebar__section">
-          <span>功能列表</span>
-          <small>{{ routes.length }} 个模块</small>
-        </div>
         <el-scrollbar>
           <LayoutSidebar :data="routes" base-path="" />
         </el-scrollbar>
@@ -71,32 +67,12 @@ const appStore = useAppStore();
 
     &.has-logo {
       .el-scrollbar {
-        height: calc(100vh - $navbar-height - 42px);
+        @include sidebar-scroll-height-with-logo;
       }
     }
 
     :deep(.el-menu) {
       border: none;
-    }
-  }
-
-  &__section {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 42px;
-    padding: 0 16px;
-    color: var(--menu-text);
-
-    span {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-    }
-
-    small {
-      font-size: 9px;
-      color: color-mix(in srgb, var(--menu-text) 62%, transparent);
     }
   }
 }

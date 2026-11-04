@@ -1,7 +1,16 @@
 <template>
-  <div class="hamburger-wrapper" @click="toggleClick">
+  <button
+    type="button"
+    class="hamburger-wrapper"
+    :class="{ 'has-label': label }"
+    :aria-label="label ? `${isActive ? '收起' : '展开'}${label}` : undefined"
+    :aria-expanded="isActive"
+    :title="label ? `${isActive ? '收起' : '展开'}${label}` : undefined"
+    @click="toggleClick"
+  >
     <div :class="['i-svg:collapse', { hamburger: true, 'is-active': isActive }, hamburgerClass]" />
-  </div>
+    <span v-if="label" class="hamburger-label">{{ label }}</span>
+  </button>
 </template>
 
 <script setup lang="ts">
@@ -13,6 +22,7 @@ import { ThemeMode, SidebarColor, LayoutMode } from "@/enums/settings";
  */
 defineProps({
   isActive: { type: Boolean, required: true },
+  label: { type: String, default: "" },
 });
 
 /**
@@ -56,6 +66,14 @@ function toggleClick() {
   padding: 0;
   color: var(--el-text-color-regular);
   cursor: pointer;
+  background: transparent;
+  border: 0;
+
+  &.has-label {
+    gap: 5px;
+    width: auto;
+    padding: 0 8px;
+  }
 
   .hamburger {
     width: 16px;
@@ -81,5 +99,12 @@ function toggleClick() {
   &:hover {
     color: var(--el-color-primary);
   }
+}
+
+.hamburger-label {
+  font-size: 11px;
+  font-weight: 650;
+  color: currentcolor;
+  white-space: nowrap;
 }
 </style>

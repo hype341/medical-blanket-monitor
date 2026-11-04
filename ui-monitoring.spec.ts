@@ -21,7 +21,7 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
 
   await expect(page.getByRole("heading", { name: "安全总览" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "功能模块" })).toBeVisible();
-  await expect(page.getByText("功能列表", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "收起列表" })).toBeVisible();
   await page.screenshot({ path: "test-results/monitoring-overview.png", fullPage: true });
   await page.getByText("床位监护", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "床位监护" })).toBeVisible();
@@ -264,6 +264,8 @@ test("warning turns red and requires nurse actions to resolve and delete", async
   await alarmCard.scrollIntoViewIfNeeded();
   await page.waitForTimeout(600);
   await page.screenshot({ path: "test-results/monitoring-alarm-open.png", fullPage: true });
+  await page.getByRole("button", { name: "查看回放" }).click();
+  await expect(page.locator(".recording-player")).toBeVisible({ timeout: 10_000 });
 
   await page.getByRole("button", { name: "标记已解决" }).click();
   await expect(alarmCard).toHaveAttribute("data-status", "RESOLVED");
