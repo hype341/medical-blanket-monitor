@@ -256,4 +256,30 @@ describe("monitoring store", () => {
     expect(store.canViewConnections).toBe(true);
     expect(store.canViewDeveloperConsole).toBe(true);
   });
+
+  it("prevents hospital administrators from managing developer accounts", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+
+    expect(() =>
+      store.updateStaff("staff-developer", {
+        username: "developer",
+        displayName: "被管理员修改",
+        role: "DEVELOPER",
+        wardIds: ["ward-a"],
+        status: "DISABLED",
+      }),
+    ).toThrow("医院管理员不能管理系统开发者账号");
+
+    expect(() =>
+      store.addStaff({
+        username: "developer-2",
+        displayName: "第二开发者",
+        role: "DEVELOPER",
+        wardIds: ["ward-a"],
+        status: "ACTIVE",
+        initialPassword: "Developer@123",
+      }),
+    ).toThrow("医院管理员不能创建系统开发者账号");
+  });
 });

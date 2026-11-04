@@ -200,6 +200,9 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     if (!canManageStaff.value) {
       throw new Error("仅管理员可以管理人员权限");
     }
+    if (input.role === "DEVELOPER" && activeRole.value !== "DEVELOPER") {
+      throw new Error("医院管理员不能创建系统开发者账号");
+    }
     if (staff.some((item) => item.username === input.username.trim())) {
       throw new Error("登录账号已存在");
     }
@@ -225,6 +228,12 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     }
     const member = staff.find((item) => item.id === staffId);
     if (!member) throw new Error("人员不存在");
+    if (
+      activeRole.value !== "DEVELOPER" &&
+      (member.role === "DEVELOPER" || input.role === "DEVELOPER")
+    ) {
+      throw new Error("医院管理员不能管理系统开发者账号");
+    }
     member.username = input.username.trim();
     member.displayName = input.displayName.trim();
     member.role = input.role;

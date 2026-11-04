@@ -10,7 +10,7 @@
     </header>
 
     <div class="staff-summary">
-      <span>共 {{ store.staff.length }} 个账号</span>
+      <span>共 {{ visibleStaff.length }} 个账号</span>
       <span>{{ activeCount }} 个启用</span>
       <span>角色决定操作权限，病区授权决定可查看范围</span>
     </div>
@@ -24,7 +24,7 @@
         <span>状态</span>
         <span>操作</span>
       </div>
-      <div v-for="member in store.staff" :key="member.id" class="staff-row">
+      <div v-for="member in visibleStaff" :key="member.id" class="staff-row">
         <strong>{{ member.displayName }}</strong>
         <div class="account-cell">
           <span>{{ member.username }}</span>
@@ -68,6 +68,9 @@
             <el-radio-button value="NURSE">护士</el-radio-button>
             <el-radio-button value="HEAD_NURSE">护士长</el-radio-button>
             <el-radio-button value="ADMIN">管理员</el-radio-button>
+            <el-radio-button v-if="store.activeRole === 'DEVELOPER'" value="DEVELOPER">
+              开发者
+            </el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="授权病区">
@@ -135,13 +138,18 @@ const form = reactive<StaffInput>({
 });
 
 const activeCount = computed(
-  () => store.staff.filter((member) => member.status === "ACTIVE").length,
+  () => visibleStaff.value.filter((member) => member.status === "ACTIVE").length,
+);
+const visibleStaff = computed(() =>
+  store.activeRole === "DEVELOPER"
+    ? store.staff
+    : store.staff.filter((member) => member.role !== "DEVELOPER"),
 );
 
 function openEditor(staffId?: string): void {
   editingStaffId.value = staffId ?? "";
   if (staffId) {
-    const member = store.staff.find((item) => item.id === staffId);
+    const member = visibleStaff.value.find((item) => item.id === staffId);
     if (!member) return;
     Object.assign(form, {
       username: member.username,
@@ -180,7 +188,7 @@ function save(): void {
 }
 
 function toggleStatus(staffId: string): void {
-  const member = store.staff.find((item) => item.id === staffId);
+  const member = visibleStaff.value.find((item) => item.id === staffId);
   if (!member) return;
   store.updateStaff(staffId, {
     username: member.username,

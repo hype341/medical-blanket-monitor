@@ -268,11 +268,19 @@ async function handleLoginSubmit() {
   try {
     await userStore.login(loginFormData.value).then(
       async () => {
-        const isNurse = loginFormData.value.username === "nurse";
+        const username = loginFormData.value.username;
         const role =
-          loginFormData.value.username === "developer" ? "DEVELOPER" : isNurse ? "NURSE" : "ADMIN";
+          username === "developer"
+            ? "DEVELOPER"
+            : username === "nurse"
+              ? "NURSE"
+              : username === "head-nurse"
+                ? "HEAD_NURSE"
+                : "ADMIN";
+        const wardIds =
+          username === "nurse" || username === "head-nurse" ? ["ward-a"] : ["ward-a", "ward-b"];
         monitoringStore.setActiveRole(role);
-        monitoringStore.setCurrentWardIds(isNurse ? ["ward-a"] : ["ward-a", "ward-b"]);
+        monitoringStore.setCurrentWardIds(wardIds);
         const redirectPath = (route.query.redirect as string) || "/";
         await router.push(decodeURIComponent(redirectPath));
       },

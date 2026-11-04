@@ -4,7 +4,10 @@ async function loginAsAdmin(page: Page): Promise<void> {
   await loginAs(page, "admin");
 }
 
-async function loginAs(page: Page, username: "admin" | "nurse" | "developer"): Promise<void> {
+async function loginAs(
+  page: Page,
+  username: "admin" | "nurse" | "head-nurse" | "developer",
+): Promise<void> {
   await page.goto("/#/overview", { waitUntil: "networkidle" });
   await page.locator('input[placeholder="用户名"]').fill(username);
   await page.locator('input[placeholder="密码"]').fill("123456");
@@ -127,6 +130,7 @@ test("only administrators can manage wards and rooms", async ({ page }) => {
 
   await page.getByText("人员权限", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "人员权限管理" })).toBeVisible();
+  await expect(page.getByText("系统开发者", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "新增人员" }).click();
   await page.locator('input[placeholder="登录账号"]').fill("nurse-li");
   await page.locator('input[placeholder="人员姓名"]').fill("李护士");
@@ -159,4 +163,13 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await page.locator('input[placeholder="设备标识"]').fill("camera-02");
   await page.getByRole("button", { name: "保存摄像头" }).click();
   await expect(page.getByText("201 病房摄像头").first()).toBeVisible();
+});
+
+test("head nurse only receives the assigned ward", async ({ page }) => {
+  await loginAs(page, "head-nurse");
+  await page.getByText("床位监护", { exact: true }).first().click();
+
+  await expect(page.getByText("A 病区 · 外科").first()).toBeVisible();
+  await expect(page.getByText("B 病区 · 康复")).toHaveCount(0);
+  await expect(page.getByText("管理中心", { exact: true })).toHaveCount(0);
 });
