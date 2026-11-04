@@ -280,7 +280,7 @@ export function createMonitoringFixture(): MonitoringData {
     hospital: {
       id: "hospital-001",
       code: "H001",
-      name: "康宁医院",
+      name: "医院名称未设置",
     },
     wards: structuredClone(wards),
     rooms: structuredClone(rooms),

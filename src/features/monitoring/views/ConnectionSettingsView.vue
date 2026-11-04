@@ -4,7 +4,7 @@
       <div>
         <span>{{ store.hospital.name }} · 开发者区域</span>
         <h1>系统连接与 MQTT</h1>
-        <p>管理 Broker 接入、床位数据主题、病房告警主题和两类报文。</p>
+        <p>管理 Broker 接入、床位数据主题、床位告警主题和两类报文。</p>
       </div>
       <div class="admin-page-header__actions">
         <span class="connection-mode">开发环境配置</span>
@@ -25,8 +25,8 @@
       </article>
       <article>
         <span>主题通道</span>
-        <strong>{{ dataTopicCount }} 数据 / {{ roomAlarmTopics.length }} 告警</strong>
-        <small>数据按床位，告警按病房</small>
+        <strong>{{ dataTopicCount }} 数据 / {{ alarmTopicCount }} 告警</strong>
+        <small>数据与告警均按床位独立</small>
       </article>
       <article>
         <span>服务质量</span>
@@ -83,90 +83,121 @@
         <header class="connection-card__header">
           <div>
             <span>MQTT 主题</span>
-            <h2>数据与告警主题</h2>
+            <h2>床位数据与告警</h2>
           </div>
-          <small>数据按床位独立，告警按病房独立</small>
+          <small>每张床位分别拥有数据主题和告警主题</small>
         </header>
-        <div class="alarm-subscription">
-          <div>
-            <span>传感器数据订阅</span>
-            <strong>{{ dataTopicCount }} 张已绑定床位</strong>
-          </div>
-          <code>{{ SENSOR_DATA_TOPIC }}</code>
-          <small>传感器状态、时间和识别扩展数据进入此数据通道。</small>
+        <div class="topic-switch" role="tablist" aria-label="MQTT 主题类型">
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="activeTopicMode === 'data'"
+            :class="{ 'is-active': activeTopicMode === 'data' }"
+            @click="activeTopicMode = 'data'"
+          >
+            <span>床位数据</span>
+            <strong>{{ dataTopicCount }}</strong>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="activeTopicMode === 'alarm'"
+            :class="{ 'is-active': activeTopicMode === 'alarm' }"
+            @click="activeTopicMode = 'alarm'"
+          >
+            <span>床位告警</span>
+            <strong>{{ alarmTopicCount }}</strong>
+          </button>
         </div>
 
-        <div class="room-topic-panel topic-panel--data">
-          <header>
+        <div v-if="activeTopicMode === 'data'" class="topic-mode-panel">
+          <div class="alarm-subscription">
             <div>
-              <span>床位独立数据通道</span>
-              <strong>{{ dataTopicCount }} 个数据主题</strong>
+              <span>传感器数据订阅</span>
+              <strong>{{ dataTopicCount }} 张已绑定床位</strong>
             </div>
-            <small>{{ dataTopicRows.length - dataTopicCount }} 张床位待绑定传感器</small>
-          </header>
-          <div class="room-topic-cards">
-            <article v-for="row in dataTopicRows" :key="row.bedId">
+            <code>{{ SENSOR_DATA_TOPIC }}</code>
+            <small>传感器状态、时间和识别扩展数据进入此数据通道。</small>
+          </div>
+          <div class="room-topic-panel topic-panel--data">
+            <header>
               <div>
-                <strong>{{ row.roomName }} · {{ row.bedNo }} 床</strong>
-                <span>{{ row.wardName }} · {{ row.sensorName }}</span>
+                <span>床位独立数据通道</span>
+                <strong>{{ dataTopicCount }} 个数据主题</strong>
               </div>
-              <code :title="row.dataTopic || '绑定传感器后生成'">
-                {{ row.dataTopic || "绑定传感器后生成" }}
-              </code>
-              <el-button
-                text
-                type="primary"
-                :disabled="!row.dataTopic"
-                @click="row.dataTopic && copyTopic(row.dataTopic, '床位数据主题')"
-              >
-                复制
-              </el-button>
-            </article>
+              <small>{{ bedTopicRows.length - dataTopicCount }} 张床位待绑定传感器</small>
+            </header>
+            <div class="room-topic-cards">
+              <article v-for="row in bedTopicRows" :key="row.bedId">
+                <div>
+                  <strong>{{ row.roomName }} · {{ row.bedNo }} 床</strong>
+                  <span>{{ row.wardName }} · {{ row.sensorName }}</span>
+                </div>
+                <code :title="row.dataTopic || '绑定传感器后生成'">
+                  {{ row.dataTopic || "绑定传感器后生成" }}
+                </code>
+                <el-button
+                  text
+                  type="primary"
+                  :disabled="!row.dataTopic"
+                  @click="row.dataTopic && copyTopic(row.dataTopic, '床位数据主题')"
+                >
+                  复制
+                </el-button>
+              </article>
+            </div>
           </div>
         </div>
 
-        <div class="alarm-subscription alarm-subscription--warning">
-          <div>
-            <span>病房告警订阅</span>
-            <strong>{{ roomAlarmTopics.length }} 间病房</strong>
-          </div>
-          <code>{{ form.alarmTopic }}</code>
-          <small>新增病房后，后端使用通配符自动覆盖对应告警主题。</small>
-        </div>
-
-        <div class="room-topic-panel topic-panel--alarm">
-          <header>
+        <div v-else class="topic-mode-panel">
+          <div class="alarm-subscription alarm-subscription--warning">
             <div>
-              <span>病房独立通道</span>
-              <strong>{{ alarmTopicGroups.length }} 个病房告警主题</strong>
+              <span>床位告警订阅</span>
+              <strong>{{ alarmTopicCount }} 张床位</strong>
             </div>
-            <small>逐项复制 · 只读</small>
-          </header>
-          <div class="room-topic-cards">
-            <article v-for="group in alarmTopicGroups" :key="group.topic">
-              <div>
-                <strong>{{ group.roomName }}</strong>
-                <span>{{ group.wardName }} · {{ group.bedNos.length }} 张床位</span>
-              </div>
-              <code :title="group.topic">{{ group.topic }}</code>
-              <el-button text type="primary" @click="copyTopic(group.topic, '病房告警主题')">
-                复制
-              </el-button>
-            </article>
+            <code>{{ form.alarmTopic }}</code>
+            <small>每张床位独立上报告警，报文中的 bedId 用于二次校验。</small>
           </div>
+          <div class="room-topic-panel topic-panel--alarm">
+            <header>
+              <div>
+                <span>床位独立告警通道</span>
+                <strong>{{ alarmTopicCount }} 个床位告警主题</strong>
+              </div>
+              <small>按床位 · 逐项复制</small>
+            </header>
+            <div class="room-topic-cards">
+              <article v-for="row in bedTopicRows" :key="row.bedId">
+                <div>
+                  <strong>{{ row.roomName }} · {{ row.bedNo }} 床</strong>
+                  <span>{{ row.wardName }}</span>
+                </div>
+                <code :title="row.alarmTopic || '未生成'">
+                  {{ row.alarmTopic || "未生成" }}
+                </code>
+                <el-button
+                  text
+                  type="primary"
+                  :disabled="!row.alarmTopic"
+                  @click="row.alarmTopic && copyTopic(row.alarmTopic, '床位告警主题')"
+                >
+                  复制
+                </el-button>
+              </article>
+            </div>
+          </div>
+          <details class="alarm-template-settings">
+            <summary>告警展示文案</summary>
+            <el-form label-position="top">
+              <el-form-item label="告警标题模板">
+                <el-input v-model="form.alarmTitleTemplate" />
+              </el-form-item>
+              <el-form-item label="告警详情模板">
+                <el-input v-model="form.alarmDetailTemplate" type="textarea" :rows="3" />
+              </el-form-item>
+            </el-form>
+          </details>
         </div>
-
-        <details class="alarm-template-settings">
-          <summary>告警展示文案</summary>
-          <el-form label-position="top">
-            <el-form-item label="告警标题模板">
-              <el-input v-model="form.alarmTitleTemplate" />
-            </el-form-item>
-            <el-form-item label="告警详情模板">
-              <el-input v-model="form.alarmDetailTemplate" type="textarea" :rows="3" />
-            </el-form-item>
-          </el-form>
-        </details>
       </section>
     </div>
 
@@ -185,9 +216,9 @@
       </article>
       <article class="message-card message-card--alarm">
         <header>
-          <span>病房告警</span>
-          <h2>病房告警报文</h2>
-          <p>主题直接归属病房，报文只保留护士需要处理的信息。</p>
+          <span>床位告警</span>
+          <h2>床位告警报文</h2>
+          <p>主题直接归属床位，报文只保留护士需要处理的信息。</p>
         </header>
         <pre>{{ alarmTemplate }}</pre>
         <footer>
@@ -256,6 +287,7 @@ import { printMarkdownDocument } from "@/utils/document-export";
 const store = useMonitoringStore();
 const form = reactive<MqttSettings>({ ...store.mqttSettings });
 const showPassword = ref(false);
+const activeTopicMode = ref<"data" | "alarm">("data");
 const generatedAt = ref(new Date().toLocaleString("zh-CN", { hour12: false }));
 const mqttDocument = computed(() =>
   generateMqttDocumentation(
@@ -296,10 +328,11 @@ const sensorDataTemplate = JSON.stringify(
   null,
   2,
 );
-const dataTopicRows = computed(() =>
+const bedTopicRows = computed(() =>
   store.bedSummaries.map((summary) => ({
     bedId: summary.bed.id,
     dataTopic: summary.dataTopic,
+    alarmTopic: summary.alarmTopic,
     wardName: summary.ward?.name ?? "未分病区",
     roomName: summary.room?.name ?? "未分病房",
     bedNo: summary.bed.bedNo,
@@ -307,27 +340,11 @@ const dataTopicRows = computed(() =>
   })),
 );
 const dataTopicCount = computed(
-  () => dataTopicRows.value.filter((row) => Boolean(row.dataTopic)).length,
+  () => bedTopicRows.value.filter((row) => Boolean(row.dataTopic)).length,
 );
-const alarmTopicGroups = computed(() => {
-  const groups = new Map<
-    string,
-    { topic: string; wardName: string; roomName: string; bedNos: string[] }
-  >();
-  store.bedSummaries.forEach((summary) => {
-    if (!summary.alarmTopic) return;
-    const group = groups.get(summary.alarmTopic) ?? {
-      topic: summary.alarmTopic,
-      wardName: summary.ward?.name ?? "未分病区",
-      roomName: summary.room?.name ?? "未分病房",
-      bedNos: [],
-    };
-    group.bedNos.push(summary.bed.bedNo);
-    groups.set(summary.alarmTopic, group);
-  });
-  return Array.from(groups.values());
-});
-const roomAlarmTopics = computed(() => alarmTopicGroups.value.map((group) => group.topic));
+const alarmTopicCount = computed(
+  () => bedTopicRows.value.filter((row) => Boolean(row.alarmTopic)).length,
+);
 
 function save(): void {
   try {
@@ -526,6 +543,65 @@ function downloadText(fileName: string, content: string): void {
   gap: 12px;
 }
 
+.topic-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  background: #edf3f0;
+
+  button {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    color: #607770;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+
+    span {
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    strong {
+      display: grid;
+      place-items: center;
+      min-width: 22px;
+      height: 22px;
+      font-family: "Avenir Next", sans-serif;
+      font-size: 9px;
+      color: #4f756b;
+      background: #fff;
+      border-radius: 11px;
+    }
+
+    &.is-active {
+      color: #245d51;
+      background: #fff;
+      border-color: #b8d1c8;
+      box-shadow: 0 2px 8px rgb(26 91 77 / 8%);
+
+      strong {
+        color: #fff;
+        background: #2f806a;
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid #2f806a;
+      outline-offset: 1px;
+    }
+  }
+}
+
+.topic-mode-panel {
+  min-width: 0;
+}
+
 .alarm-subscription {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -657,6 +733,12 @@ function downloadText(fileName: string, content: string): void {
 }
 
 .topic-panel--data .room-topic-cards {
+  max-height: 270px;
+  padding-right: 3px;
+  overflow: auto;
+}
+
+.topic-panel--alarm .room-topic-cards {
   max-height: 270px;
   padding-right: 3px;
   overflow: auto;

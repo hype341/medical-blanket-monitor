@@ -30,7 +30,7 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(page).toHaveURL(/#\/beds\/bed-/);
   await expect(page.getByTestId("sensor-graphic")).toBeVisible();
   await expect(
-    page.getByText("medical-blanket/v1/H001/WARD-A/301/alarm", {
+    page.getByText("medical-blanket/v1/H001/WARD-A/301-01/alarm", {
       exact: true,
     }),
   ).toBeVisible();
@@ -47,7 +47,7 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(refreshRate).toHaveValue("5");
   await expect(page.getByText("智能识别扩展")).toBeVisible();
   await expect(page.getByText("录像回放").first()).toBeVisible();
-  await expect(page.getByText("病房告警").first()).toBeVisible();
+  await expect(page.getByText("床位告警").first()).toBeVisible();
   const recordingSegment = page.locator(".recording-timeline__segment").first();
   if (await recordingSegment.count()) {
     await expect(page.getByLabel("录像回放进度")).toBeEnabled();
@@ -65,7 +65,7 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   } else {
     await expect(page.getByText("暂无录像片段").first()).toBeVisible();
   }
-  await expect(page.getByText("病房状态平稳").first()).toBeVisible();
+  await expect(page.getByText("床位状态平稳").first()).toBeVisible();
   await page.waitForTimeout(600);
   await page.screenshot({ path: "test-results/monitoring-bed-detail.png", fullPage: true });
 });
@@ -76,7 +76,7 @@ test("bed monitor stays usable on a narrow screen", async ({ page }) => {
   await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
 
   await expect(page.getByTestId("sensor-graphic")).toBeVisible();
-  await expect(page.getByText("病房告警").first()).toBeVisible();
+  await expect(page.getByText("床位告警").first()).toBeVisible();
   const horizontalOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
@@ -177,17 +177,24 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await loginAs(page, "developer");
   await expect(page.getByText("系统开发者", { exact: true })).toBeVisible();
 
+  await page.getByText("开发者概览", { exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "开发者工作台" })).toBeVisible();
+  await page.getByLabel("医院名称").fill("仁和医院");
+  await page.getByRole("button", { name: "保存医院名称" }).click();
+  await expect(page.getByText("医院名称已保存")).toBeVisible();
+  await expect(page.getByText("仁和医院 · 开发者区域")).toBeVisible();
+
   await page.getByText("MQTT 管理", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
   await expect(page.getByText("EMQX 接入")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "数据与告警主题" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "床位数据与告警", exact: true })).toBeVisible();
   await expect(page.getByText("9 个数据主题")).toBeVisible();
-  await expect(page.getByText("1 张床位待绑定传感器")).toBeVisible();
-  await expect(page.getByText("6 个病房告警主题")).toBeVisible();
   await page.locator(".topic-panel--data").getByRole("button", { name: "复制" }).first().click();
   await expect(page.getByText("床位数据主题已复制")).toBeVisible();
+  await page.getByRole("tab", { name: /床位告警/ }).click();
+  await expect(page.getByText("10 个床位告警主题")).toBeVisible();
   await page.locator(".topic-panel--alarm").getByRole("button", { name: "复制" }).first().click();
-  await expect(page.getByText("病房告警主题已复制")).toBeVisible();
+  await expect(page.getByText("床位告警主题已复制")).toBeVisible();
   await expect(
     page.locator(".message-card--data").getByRole("heading", { name: "传感器数据报文" }),
   ).toBeVisible();
@@ -195,7 +202,7 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await expect(page.getByText("MQTT 原始报文")).toBeVisible();
   await expect(page.getByRole("heading", { name: "MQTT 连接文档", exact: true })).toBeVisible();
   await expect(page.locator(".document-panel .document-preview")).toContainText(
-    "medical-blanket/v1/H001/WARD-A/301/alarm",
+    "medical-blanket/v1/H001/WARD-A/301-01/alarm",
   );
   await expect(page.locator(".document-panel .document-preview")).toContainText(
     "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data",

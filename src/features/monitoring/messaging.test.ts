@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBedDataTopic,
-  buildRoomAlarmTopic,
+  buildBedAlarmTopic,
   LEGACY_SENSOR_EVENT_TOPIC,
   SENSOR_DATA_TOPIC,
 } from "./messaging";
@@ -9,12 +9,13 @@ import {
 describe("room MQTT topics", () => {
   it("creates an independent alarm topic for each hospital room", () => {
     expect(
-      buildRoomAlarmTopic({
+      buildBedAlarmTopic({
         hospitalCode: "H001",
         wardCode: "WARD-A",
         roomNo: "301",
+        bedNo: "01",
       }),
-    ).toBe("medical-blanket/v1/H001/WARD-A/301/alarm");
+    ).toBe("medical-blanket/v1/H001/WARD-A/301-01/alarm");
     expect(
       buildBedDataTopic({
         hospitalCode: "H001",

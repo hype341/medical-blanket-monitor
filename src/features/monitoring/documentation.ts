@@ -51,7 +51,7 @@ const stream = openMqttSensorStream(settings, {
     console.log("传感器数据", reading);
   },
   onAlarm(alarm) {
-    console.warn("病房告警", alarm.bedId, alarm.title);
+    console.warn("床位告警", alarm.bedId, alarm.title);
   },
   onStatus(status) {
     console.log("MQTT 状态", status);
@@ -62,11 +62,11 @@ const stream = openMqttSensorStream(settings, {
 stream.close();
 \`\`\`
 
-## 病房、床位、数据与告警 Topic
+## 床位数据与告警 Topic
 
-每张床位拥有独立传感器数据 Topic，每间病房拥有独立告警 Topic。
+每张床位分别拥有独立的数据 Topic 和告警 Topic。
 
-| 病区 | 病房 | 床位 | 传感器 | 床位数据 Topic | 病房告警 Topic |
+| 病区 | 病房 | 床位 | 传感器 | 床位数据 Topic | 床位告警 Topic |
 | --- | --- | --- | --- | --- | --- |
 ${topicRows}
 
@@ -98,7 +98,7 @@ ${topicRows}
 
 ## 告警报文示例
 
-告警 Topic 直接归属于病房，报文中的 \`bedId\` 用于定位具体床位。
+告警 Topic 直接归属于床位，报文中的 \`bedId\` 用于二次校验。
 
 \`\`\`json
 {

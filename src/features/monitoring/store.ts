@@ -26,6 +26,8 @@ import type {
 
 export const useMonitoringStore = defineStore("monitoring", () => {
   const fixture = ref<MonitoringData>(createMonitoringFixture());
+  const storedHospitalName = localStorage.getItem("monitoring-hospital-name");
+  if (storedHospitalName) fixture.value.hospital.name = storedHospitalName;
   const storedWardIds = sessionStorage.getItem("monitoring-wards");
   const currentWardIds = ref<string[]>(
     storedWardIds ? (JSON.parse(storedWardIds) as string[]) : ["ward-a", "ward-b"],
@@ -51,7 +53,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     clientId: "medical-blanket-platform",
     username: "blanket-service",
     password: "demo-mqtt-secret",
-    alarmTopic: "medical-blanket/v1/+/+/+/alarm",
+    alarmTopic: "medical-blanket/v1/+/+/+/+/alarm",
     alarmTitleTemplate: "{{deviceName}} 状态异常",
     alarmDetailTemplate: "{{bedName}} 在 {{occurredAt}} 上报 {{alarmCode}}",
     qos: 1,
@@ -148,6 +150,16 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   function setCurrentWardIds(wardIds: string[]): void {
     currentWardIds.value = wardIds;
     sessionStorage.setItem("monitoring-wards", JSON.stringify(wardIds));
+  }
+
+  function updateHospitalName(name: string): void {
+    if (activeRole.value !== "DEVELOPER") {
+      throw new Error("仅开发者可以修改医院名称");
+    }
+    const normalizedName = name.trim();
+    if (!normalizedName) throw new Error("医院名称不能为空");
+    hospital.name = normalizedName;
+    localStorage.setItem("monitoring-hospital-name", normalizedName);
   }
 
   function setActiveRole(role: MonitoringRole, username?: string): void {
@@ -461,6 +473,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     updateBinding,
     setCurrentWardIds,
     setActiveRole,
+    updateHospitalName,
     canAccessModule,
     addWard,
     updateWard,

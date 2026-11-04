@@ -5,7 +5,7 @@ import type {
   MonitoringLookupData,
   PlaybackProtocol,
 } from "./types";
-import { buildBedDataTopic, buildRoomAlarmTopic } from "./messaging";
+import { buildBedAlarmTopic, buildBedDataTopic } from "./messaging";
 
 export function getBedMonitorSummary(
   bedId: string,
@@ -35,10 +35,11 @@ export function getBedMonitorSummary(
   const room = data.rooms?.find((item) => item.id === bed.roomId) ?? null;
   const alarmTopic =
     ward && room
-      ? buildRoomAlarmTopic({
+      ? buildBedAlarmTopic({
           hospitalCode: data.hospital?.code ?? "H001",
           wardCode: ward.code,
           roomNo: room.roomNo,
+          bedNo: bed.bedNo,
         })
       : null;
   const dataTopic =

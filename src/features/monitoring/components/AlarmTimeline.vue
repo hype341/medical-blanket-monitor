@@ -2,9 +2,9 @@
   <section class="alarm-timeline">
     <header>
       <div>
-        <span class="alarm-timeline__eyebrow">病房级独立告警</span>
-        <h3>病房告警</h3>
-        <p>每间病房使用独立 Topic，报文中的床位编号用于定位。</p>
+        <span class="alarm-timeline__eyebrow">床位级独立告警</span>
+        <h3>床位告警</h3>
+        <p>每张床位使用独立告警 Topic，直接关联患者与摄像头。</p>
       </div>
       <span class="alarm-timeline__count" :data-active="unresolvedCount > 0">
         {{ unresolvedCount > 0 ? `${unresolvedCount} 条待处理` : "当前平稳" }}
@@ -45,13 +45,13 @@
     <div v-else class="alarm-timeline__empty">
       <span class="alarm-timeline__mark" />
       <div>
-        <strong>病房状态平稳</strong>
-        <p>收到本病房的独立告警主题后，记录会立即显示在这里。</p>
+        <strong>床位状态平稳</strong>
+        <p>收到本床位的独立告警主题后，记录会立即显示在这里。</p>
       </div>
     </div>
 
     <footer>
-      <span>本病房独立告警 Topic</span>
+      <span>本床位独立告警 Topic</span>
       <code :title="topic || '尚未生成'">{{ topic || "尚未生成" }}</code>
       <small>告警前 30 秒 + 后 60 秒自动剪辑</small>
     </footer>
@@ -307,7 +307,7 @@ function formatTime(value: string): string {
   }
 }
 
-/* 病房告警视图：卡片只承载业务信息，Topic 保留在页脚供开发联调。 */
+/* 床位告警视图：卡片只承载业务信息，Topic 保留在页脚供开发联调。 */
 .alarm-timeline {
   padding: 0;
   overflow: hidden;

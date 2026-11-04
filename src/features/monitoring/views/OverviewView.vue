@@ -262,7 +262,7 @@ const moduleLinks = computed(() => {
       path: "/admin/connections",
       kind: "数据",
       label: "MQTT 管理",
-      description: "床位数据主题、病房告警主题和在线文档",
+      description: "床位数据主题、床位告警主题和在线文档",
       visible: store.canAccessModule("mqtt"),
     },
     {

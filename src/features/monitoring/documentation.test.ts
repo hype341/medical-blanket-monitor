@@ -10,7 +10,7 @@ const settings = {
   clientId: "medical-blanket-platform",
   username: "blanket-service",
   password: "secret",
-  alarmTopic: "medical-blanket/v1/+/+/+/alarm",
+  alarmTopic: "medical-blanket/v1/+/+/+/+/alarm",
   alarmTitleTemplate: "{{deviceName}} 状态异常",
   alarmDetailTemplate: "{{bedName}} 上报 {{alarmCode}}",
   qos: 1 as const,
@@ -20,7 +20,7 @@ describe("online documentation", () => {
   it("generates a room alarm topic and simplified payload document", () => {
     const document = generateMqttDocumentation(data, settings, generatedAt);
 
-    expect(document).toContain("medical-blanket/v1/H001/WARD-A/301/alarm");
+    expect(document).toContain("medical-blanket/v1/H001/WARD-A/301-01/alarm");
     expect(document).toContain("medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data");
     expect(document).toContain("medical-blanket/v1/+/+/+/sensor/+/data");
     expect(document).not.toContain("遥测主题");

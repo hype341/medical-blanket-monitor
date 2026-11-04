@@ -9,6 +9,26 @@
       <span class="developer-badge">开发者视图</span>
     </header>
 
+    <section class="hospital-settings">
+      <header>
+        <span>机构基础信息</span>
+        <h2>医院名称</h2>
+        <p>医院名称尚未最终确定时可以先留空；保存后将同步到全局页面。</p>
+      </header>
+      <form @submit.prevent="saveHospitalName">
+        <el-input
+          v-model.trim="hospitalName"
+          maxlength="40"
+          clearable
+          placeholder="请输入医院名称"
+          aria-label="医院名称"
+        />
+        <el-button type="primary" native-type="submit" :disabled="!hospitalName">
+          保存医院名称
+        </el-button>
+      </form>
+    </section>
+
     <section class="developer-hero">
       <div>
         <span class="developer-hero__eyebrow">运行概览</span>
@@ -42,7 +62,7 @@
           </div>
           <div>
             <small>MQTT 主题</small>
-            <strong>{{ dataTopicCount }} 数据 / {{ roomAlarmTopics.length }} 告警</strong>
+            <strong>{{ dataTopicCount }} 数据 / {{ bedAlarmTopics.length }} 告警</strong>
           </div>
           <div>
             <small>QoS</small>
@@ -130,19 +150,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { ElMessage } from "element-plus";
 import { useRouter } from "vue-router";
 import { useMonitoringStore } from "../store";
 
 const store = useMonitoringStore();
 const router = useRouter();
+const hospitalName = ref(store.hospital.name === "医院名称未设置" ? "" : store.hospital.name);
 const services = [
   { name: "Nginx", state: "静态站点在线", online: true },
   { name: "Spring Boot", state: "业务服务未接入", online: false },
   { name: "EMQX", state: "等待 MQTT 参数", online: false },
   { name: "MediaMTX", state: "实时流在线", online: true },
 ];
-const roomAlarmTopics = computed(() =>
+const bedAlarmTopics = computed(() =>
   Array.from(
     new Set(
       store.bedSummaries
@@ -154,6 +176,16 @@ const roomAlarmTopics = computed(() =>
 const dataTopicCount = computed(
   () => store.bedSummaries.filter((summary) => Boolean(summary.dataTopic)).length,
 );
+
+function saveHospitalName(): void {
+  try {
+    store.updateHospitalName(hospitalName.value);
+    hospitalName.value = store.hospital.name;
+    ElMessage.success("医院名称已保存");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "医院名称保存失败");
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -197,6 +229,46 @@ const dataTopicCount = computed(
   letter-spacing: 0.08em;
   background: #fff0ee;
   border: 1px solid #e4b2ac;
+}
+
+.hospital-settings {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
+  gap: 24px;
+  align-items: center;
+  padding: 16px 18px;
+  margin-top: 16px;
+  background: #fff;
+  border: 1px solid #dbe6e2;
+  border-left: 4px solid #4a927e;
+
+  header {
+    span {
+      font-size: 9px;
+      font-weight: 700;
+      color: #4b8576;
+      letter-spacing: 0.1em;
+    }
+
+    h2 {
+      margin: 4px 0;
+      font-size: 16px;
+      font-weight: 680;
+    }
+
+    p {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.6;
+      color: #7d8d88;
+    }
+  }
+
+  form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
 }
 
 .developer-hero {
@@ -607,6 +679,10 @@ dl {
 }
 
 @media (width <= 800px) {
+  .hospital-settings {
+    grid-template-columns: 1fr;
+  }
+
   .pipeline-grid {
     grid-template-columns: 1fr;
   }
@@ -617,6 +693,10 @@ dl {
 }
 
 @media (width <= 520px) {
+  .hospital-settings form {
+    grid-template-columns: 1fr;
+  }
+
   .developer-hero {
     flex-direction: column;
     align-items: flex-start;
