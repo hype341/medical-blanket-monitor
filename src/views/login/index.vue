@@ -128,25 +128,13 @@
                 <div class="login-card__demo-title">演示账号密码统一为 123456</div>
                 <div class="flex flex-wrap gap-8px">
                   <button
+                    v-for="account in demoAccounts"
+                    :key="account.username"
                     type="button"
                     class="login-card__demo-chip"
-                    @click="fillDemoAccount('admin')"
+                    @click="fillDemoAccount(account.username)"
                   >
-                    管理员演示
-                  </button>
-                  <button
-                    type="button"
-                    class="login-card__demo-chip"
-                    @click="fillDemoAccount('nurse')"
-                  >
-                    护士演示
-                  </button>
-                  <button
-                    type="button"
-                    class="login-card__demo-chip"
-                    @click="fillDemoAccount('developer')"
-                  >
-                    开发者演示
+                    {{ account.label }}
                   </button>
                 </div>
               </div>
@@ -193,6 +181,11 @@ import type { FormInstance } from "element-plus";
 import AuthAPI, { OIDC_AUTHORIZATION_URL } from "@/api/auth";
 import type { LoginRequest } from "@/api/auth";
 import router from "@/router";
+import {
+  DEMO_ACCOUNTS,
+  findDemoAccount,
+  isDemoLoginEnabled,
+} from "@/features/monitoring/demo-accounts";
 import { useMonitoringStore } from "@/features/monitoring/store";
 import { useUserStore } from "@/stores";
 import { AuthStorage } from "@/utils/auth";
@@ -211,6 +204,7 @@ const loading = ref(false);
 const isCapsLock = ref(false);
 const captchaBase64 = ref<string>();
 const codeLoading = ref(false);
+const demoAccounts = DEMO_ACCOUNTS;
 
 const UserIcon = markRaw(User);
 const LockIcon = markRaw(Lock);
@@ -219,9 +213,12 @@ const loginFormData = ref<LoginRequest>({
   username: "admin",
   password: "123456",
   captchaId: "",
-  captchaCode: "",
+  captchaCode: isDemoLoginEnabled ? "1" : "",
   rememberMe: AuthStorage.getRememberMe(),
 });
+const activeDemoAccount = computed(() =>
+  findDemoAccount(loginFormData.value.username, loginFormData.value.password),
+);
 
 const loginRules = computed(() => ({
   username: [{ required: true, trigger: "blur", message: "请输入用户名" }],
@@ -229,21 +226,32 @@ const loginRules = computed(() => ({
     { required: true, trigger: "blur", message: "请输入密码" },
     { min: 6, message: "密码不能少于6位", trigger: "blur" },
   ],
-  captchaCode: [{ required: true, trigger: "blur", message: "请输入验证码" }],
+  captchaCode: [
+    {
+      required: !activeDemoAccount.value,
+      trigger: "blur",
+      message: "请输入验证码",
+    },
+  ],
 }));
 
 /**
  * 填充演示账号
  */
-function fillDemoAccount(username: "admin" | "nurse" | "developer"): void {
+function fillDemoAccount(username: string): void {
   loginFormData.value.username = username;
   loginFormData.value.password = "123456";
+  loginFormData.value.captchaCode = "1";
 }
 
 /**
  * 刷新验证码
  */
 function getCaptcha() {
+  if (isDemoLoginEnabled) {
+    loginFormData.value.captchaId = "demo";
+    return;
+  }
   codeLoading.value = true;
   AuthAPI.getCaptcha()
     .then((d) => {
@@ -265,6 +273,17 @@ async function handleLoginSubmit() {
 
   loading.value = true;
   try {
+    const demoAccount = findDemoAccount(loginFormData.value.username, loginFormData.value.password);
+    if (demoAccount) {
+      userStore.loginDemo(
+        demoAccount.username,
+        demoAccount.role,
+        loginFormData.value.rememberMe ?? false,
+      );
+      await enterAccount(demoAccount.username, demoAccount.role, demoAccount.wardIds);
+      return;
+    }
+
     await userStore.login(loginFormData.value).then(
       async () => {
         const username = loginFormData.value.username;
@@ -278,16 +297,24 @@ async function handleLoginSubmit() {
                 : "ADMIN";
         const wardIds =
           username === "nurse" || username === "head-nurse" ? ["ward-a"] : ["ward-a", "ward-b"];
-        monitoringStore.setActiveRole(role, username);
-        monitoringStore.setCurrentWardIds(wardIds);
-        const redirectPath = (route.query.redirect as string) || "/";
-        await router.push(decodeURIComponent(redirectPath));
+        await enterAccount(username, role, wardIds);
       },
       () => getCaptcha(),
     );
   } finally {
     loading.value = false;
   }
+}
+
+async function enterAccount(
+  username: string,
+  role: "ADMIN" | "NURSE" | "HEAD_NURSE" | "DEVELOPER",
+  wardIds: string[],
+) {
+  monitoringStore.setActiveRole(role, username);
+  monitoringStore.setCurrentWardIds(wardIds);
+  const redirectPath = (route.query.redirect as string) || "/";
+  await router.push(decodeURIComponent(redirectPath));
 }
 
 /**

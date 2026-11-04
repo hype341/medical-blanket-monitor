@@ -19,11 +19,22 @@ let sessionExpired = false;
  */
 const createEmptyUserInfo = (): UserInfo => ({ roles: [], perms: [] });
 
+const demoIdentity = AuthStorage.getDemoIdentity();
+const createInitialUserInfo = (): UserInfo =>
+  demoIdentity
+    ? {
+        username: demoIdentity.username,
+        nickname: demoIdentity.username,
+        roles: [demoIdentity.role],
+        perms: [],
+      }
+    : createEmptyUserInfo();
+
 /**
  * 管理用户资料、登录会话和令牌续期。
  */
 export const useUserStore = defineStore("user", () => {
-  const userInfo = ref<UserInfo>(createEmptyUserInfo());
+  const userInfo = ref<UserInfo>(createInitialUserInfo());
   const rememberMe = ref(AuthStorage.getRememberMe());
 
   /**
@@ -33,6 +44,31 @@ export const useUserStore = defineStore("user", () => {
     const { accessToken, refreshToken } = await AuthAPI.login(loginRequest);
     rememberMe.value = loginRequest.rememberMe ?? false;
     AuthStorage.setTokens(accessToken, refreshToken, rememberMe.value);
+    sessionExpired = false;
+  }
+
+  /**
+   * 本地演示登录：不依赖尚未部署的业务认证接口。
+   */
+  function loginDemo(
+    username: string,
+    role: "ADMIN" | "NURSE" | "HEAD_NURSE" | "DEVELOPER",
+    rememberMeRequested: boolean,
+  ): void {
+    const identity = { username, role };
+    rememberMe.value = rememberMeRequested;
+    AuthStorage.setTokens(
+      `demo-session.${role}.${Date.now()}`,
+      `demo-refresh.${role}.${Date.now()}`,
+      rememberMe.value,
+    );
+    AuthStorage.setDemoIdentity(identity, rememberMe.value);
+    userInfo.value = {
+      username,
+      nickname: username,
+      roles: [role],
+      perms: [],
+    };
     sessionExpired = false;
   }
 
@@ -188,6 +224,7 @@ export const useUserStore = defineStore("user", () => {
     rememberMe,
     isLoggedIn: () => !!AuthStorage.getAccessToken(),
     login,
+    loginDemo,
     loginByQrCode,
     logout,
     fetchUserInfo,

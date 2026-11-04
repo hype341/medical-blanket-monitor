@@ -7,6 +7,7 @@ import { usePermissionStoreHook } from "@/stores/permission";
 import type { ApiResult } from "@/api/common";
 import { installTokenRefresh } from "@/utils/token-refresh";
 import { readBinaryApiResult } from "@/utils/http-response";
+import { AuthStorage } from "@/utils/auth";
 
 const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
@@ -48,6 +49,7 @@ http.interceptors.response.use(
 
   async (error) => {
     if (axios.isCancel(error)) return Promise.reject(error);
+    if (AuthStorage.isDemoSession()) return Promise.reject(error);
     // 令牌续期拦截器已终结的错误（Token Invalid 等）不再提示
     if (!axios.isAxiosError(error)) {
       return Promise.reject(error);

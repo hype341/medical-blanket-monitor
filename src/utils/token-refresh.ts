@@ -53,6 +53,7 @@ export function installTokenRefresh(http: AxiosInstance) {
     ) {
       return Promise.reject(new Error("登录会话已切换"));
     }
+    if (AuthStorage.isDemoSession()) return Promise.reject(error);
 
     try {
       const result = await readBinaryApiResult(response);

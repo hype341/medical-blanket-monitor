@@ -2,6 +2,11 @@ import { Storage } from "./storage";
 import { STORAGE_KEYS } from "@/constants";
 import { readonly, shallowRef } from "vue";
 
+export interface DemoIdentity {
+  username: string;
+  role: "ADMIN" | "NURSE" | "HEAD_NURSE" | "DEVELOPER";
+}
+
 const sessionRevision = shallowRef(0);
 // 标识登录会话变化，正常续期不递增，供异步回调判断是否仍属当前账号。
 export const authSessionRevision = readonly(sessionRevision);
@@ -13,6 +18,14 @@ const isString = (value: unknown): value is string => typeof value === "string";
  * 校验持久化值是否为布尔值。
  */
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+const isDemoIdentity = (value: unknown): value is DemoIdentity => {
+  if (typeof value !== "object" || value === null) return false;
+  const identity = value as Partial<DemoIdentity>;
+  return (
+    typeof identity.username === "string" &&
+    ["ADMIN", "NURSE", "HEAD_NURSE", "DEVELOPER"].includes(identity.role ?? "")
+  );
+};
 
 /**
  * 本地凭证与偏好读写
@@ -48,6 +61,7 @@ export const AuthStorage = {
     rememberMe: boolean,
     renewing = false,
   ): void {
+    Storage.clear(STORAGE_KEYS.DEMO_IDENTITY);
     Storage.set(STORAGE_KEYS.REMEMBER_ME, rememberMe);
     if (rememberMe) {
       Storage.set(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
@@ -71,7 +85,36 @@ export const AuthStorage = {
     Storage.remove(STORAGE_KEYS.REFRESH_TOKEN);
     Storage.sessionRemove(STORAGE_KEYS.ACCESS_TOKEN);
     Storage.sessionRemove(STORAGE_KEYS.REFRESH_TOKEN);
+    Storage.clear(STORAGE_KEYS.DEMO_IDENTITY);
     sessionRevision.value += 1;
+  },
+
+  /**
+   * 保存演示账号身份，供刷新后恢复角色和用户信息。
+   */
+  setDemoIdentity(identity: DemoIdentity, rememberMe: boolean): void {
+    if (rememberMe) {
+      Storage.set(STORAGE_KEYS.DEMO_IDENTITY, identity);
+    } else {
+      Storage.sessionSet(STORAGE_KEYS.DEMO_IDENTITY, identity);
+    }
+  },
+
+  /**
+   * 读取演示账号身份。
+   */
+  getDemoIdentity(): DemoIdentity | null {
+    return (
+      Storage.sessionGet(STORAGE_KEYS.DEMO_IDENTITY, null, isDemoIdentity) ??
+      Storage.get(STORAGE_KEYS.DEMO_IDENTITY, null, isDemoIdentity)
+    );
+  },
+
+  /**
+   * 当前访问令牌是否来自本地演示登录。
+   */
+  isDemoSession(): boolean {
+    return this.getAccessToken().startsWith("demo-session.");
   },
 
   /**

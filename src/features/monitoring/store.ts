@@ -26,7 +26,10 @@ import type {
 
 export const useMonitoringStore = defineStore("monitoring", () => {
   const fixture = ref<MonitoringData>(createMonitoringFixture());
-  const currentWardIds = ref(["ward-a", "ward-b"]);
+  const storedWardIds = sessionStorage.getItem("monitoring-wards");
+  const currentWardIds = ref<string[]>(
+    storedWardIds ? (JSON.parse(storedWardIds) as string[]) : ["ward-a", "ward-b"],
+  );
   const storedRole = sessionStorage.getItem("monitoring-role");
   const activeRole = ref<MonitoringRole>(
     storedRole === "NURSE" ||
@@ -144,6 +147,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
 
   function setCurrentWardIds(wardIds: string[]): void {
     currentWardIds.value = wardIds;
+    sessionStorage.setItem("monitoring-wards", JSON.stringify(wardIds));
   }
 
   function setActiveRole(role: MonitoringRole, username?: string): void {
