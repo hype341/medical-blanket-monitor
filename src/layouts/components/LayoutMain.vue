@@ -79,6 +79,8 @@ const transitionName = computed(() => {
   position: relative;
   overflow-y: auto;
   background-color: var(--page-bg);
+  background-image: var(--page-bg-image);
+  background-attachment: fixed;
 
   /* fade */
   .fade-enter-active,

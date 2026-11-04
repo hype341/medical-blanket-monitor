@@ -119,7 +119,6 @@ export interface BedMonitorSummary {
   sensor: SensorDevice | null;
   cameras: Camera[];
   bindingIds: string[];
-  telemetryTopic: string | null;
   alarmTopic: string | null;
 }
 
@@ -215,7 +214,6 @@ export interface MqttSettings {
   clientId: string;
   username: string;
   password: string;
-  telemetryTopic: string;
   alarmTopic: string;
   alarmTitleTemplate: string;
   alarmDetailTemplate: string;

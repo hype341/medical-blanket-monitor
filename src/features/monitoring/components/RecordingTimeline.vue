@@ -14,14 +14,7 @@
         >
           −10s
         </button>
-        <button
-          type="button"
-          :aria-label="isPlaying ? '暂停回放' : '播放回放'"
-          :disabled="!visibleSegments.length"
-          @click="isPlaying = !isPlaying"
-        >
-          {{ isPlaying ? "暂停" : "播放" }}
-        </button>
+        <span>拖动松手定位</span>
         <button
           type="button"
           aria-label="向后查看 10 秒"
@@ -70,7 +63,9 @@
       step="0.1"
       :disabled="!visibleSegments.length"
       aria-label="录像回放进度"
-      @input="seekFromRange"
+      @pointerdown="isScrubbing = true"
+      @input="isScrubbing = true"
+      @change="commitSeek"
     />
 
     <div v-if="!visibleSegments.length" class="recording-timeline__empty">
@@ -80,16 +75,16 @@
 
     <div v-else class="recording-timeline__legend">
       <span>
-        当前回放
+        回放位置
         <strong>{{ cursorTime }}</strong>
       </span>
-      <span>点击红色告警点可定位到对应时间</span>
+      <span>片段自动预加载 · 红色告警点可定位</span>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { AlarmEnvelope, RecordingSegment } from "../recording";
 import { pruneExpiredSegments } from "../recording";
 
@@ -98,11 +93,13 @@ const props = withDefaults(
     segments?: RecordingSegment[];
     alarms?: AlarmEnvelope[];
     retentionMinutes?: number;
+    currentAt?: string;
   }>(),
   {
     segments: () => [],
     alarms: () => [],
     retentionMinutes: 30,
+    currentAt: "",
   },
 );
 
@@ -113,9 +110,8 @@ const emit = defineEmits<{
 
 const now = ref(Date.now());
 const cursorPercent = ref(100);
-const isPlaying = ref(false);
+const isScrubbing = ref(false);
 let clockTimer: ReturnType<typeof setInterval> | null = null;
-let playbackTimer: ReturnType<typeof setInterval> | null = null;
 
 const windowStart = computed(() => now.value - props.retentionMinutes * 60_000);
 const windowSpan = computed(() => now.value - windowStart.value);
@@ -174,34 +170,40 @@ function shiftCursor(seconds: number): void {
     100,
     Math.max(0, cursorPercent.value + (seconds / (props.retentionMinutes * 60)) * 100),
   );
-  seekFromRange();
+  commitSeek();
 }
 
-function seekFromRange(): void {
+function commitSeek(): void {
+  isScrubbing.value = false;
   emit(
     "seek",
     new Date(windowStart.value + (cursorPercent.value / 100) * windowSpan.value).toISOString(),
   );
 }
 
+function syncCursor(): void {
+  if (!props.currentAt) {
+    cursorPercent.value = 100;
+    return;
+  }
+  const target = new Date(props.currentAt).getTime();
+  cursorPercent.value = Math.min(
+    100,
+    Math.max(0, ((target - windowStart.value) / windowSpan.value) * 100),
+  );
+}
+
+watch(() => props.currentAt, syncCursor, { immediate: true });
+
 onMounted(() => {
   clockTimer = setInterval(() => {
-    if (!isPlaying.value) now.value = Date.now();
-    cursorPercent.value = Math.min(
-      100,
-      cursorPercent.value + (1 / (props.retentionMinutes * 60)) * 100,
-    );
-  }, 1000);
-  playbackTimer = setInterval(() => {
-    if (!isPlaying.value) return;
     now.value = Date.now();
-    if (cursorPercent.value >= 99.9) cursorPercent.value = 0;
+    if (!isScrubbing.value) syncCursor();
   }, 1000);
 });
 
 onBeforeUnmount(() => {
   if (clockTimer) clearInterval(clockTimer);
-  if (playbackTimer) clearInterval(playbackTimer);
 });
 </script>
 
@@ -235,6 +237,14 @@ onBeforeUnmount(() => {
 .recording-timeline__controls {
   display: flex;
   gap: 5px;
+  align-items: center;
+
+  > span {
+    padding: 0 3px;
+    font-size: 9px;
+    color: #879690;
+    white-space: nowrap;
+  }
 
   button {
     min-width: 42px;

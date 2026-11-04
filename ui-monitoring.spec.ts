@@ -29,10 +29,11 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(page).toHaveURL(/#\/beds\/bed-/);
   await expect(page.getByTestId("sensor-graphic")).toBeVisible();
   await expect(
-    page.getByText("medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/telemetry", {
+    page.getByText("medical-blanket/v1/H001/WARD-A/301/alarm", {
       exact: true,
     }),
   ).toBeVisible();
+  await expect(page.getByText(/sensor\/.+\/telemetry/)).toHaveCount(0);
   await expect(page.getByText("毯面温度")).toHaveCount(0);
   await expect(page.getByText("设备电量")).toHaveCount(0);
   const refreshRate = page.getByLabel("传感器图形帧率");
@@ -42,18 +43,33 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(refreshRate).toHaveValue("5");
   await expect(page.getByText("智能识别扩展")).toBeVisible();
   await expect(page.getByText("录像回放").first()).toBeVisible();
-  await expect(page.getByText("告警时间线").first()).toBeVisible();
+  await expect(page.getByText("病房告警").first()).toBeVisible();
   const recordingSegment = page.locator(".recording-timeline__segment").first();
   if (await recordingSegment.count()) {
     await expect(page.getByLabel("录像回放进度")).toBeEnabled();
     await recordingSegment.click();
-    await expect(page.locator("video.detail-playback")).toBeVisible();
+    await expect(page.locator(".recording-player")).toBeVisible();
   } else {
     await expect(page.getByText("暂无录像片段").first()).toBeVisible();
   }
-  await expect(page.getByText("暂无告警").first()).toBeVisible();
+  await expect(page.getByText("病房状态平稳").first()).toBeVisible();
   await page.waitForTimeout(600);
   await page.screenshot({ path: "test-results/monitoring-bed-detail.png", fullPage: true });
+});
+
+test("bed monitor stays usable on a narrow screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, "nurse");
+  await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+
+  await expect(page.getByTestId("sensor-graphic")).toBeVisible();
+  await expect(page.getByText("病房告警").first()).toBeVisible();
+  const horizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: "test-results/monitoring-bed-mobile.png", fullPage: true });
 });
 
 test("binding page maps one camera to a bed without side-view options", async ({ page }) => {
@@ -152,11 +168,19 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
   await expect(page.getByText("EMQX 接入")).toBeVisible();
   await expect(page.getByText("告警主题", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "传感器数据报文" })).toBeVisible();
+  await expect(page.locator(".message-card--data pre")).toContainText('"metrics": {}');
   await expect(page.getByText("MQTT 原始报文")).toBeVisible();
   await expect(page.getByRole("heading", { name: "MQTT 连接文档" })).toBeVisible();
   await expect(page.locator(".document-panel pre")).toContainText(
-    "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/telemetry",
+    "medical-blanket/v1/H001/WARD-A/301/alarm",
   );
+  await expect(page.locator(".document-panel pre")).not.toContainText("遥测主题");
+  await page.waitForTimeout(400);
+  await page.locator(".connection-page").screenshot({ path: "test-results/monitoring-mqtt.png" });
+  await page
+    .locator(".message-grid")
+    .screenshot({ path: "test-results/monitoring-mqtt-messages.png" });
 
   await page.getByText("开发者概览", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "开发者工作台" })).toBeVisible();

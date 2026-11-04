@@ -4,15 +4,46 @@
       <div>
         <span>{{ store.hospital.name }} · 开发者区域</span>
         <h1>系统连接与 MQTT</h1>
-        <p>管理 Broker 账户、Topic、QoS 和消息模板。该页面仅开发者可见。</p>
+        <p>管理 Broker 接入、病房告警主题、数据报文和第三方读取方式。</p>
       </div>
-      <el-button type="primary" @click="save">保存连接配置</el-button>
+      <div class="admin-page-header__actions">
+        <span class="connection-mode">开发环境配置</span>
+        <el-button type="primary" @click="save">保存连接配置</el-button>
+      </div>
     </header>
+
+    <section class="connection-summary" aria-label="MQTT 配置概览">
+      <article>
+        <span>Broker</span>
+        <strong>{{ form.brokerUrl }}</strong>
+        <small>设备消息接入地址</small>
+      </article>
+      <article>
+        <span>WebSocket</span>
+        <strong>{{ form.websocketUrl }}</strong>
+        <small>浏览器实时订阅</small>
+      </article>
+      <article>
+        <span>病房告警主题</span>
+        <strong>{{ roomAlarmTopics.length }} 个</strong>
+        <small>按病房独立生成</small>
+      </article>
+      <article>
+        <span>服务质量</span>
+        <strong>QoS {{ form.qos }}</strong>
+        <small>当前订阅级别</small>
+      </article>
+    </section>
 
     <div class="connection-grid">
       <section class="connection-card">
-        <span>连接属性</span>
-        <h2>EMQX 接入</h2>
+        <header class="connection-card__header">
+          <div>
+            <span>连接属性</span>
+            <h2>EMQX 接入</h2>
+          </div>
+          <small>凭证不会下发给摄像头</small>
+        </header>
         <el-form label-position="top">
           <el-form-item label="MQTT Broker">
             <el-input v-model.trim="form.brokerUrl" placeholder="mqtt://host:1883" />
@@ -48,13 +79,15 @@
         </el-form>
       </section>
 
-      <section class="connection-card">
-        <span>Topic</span>
-        <h2>遥测与告警</h2>
+      <section class="connection-card connection-card--alerts">
+        <header class="connection-card__header">
+          <div>
+            <span>病房告警</span>
+            <h2>独立告警主题</h2>
+          </div>
+          <small>报文中的 bedId 用于定位床位</small>
+        </header>
         <el-form label-position="top">
-          <el-form-item label="遥测主题">
-            <el-input v-model.trim="form.telemetryTopic" />
-          </el-form-item>
           <el-form-item label="告警主题">
             <el-input v-model.trim="form.alarmTopic" />
           </el-form-item>
@@ -66,33 +99,71 @@
           </el-form-item>
         </el-form>
 
-        <div class="message-template">
-          <span>告警报文模板</span>
-          <pre>{{ alarmTemplate }}</pre>
+        <div class="room-topic-panel">
+          <header>
+            <div>
+              <span>已生成主题</span>
+              <strong>{{ roomAlarmTopics.length }} 个病房通道</strong>
+            </div>
+            <small>只读</small>
+          </header>
+          <div class="raw-topic-list">
+            <code v-for="topic in roomAlarmTopics" :key="topic">{{ topic }}</code>
+          </div>
         </div>
       </section>
     </div>
 
+    <section class="message-grid">
+      <article class="message-card message-card--data">
+        <header>
+          <span>传感器数据</span>
+          <h2>传感器数据报文</h2>
+          <p>只上报设备、时间、状态和扩展容器，图形由状态字段驱动。</p>
+        </header>
+        <pre>{{ sensorDataTemplate }}</pre>
+        <footer>
+          <code>status</code>
+          <span>ONLINE / STALE / OFFLINE / ALARM</span>
+        </footer>
+      </article>
+      <article class="message-card message-card--alarm">
+        <header>
+          <span>病房告警</span>
+          <h2>病房告警报文</h2>
+          <p>主题直接归属病房，报文只保留护士需要处理的信息。</p>
+        </header>
+        <pre>{{ alarmTemplate }}</pre>
+        <footer>
+          <code>bedId</code>
+          <span>定位到具体床位并关联摄像头</span>
+        </footer>
+      </article>
+    </section>
+
     <section class="connection-note">
-      <strong>凭证安全</strong>
+      <strong>凭证与接入边界</strong>
       <p>
-        当前为前端配置演示值。正式环境由 Spring Boot
-        加密保存，浏览器通过鉴权接口读取，不下发摄像头源凭证。
+        正式环境由 Spring Boot 加密保存 Broker
+        凭证。浏览器只获取短期订阅能力，摄像头源地址和密码不会进入前端配置。
       </p>
     </section>
 
     <section class="raw-message-panel">
       <header>
         <div>
-          <span>订阅诊断</span>
+          <span>实时诊断</span>
           <h2>MQTT 原始报文</h2>
+          <p>连接成功后在这里查看订阅主题、到达时间和原始 JSON。</p>
         </div>
-        <small>等待 Broker 连接</small>
+        <span class="diagnostic-state">
+          <i />
+          等待 Broker 连接
+        </span>
       </header>
-      <div class="raw-topic-list">
-        <code v-for="topic in bedTelemetryTopics" :key="topic">SUB {{ topic }}</code>
+      <div class="raw-topic-list raw-topic-list--diagnostics">
+        <code v-for="topic in roomAlarmTopics" :key="topic">SUB {{ topic }}</code>
       </div>
-      <p>连接成功后，这里查看 Topic、QoS、到达时间和原始 JSON。</p>
     </section>
 
     <section class="document-panel">
@@ -143,23 +214,34 @@ const mqttDocument = computed(() =>
 const alarmTemplate = JSON.stringify(
   {
     alarmId: "alarm-01",
-    code: "SENSOR_STATE_CHANGED",
     level: "WARNING",
-    status: "OPEN",
     title: "传感器状态异常",
-    detail: "设备上报状态变化",
-    sensorKey: "blanket-001",
-    cameraKey: "camera-01",
     bedId: "bed-a-01",
     occurredAt: "2026-11-04T17:04:20+08:00",
   },
   null,
   2,
 );
-const bedTelemetryTopics = computed(() =>
-  store.bedSummaries
-    .map((summary) => summary.telemetryTopic)
-    .filter((topic): topic is string => Boolean(topic)),
+const sensorDataTemplate = JSON.stringify(
+  {
+    messageId: "message-01",
+    deviceKey: "blanket-001",
+    bedId: "bed-a-01",
+    observedAt: "2026-11-04T17:04:20+08:00",
+    status: "ONLINE",
+    metrics: {},
+  },
+  null,
+  2,
+);
+const roomAlarmTopics = computed(() =>
+  Array.from(
+    new Set(
+      store.bedSummaries
+        .map((summary) => summary.alarmTopic)
+        .filter((topic): topic is string => Boolean(topic)),
+    ),
+  ),
 );
 
 function save(): void {
@@ -229,11 +311,64 @@ function downloadText(fileName: string, content: string): void {
   }
 }
 
+.admin-page-header__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
+  align-items: center;
+}
+
+.connection-mode {
+  padding: 5px 8px;
+  font-size: 9px !important;
+  font-weight: 650;
+  color: #2d6d5e !important;
+  background: #edf7f2;
+  border: 1px solid #c4ddd5;
+}
+
+.connection-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 16px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #dbe6e2;
+
+  article {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    padding: 14px 16px;
+    border-right: 1px solid #e4ece9;
+
+    &:last-child {
+      border-right: 0;
+    }
+  }
+
+  span,
+  small {
+    font-size: 9px;
+    color: #7d8e89;
+  }
+
+  strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "Avenir Next", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+    font-weight: 650;
+    color: #275f53;
+    white-space: nowrap;
+  }
+}
+
 .connection-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.06fr) minmax(340px, 0.94fr);
   gap: 14px;
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .connection-card {
@@ -241,16 +376,40 @@ function downloadText(fileName: string, content: string): void {
   background: #fff;
   border: 1px solid #dbe6e2;
 
-  > span {
-    font-size: 10px;
-    font-weight: 650;
+  &--alerts {
+    background: linear-gradient(180deg, rgb(240 248 245 / 72%), transparent 120px), #fff;
+  }
+}
+
+.connection-card__header {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #e5ece9;
+
+  span {
+    font-size: 9px;
+    font-weight: 700;
     color: #4f766c;
+    letter-spacing: 0.08em;
   }
 
   h2 {
-    margin: 6px 0 16px;
+    margin: 4px 0 0;
     font-size: 17px;
-    font-weight: 650;
+    font-weight: 680;
+    letter-spacing: -0.02em;
+  }
+
+  small {
+    max-width: 170px;
+    font-size: 9px;
+    line-height: 1.55;
+    color: #85948f;
+    text-align: right;
   }
 }
 
@@ -260,28 +419,112 @@ function downloadText(fileName: string, content: string): void {
   gap: 12px;
 }
 
-.message-template {
+.room-topic-panel {
   padding: 12px;
-  margin-top: 12px;
-  background: #f4f8f6;
-  border-left: 3px solid #2f806a;
+  margin-top: 4px;
+  background: #f7fbf9;
+  border: 1px solid #e0eae6;
 
-  span {
-    font-size: 10px;
-    font-weight: 650;
-    color: #4e756a;
+  > header {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    div {
+      display: grid;
+      gap: 3px;
+    }
+
+    span,
+    small {
+      font-size: 9px;
+      color: #81918c;
+    }
+
+    strong {
+      font-size: 11px;
+      color: #35675c;
+    }
+  }
+}
+
+.message-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.message-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #dbe6e2;
+
+  > header {
+    padding: 16px 17px 13px;
+    border-bottom: 1px solid #e5ece9;
+
+    span {
+      font-size: 8px;
+      font-weight: 700;
+      color: #4b8576;
+      letter-spacing: 0.12em;
+    }
+
+    h2 {
+      margin: 4px 0 5px;
+      font-size: 16px;
+      font-weight: 680;
+    }
+
+    p {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.6;
+      color: #7d8d88;
+    }
   }
 
   pre {
-    max-height: 280px;
-    padding: 10px;
-    margin: 8px 0 0;
+    max-height: 270px;
+    padding: 14px 17px;
+    margin: 0;
     overflow: auto;
     font-family: "SFMono-Regular", Consolas, monospace;
     font-size: 10px;
     line-height: 1.65;
-    color: #355c52;
-    background: #fff;
+    color: #d8ebe5;
+    background: #082f2b;
+  }
+
+  footer {
+    display: flex;
+    gap: 9px;
+    align-items: center;
+    padding: 10px 17px;
+    background: #f7faf9;
+    border-top: 1px solid #e5ece9;
+
+    code {
+      padding: 2px 5px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 9px;
+      color: #2d6b5d;
+      background: #e9f4ef;
+    }
+
+    span {
+      font-size: 9px;
+      color: #738681;
+    }
+  }
+
+  &--alarm pre {
+    background: #2c2422;
   }
 }
 
@@ -312,11 +555,11 @@ function downloadText(fileName: string, content: string): void {
 
   > header {
     display: flex;
-    align-items: center;
+    gap: 16px;
+    align-items: flex-start;
     justify-content: space-between;
 
-    span,
-    small {
+    span {
       font-size: 9px;
       color: #81918c;
     }
@@ -325,12 +568,30 @@ function downloadText(fileName: string, content: string): void {
       margin: 3px 0 0;
       font-size: 15px;
     }
-  }
 
-  > p {
-    margin: 10px 0 0;
-    font-size: 10px;
-    color: #7e8e89;
+    p {
+      margin: 4px 0 0;
+      font-size: 9px;
+      color: #7e8e89;
+    }
+  }
+}
+
+.diagnostic-state {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 7px;
+  align-items: center;
+  padding: 5px 8px;
+  color: #7d6b49 !important;
+  background: #fbf7ed;
+  border: 1px solid #e4d5b8;
+
+  i {
+    width: 6px;
+    height: 6px;
+    background: #bc8b3d;
+    border-radius: 50%;
   }
 }
 
@@ -352,6 +613,12 @@ function downloadText(fileName: string, content: string): void {
     color: #315f55;
     white-space: nowrap;
   }
+}
+
+.raw-topic-list--diagnostics {
+  max-height: 120px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 47px, rgb(23 60 58 / 3%) 47px 48px), #f5f9f7;
 }
 
 .document-panel {
@@ -410,7 +677,28 @@ function downloadText(fileName: string, content: string): void {
     align-items: flex-start;
   }
 
+  .admin-page-header__actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .connection-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    article:nth-child(2) {
+      border-right: 0;
+    }
+
+    article:nth-child(-n + 2) {
+      border-bottom: 1px solid #e4ece9;
+    }
+  }
+
   .connection-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .message-grid {
     grid-template-columns: 1fr;
   }
 
@@ -420,6 +708,34 @@ function downloadText(fileName: string, content: string): void {
 
   .document-panel__actions {
     flex-wrap: wrap;
+  }
+}
+
+@media (width <= 520px) {
+  .connection-card__header {
+    flex-direction: column;
+
+    small {
+      max-width: none;
+      text-align: left;
+    }
+  }
+
+  .connection-row {
+    grid-template-columns: 1fr;
+  }
+
+  .connection-summary {
+    grid-template-columns: 1fr;
+
+    article {
+      border-right: 0;
+      border-bottom: 1px solid #e4ece9;
+
+      &:last-child {
+        border-bottom: 0;
+      }
+    }
   }
 }
 </style>

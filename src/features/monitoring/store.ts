@@ -48,7 +48,6 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     clientId: "medical-blanket-platform",
     username: "blanket-service",
     password: "demo-mqtt-secret",
-    telemetryTopic: "medical-blanket/v1/+/+/+/sensor/+/telemetry",
     alarmTopic: "medical-blanket/v1/+/+/+/alarm",
     alarmTitleTemplate: "{{deviceName}} 状态异常",
     alarmDetailTemplate: "{{bedName}} 在 {{occurredAt}} 上报 {{alarmCode}}",
@@ -345,7 +344,6 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       clientId: settings.clientId.trim(),
       username: settings.username.trim(),
       password: settings.password,
-      telemetryTopic: settings.telemetryTopic.trim(),
       alarmTopic: settings.alarmTopic.trim(),
     };
   }

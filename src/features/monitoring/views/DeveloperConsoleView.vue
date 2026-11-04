@@ -6,12 +6,12 @@
         <h1>开发者工作台</h1>
         <p>技术能力集中为 MQTT 与视频两条管线，配置、状态和诊断入口互不混杂。</p>
       </div>
-      <span class="developer-badge">DEVELOPER</span>
+      <span class="developer-badge">开发者视图</span>
     </header>
 
     <section class="developer-hero">
       <div>
-        <span class="developer-hero__eyebrow">SYSTEM CONTROL</span>
+        <span class="developer-hero__eyebrow">运行概览</span>
         <h2>两条数据管线，一个运行视图</h2>
         <p>MQTT 负责传感器事件，视频管线负责实时画面、录像与回放。当前所有连接和报文均可追踪。</p>
       </div>
@@ -30,7 +30,7 @@
         type="button"
         @click="router.push('/admin/connections')"
       >
-        <span class="pipeline-card__index">01</span>
+        <span class="pipeline-card__index">MQTT</span>
         <div class="pipeline-card__title">
           <span>MQTT 中枢</span>
           <h2>传感器数据接入</h2>
@@ -41,8 +41,8 @@
             <strong>{{ store.mqttSettings.brokerUrl }}</strong>
           </div>
           <div>
-            <small>床位上送 Topic</small>
-            <strong>{{ bedTelemetryTopics.length }} 个</strong>
+            <small>病房告警 Topic</small>
+            <strong>{{ roomAlarmTopics.length }} 个</strong>
           </div>
           <div>
             <small>QoS</small>
@@ -50,7 +50,7 @@
           </div>
         </div>
         <footer>
-          <span>连接配置 · 账号密码 · Topic · 原始报文</span>
+          <span>连接配置 · 告警 Topic · 数据报文 · 原始报文</span>
           <strong>进入 MQTT 管理</strong>
         </footer>
       </button>
@@ -60,7 +60,7 @@
         type="button"
         @click="router.push('/devices/cameras')"
       >
-        <span class="pipeline-card__index">02</span>
+        <span class="pipeline-card__index">VIDEO</span>
         <div class="pipeline-card__title">
           <span>视频管线</span>
           <h2>实时画面与录像</h2>
@@ -142,10 +142,14 @@ const services = [
   { name: "EMQX", state: "等待 MQTT 参数", online: false },
   { name: "MediaMTX", state: "实时流在线", online: true },
 ];
-const bedTelemetryTopics = computed(() =>
-  store.bedSummaries
-    .map((summary) => summary.telemetryTopic)
-    .filter((topic): topic is string => Boolean(topic)),
+const roomAlarmTopics = computed(() =>
+  Array.from(
+    new Set(
+      store.bedSummaries
+        .map((summary) => summary.alarmTopic)
+        .filter((topic): topic is string => Boolean(topic)),
+    ),
+  ),
 );
 </script>
 

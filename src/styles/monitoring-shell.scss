@@ -1,0 +1,63 @@
+/*
+ * Monitoring workspace shell
+ * Keeps every product module on the same reading width and spacing rhythm.
+ */
+
+:where(
+  .overview-page,
+  .bed-list-page,
+  .bed-detail,
+  .bindings-page,
+  .camera-page,
+  .management-center,
+  .organization-page,
+  .staff-page,
+  .policy-page,
+  .connection-page,
+  .developer-page
+) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1680px;
+  min-height: 100%;
+  padding: 22px 28px 48px;
+  margin: 0 auto;
+}
+
+:where(
+  .admin-page-header,
+  .bed-list-header,
+  .detail-header,
+  .management-center > .el-tabs > .el-tabs__header
+) {
+  border-radius: 0;
+}
+
+@media (width <= 900px) {
+  :where(
+    .overview-page,
+    .bed-list-page,
+    .bed-detail,
+    .bindings-page,
+    .camera-page,
+    .management-center,
+    .organization-page,
+    .staff-page,
+    .policy-page,
+    .connection-page,
+    .developer-page
+  ) {
+    padding: 16px 16px 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout-content *,
+  .layout-content *::before,
+  .layout-content *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

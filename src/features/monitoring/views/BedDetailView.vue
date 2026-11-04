@@ -33,15 +33,16 @@
             <span>床旁视频</span>
             <h2>{{ selectedCamera?.name ?? "尚未绑定摄像头" }}</h2>
           </div>
-          <span class="video-panel__protocol">待接入媒体地址</span>
+          <span class="video-panel__protocol">
+            {{ recordingAt ? "连续回放 · 双缓冲" : "WebRTC 优先" }}
+          </span>
         </header>
 
-        <video
-          v-if="recordingUrl"
-          class="detail-player detail-playback"
-          :src="recordingUrl"
-          controls
-          autoplay
+        <RecordingPlayer
+          v-if="recordingAt"
+          :segments="recordingSegments"
+          :target-at="recordingAt"
+          @time-update="playbackPositionAt = $event"
         />
         <UniversalVideoPlayer
           v-else
@@ -50,19 +51,21 @@
           :camera-status="selectedCamera?.status ?? 'OFFLINE'"
           :playback="selectedCamera?.playback ?? null"
         />
-        <button v-if="recordingUrl" type="button" class="back-to-live" @click="recordingUrl = ''">
+        <button v-if="recordingAt" type="button" class="back-to-live" @click="returnToLive">
           返回实时画面
         </button>
         <RecordingTimeline
           :segments="recordingSegments"
           :alarms="alarms"
           :retention-minutes="store.monitoringPolicy.recordingRetentionMinutes"
+          :current-at="playbackPositionAt || recordingAt"
           @seek="seekRecording"
           @select-alarm="selectAlarm"
         />
         <AlarmTimeline
           :alarms="alarms"
           :location-label="`${summary.ward?.name ?? ''} · ${summary.room?.name ?? ''} · ${summary.bed.bedNo} 床`"
+          :topic="summary.alarmTopic ?? ''"
           @resolve="store.resolveAlarm"
         />
       </section>
@@ -113,9 +116,8 @@
         <div class="sensor-contract">
           <span>数据接口</span>
           <p>传感器只上报标准化设备事件，由后续分析处理器解释和扩展。</p>
-          <code v-if="summary.telemetryTopic">{{ summary.telemetryTopic }}</code>
           <code v-if="summary.alarmTopic">告警：{{ summary.alarmTopic }}</code>
-          <small>每张床位独立 Topic → Java 订阅 → WebSocket → 传感器图 / 分析处理器</small>
+          <small>病房独立告警 Topic → Java 订阅 → WebSocket → 告警记录 / 分析处理器</small>
         </div>
         <AnalysisExtensionPanel />
       </section>
@@ -145,6 +147,7 @@ import UniversalVideoPlayer from "@/components/UniversalVideoPlayer/index.vue";
 import AlarmTimeline from "../components/AlarmTimeline.vue";
 import AnalysisExtensionPanel from "../components/AnalysisExtensionPanel.vue";
 import PatientEditor from "../components/PatientEditor.vue";
+import RecordingPlayer from "../components/RecordingPlayer.vue";
 import RecordingTimeline from "../components/RecordingTimeline.vue";
 import SensorDeviceGraphic from "../components/SensorDeviceGraphic.vue";
 import {
@@ -202,13 +205,22 @@ const lastSeenLabel = computed(() => {
 
 // 回放与告警数据由 RecordingTimelineSource / MQTT 告警主题接入。
 const recordingSegments = ref<RecordingSegment[]>([]);
-const recordingUrl = ref("");
+const recordingAt = ref("");
+const playbackPositionAt = ref("");
 let recordingTimer: ReturnType<typeof setInterval> | null = null;
 const alarms = computed(() => store.alarms.filter((alarm) => alarm.bedId === route.params.bedId));
 
 function openRecordingAt(targetAt: string): void {
   const segment = findPlaybackSegment(recordingSegments.value, targetAt);
-  if (segment) recordingUrl.value = segment.playbackUrl;
+  if (segment) {
+    recordingAt.value = targetAt;
+    playbackPositionAt.value = targetAt;
+  }
+}
+
+function returnToLive(): void {
+  recordingAt.value = "";
+  playbackPositionAt.value = "";
 }
 
 function seekRecording(targetAt: string): void {
@@ -414,12 +426,6 @@ onBeforeUnmount(() => {
 .detail-player {
   min-height: 440px;
   margin-top: 16px;
-}
-
-.detail-playback {
-  width: 100%;
-  object-fit: contain;
-  background: #052421;
 }
 
 .back-to-live {

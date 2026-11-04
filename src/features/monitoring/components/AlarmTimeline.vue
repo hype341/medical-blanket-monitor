@@ -2,10 +2,13 @@
   <section class="alarm-timeline">
     <header>
       <div>
-        <h3>告警时间线</h3>
-        <p>订阅 MQTT 告警主题，按发生时间生成记录。</p>
+        <span class="alarm-timeline__eyebrow">病房级独立告警</span>
+        <h3>病房告警</h3>
+        <p>每间病房使用独立 Topic，报文中的床位编号用于定位。</p>
       </div>
-      <span>{{ alarms.length }} 条</span>
+      <span class="alarm-timeline__count" :data-active="unresolvedCount > 0">
+        {{ unresolvedCount > 0 ? `${unresolvedCount} 条待处理` : "当前平稳" }}
+      </span>
     </header>
 
     <ol v-if="alarms.length" class="alarm-timeline__list">
@@ -15,24 +18,26 @@
         :data-level="alarm.level"
         :data-status="alarm.status"
       >
-        <time>{{ formatTime(alarm.occurredAt) }}</time>
-        <div>
-          <strong>
-            {{ alarm.title }}
-            <span>{{ alarm.status === "RESOLVED" ? "已解决" : "报警中" }}</span>
-          </strong>
-          <p>{{ alarm.detail }}</p>
-          <small>
-            {{ locationLabel }} · {{ alarm.code }} · {{ alarm.cameraKey }}
-            <template v-if="alarm.resolvedAt">· {{ formatTime(alarm.resolvedAt) }} 解决</template>
-          </small>
+        <div class="alarm-timeline__meta">
+          <span class="alarm-timeline__state">
+            <i aria-hidden="true" />
+            {{ alarm.status === "RESOLVED" ? "已解决" : levelLabel(alarm.level) }}
+          </span>
+          <time :datetime="alarm.occurredAt">{{ formatTime(alarm.occurredAt) }}</time>
+        </div>
+        <div class="alarm-timeline__content">
+          <h4>{{ alarm.title }}</h4>
+          <p class="alarm-location">
+            <span>{{ locationLabel }}</span>
+          </p>
+          <small v-if="alarm.resolvedAt">解决于 {{ formatTime(alarm.resolvedAt) }}</small>
         </div>
         <button
           v-if="alarm.status !== 'RESOLVED'"
           type="button"
           @click="emit('resolve', alarm.alarmId)"
         >
-          解决并自动删除
+          标记已解决
         </button>
       </li>
     </ol>
@@ -40,36 +45,51 @@
     <div v-else class="alarm-timeline__empty">
       <span class="alarm-timeline__mark" />
       <div>
-        <strong>暂无告警</strong>
-        <p>有告警消息时将保存时间节点，并触发对应摄像头片段留存。</p>
+        <strong>病房状态平稳</strong>
+        <p>收到本病房的独立告警主题后，记录会立即显示在这里。</p>
       </div>
     </div>
 
     <footer>
-      <span>告警主题</span>
-      <code>medical-blanket/v1/+/+/+/alarm/+</code>
+      <span>本病房独立告警 Topic</span>
+      <code :title="topic || '尚未生成'">{{ topic || "尚未生成" }}</code>
       <small>告警前 30 秒 + 后 60 秒自动剪辑</small>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import type { AlarmEnvelope } from "../recording";
+import { computed } from "vue";
+import type { AlarmEnvelope, AlarmLevel } from "../recording";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     alarms?: AlarmEnvelope[];
     locationLabel?: string;
+    topic?: string;
   }>(),
   {
     alarms: () => [],
     locationLabel: "",
+    topic: "",
   },
 );
 
 const emit = defineEmits<{
   resolve: [alarmId: string];
 }>();
+
+const unresolvedCount = computed(
+  () => props.alarms.filter((alarm) => alarm.status !== "RESOLVED").length,
+);
+
+function levelLabel(level: AlarmLevel): string {
+  return {
+    INFO: "提醒",
+    WARNING: "待处理",
+    CRITICAL: "紧急",
+  }[level];
+}
 
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -171,6 +191,24 @@ function formatTime(value: string): string {
     color: #7c8985;
   }
 
+  .alarm-location {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+
+    span {
+      padding: 3px 6px;
+      color: #315f55;
+      background: #edf6f2;
+      border: 1px solid #c7ddd5;
+    }
+
+    small {
+      color: #a43d34;
+    }
+  }
+
   button {
     align-self: center;
     padding: 4px 7px;
@@ -266,6 +304,189 @@ function formatTime(value: string): string {
   .alarm-timeline footer small {
     width: 100%;
     margin-left: 0;
+  }
+}
+
+/* 病房告警视图：卡片只承载业务信息，Topic 保留在页脚供开发联调。 */
+.alarm-timeline {
+  padding: 0;
+  overflow: hidden;
+  border-color: #d9e5e0;
+}
+
+.alarm-timeline > header {
+  padding: 18px;
+  background:
+    linear-gradient(90deg, rgb(237 247 243 / 94%), rgb(252 254 253 / 96%)),
+    repeating-linear-gradient(90deg, transparent 0 35px, rgb(34 108 91 / 5%) 35px 36px);
+  border-bottom: 1px solid #e4ece9;
+
+  h3 {
+    margin-top: 3px;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    margin-top: 5px;
+    font-size: 10px;
+    line-height: 1.6;
+    color: #70847e;
+  }
+}
+
+.alarm-timeline__eyebrow {
+  font-size: 9px !important;
+  font-weight: 700;
+  color: #367466 !important;
+  letter-spacing: 0.12em;
+}
+
+.alarm-timeline__count {
+  flex-shrink: 0;
+  padding: 6px 9px;
+  font-weight: 650;
+  color: #526f67 !important;
+  background: rgb(255 255 255 / 80%);
+  border: 1px solid #cbded7;
+
+  &[data-active="true"] {
+    color: #a1362e !important;
+    background: #fff2ef;
+    border-color: #e6b7b1;
+  }
+}
+
+.alarm-timeline__list {
+  padding: 14px;
+  margin-top: 0;
+
+  li {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 13px 14px 13px 18px;
+    background: #fff;
+    border: 1px solid #e3eae7;
+    border-left: 0;
+
+    &::before {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      content: "";
+      background: #d79443;
+    }
+
+    &[data-level="CRITICAL"] {
+      background: #fff5f3;
+      border-color: #e7b8b2;
+
+      &::before {
+        background: #a72c23;
+      }
+    }
+
+    &[data-status="RESOLVED"] {
+      background: #f3faf6;
+      border-color: #c6dfd6;
+
+      &::before {
+        background: #368468;
+      }
+    }
+  }
+}
+
+.alarm-timeline__meta {
+  display: flex !important;
+  grid-column: 1 / -1;
+  gap: 9px !important;
+  align-items: center;
+
+  time {
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+    color: #7e8c88;
+  }
+}
+
+.alarm-timeline__state {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 650;
+  color: #955033;
+
+  i {
+    width: 6px;
+    height: 6px;
+    background: currentcolor;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgb(199 76 61 / 9%);
+  }
+}
+
+.alarm-timeline__list li[data-level="CRITICAL"] .alarm-timeline__state {
+  color: #a72c23;
+}
+
+.alarm-timeline__list li[data-status="RESOLVED"] .alarm-timeline__state {
+  color: #2d7d62;
+}
+
+.alarm-timeline__content {
+  display: grid;
+  gap: 5px !important;
+  min-width: 0;
+
+  h4 {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 14px;
+    font-weight: 680;
+    color: #263d39;
+    white-space: nowrap;
+  }
+}
+
+.alarm-timeline__list .alarm-location span {
+  padding: 0;
+  color: #5f746e;
+  background: transparent;
+  border: 0;
+}
+
+.alarm-timeline__list button {
+  min-height: 30px;
+  padding: 6px 9px;
+  font-weight: 600;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+
+  &:hover {
+    color: #fff;
+    background: #a84237;
+    border-color: #a84237;
+  }
+}
+
+.alarm-timeline footer {
+  padding: 12px 18px;
+  margin-top: 0;
+  background: #f7faf9;
+}
+
+@media (width <= 640px) {
+  .alarm-timeline__list li {
+    grid-template-columns: 1fr;
+  }
+
+  .alarm-timeline__list button {
+    justify-self: start;
   }
 }
 </style>

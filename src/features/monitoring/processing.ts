@@ -6,6 +6,7 @@ export type VideoFrameFormat = "JPEG" | "PNG" | "YUV420" | "H264";
 export interface SensorTelemetryEnvelope {
   messageId: string;
   deviceKey: string;
+  bedId?: string;
   observedAt: string;
   status: SensorStatus;
   metrics: SensorMetrics;

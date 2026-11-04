@@ -17,13 +17,11 @@ export function generateMqttDocumentation(
       const room = data.rooms.find((item) => item.id === bed.roomId);
       return `| ${ward?.name ?? "-"} | ${room?.roomNo ?? "-"} | ${bed.bedNo} | ${
         summary?.sensor?.deviceKey ?? "未绑定"
-      } | ${summary?.telemetryTopic ?? "未生成"} | ${summary?.alarmTopic ?? "未生成"} |`;
+      } | ${summary?.alarmTopic ?? "未生成"} |`;
     })
     .join("\n");
 
-  const firstSensorBed = rows.find(({ summary }) => summary?.sensor);
-  const sampleSensor = firstSensorBed?.summary?.sensor;
-  const sampleBed = firstSensorBed?.bed;
+  const sampleBed = rows[0]?.bed;
 
   return `# 医用智能毯平台 MQTT 连接文档
 
@@ -39,7 +37,6 @@ export function generateMqttDocumentation(
 | 用户名 | \`${settings.username}\` |
 | 密码 | \`${settings.password}\` |
 | QoS | \`${settings.qos}\` |
-| 遥测订阅 | \`${settings.telemetryTopic}\` |
 | 告警订阅 | \`${settings.alarmTopic}\` |
 
 ## 第三方直接订阅函数
@@ -52,7 +49,7 @@ const stream = openMqttSensorStream(settings, {
     console.log("传感器数据", reading);
   },
   onAlarm(alarm) {
-    console.warn("床位告警", alarm.bedId, alarm.title);
+    console.warn("病房告警", alarm.bedId, alarm.title);
   },
   onStatus(status) {
     console.log("MQTT 状态", status);
@@ -63,27 +60,41 @@ const stream = openMqttSensorStream(settings, {
 stream.close();
 \`\`\`
 
-## 病房、床位与独立 Topic
+## 病房、床位与独立告警 Topic
 
-| 病区 | 病房 | 床位 | 传感器 | 遥测 Topic | 告警 Topic |
-| --- | --- | --- | --- | --- | --- |
+| 病区 | 病房 | 床位 | 传感器 | 病房告警 Topic |
+| --- | --- | --- | --- | --- |
 ${topicRows}
 
-## 遥测报文示例
+## 传感器数据报文
+
+传感器图形只依赖设备身份、上报时间和状态。\`metrics\` 保留给后续识别处理器，当前允许为空对象；毯子不要求温度、压力或电量字段。
 
 \`\`\`json
 {
-  "messageId": "01J9Z1W5QJ0B7W8P5F3D2K1N6M",
-  "deviceKey": "${sampleSensor?.deviceKey ?? "blanket-001"}",
+  "messageId": "message-01",
+  "deviceKey": "${rows[0]?.summary?.sensor?.deviceKey ?? "blanket-001"}",
   "bedId": "${sampleBed?.id ?? "bed-a-01"}",
   "observedAt": "${generatedAt}",
   "status": "ONLINE",
-  "metrics": {},
-  "events": []
+  "metrics": {}
 }
 \`\`\`
 
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| \`messageId\` | string | 消息唯一标识，用于去重和追踪 |
+| \`deviceKey\` | string | 毯子传感器设备标识，必须与设备绑定一致 |
+| \`bedId\` | string | 床位标识，用于校验传感器与床位关系 |
+| \`observedAt\` | ISO 8601 string | 设备采集时间，包含时区 |
+| \`status\` | string | \`ONLINE\`、\`STALE\`、\`OFFLINE\` 或 \`ALARM\`，驱动传感器图形状态 |
+| \`metrics\` | object | 识别扩展字段；没有业务指标时传空对象 |
+
+第三方页面或识别服务调用 \`openMqttSensorStream\` 后，在 \`onTelemetry(reading)\` 中直接接收上述数据对象。
+
 ## 告警报文示例
+
+告警 Topic 直接归属于病房，报文中的 \`bedId\` 用于定位具体床位。
 
 \`\`\`json
 {
@@ -94,6 +105,14 @@ ${topicRows}
   "occurredAt": "${generatedAt}"
 }
 \`\`\`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| \`alarmId\` | string | 告警唯一标识，重复上报会覆盖同一条告警 |
+| \`level\` | string | \`INFO\`、\`WARNING\` 或 \`CRITICAL\` |
+| \`title\` | string | 护士可直接阅读的告警标题 |
+| \`bedId\` | string | 告警对应床位，后端据此补全病区、病房和摄像头 |
+| \`occurredAt\` | ISO 8601 string | 告警发生时间，包含时区 |
 `;
 }
 
@@ -103,7 +122,7 @@ export function generateVideoDocumentation(data: MonitoringData, generatedAt: st
       .map((bed) => ({ bed, summary: getBedMonitorSummary(bed.id, data) }))
       .filter(({ summary }) => summary?.cameras.some((item) => item.id === camera.id));
     const mappings = linked
-      .map(({ bed, summary }) => {
+      .map(({ bed }) => {
         const ward = data.wards.find((item) => item.id === bed.wardId);
         const room = data.rooms.find((item) => item.id === bed.roomId);
         return `- ${ward?.name ?? "-"} / ${room?.name ?? "-"} / ${bed.bedNo} 床`;

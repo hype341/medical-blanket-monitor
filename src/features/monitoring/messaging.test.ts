@@ -1,19 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { buildBedMqttTopics } from "./messaging";
+import { buildRoomAlarmTopic, SENSOR_EVENT_TOPIC } from "./messaging";
 
-describe("per-bed MQTT topics", () => {
-  it("creates unique telemetry and alarm topics for a bed sensor", () => {
+describe("room MQTT topics", () => {
+  it("creates an independent alarm topic for each hospital room", () => {
     expect(
-      buildBedMqttTopics({
+      buildRoomAlarmTopic({
         hospitalCode: "H001",
         wardCode: "WARD-A",
         roomNo: "301",
-        bedNo: "01",
-        deviceKey: "blanket-001",
       }),
-    ).toEqual({
-      telemetry: "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/telemetry",
-      alarm: "medical-blanket/v1/H001/WARD-A/301/alarm",
-    });
+    ).toBe("medical-blanket/v1/H001/WARD-A/301/alarm");
+    expect(SENSOR_EVENT_TOPIC).toBe("medical-blanket/v1/+/+/+/sensor/+/telemetry");
   });
 });
