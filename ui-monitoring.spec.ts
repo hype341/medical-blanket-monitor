@@ -41,17 +41,21 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await page.screenshot({ path: "test-results/monitoring-bed-detail.png", fullPage: true });
 });
 
-test("video monitor exposes the single camera and explicit unavailable state", async ({ page }) => {
+test("video monitor plays the real Jetson camera stream", async ({ page }) => {
   await loginAsAdmin(page);
 
   await page.getByText("实时监控", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "实时监控" })).toBeVisible();
-  await expect(page.getByText("摄像头线路尚未接入").first()).toBeVisible();
   await expect(page.locator('[data-testid="video-tile"]')).toHaveCount(1);
+  await expect(page.getByText("301 病房摄像头").first()).toBeVisible();
+  await expect(page.locator('.universal-player[data-state="playing"]')).toBeVisible({
+    timeout: 20_000,
+  });
+  await page.screenshot({ path: "test-results/live-camera.png", fullPage: true });
 });
 
 test("binding page maps one camera to a bed without side-view options", async ({ page }) => {
-  await loginAs(page, "developer");
+  await loginAsAdmin(page);
 
   await page.getByText("设备绑定", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "设备绑定" })).toBeVisible();
@@ -86,7 +90,7 @@ test("nurse can add and update a patient but cannot manage bindings", async ({ p
   await expect(page.getByText("患者信息已保存")).toBeVisible();
 
   await page.getByText("设备绑定", { exact: true }).first().click();
-  await expect(page.getByText("仅开发者可修改设备绑定")).toBeVisible();
+  await expect(page.getByText("仅管理员或开发者可修改设备绑定")).toBeVisible();
   await expect(page.getByRole("button", { name: "编辑绑定" }).first()).toBeDisabled();
   await expect(page.getByText("病区与病房", { exact: true })).toHaveCount(0);
 });

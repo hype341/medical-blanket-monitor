@@ -126,8 +126,15 @@ const cameras: Camera[] = [
     id: "camera-01",
     cameraKey: "camera-ward-a-301",
     name: "301 病房摄像头",
-    status: "OFFLINE",
-    playback: null,
+    status: "ONLINE",
+    playback: {
+      cameraId: "camera-01",
+      preferredProtocol: "webrtc",
+      webrtcUrl: "http://10.208.236.131:8889/camera-01/whep",
+      hlsUrl: "http://10.208.236.131:8888/camera-01/index.m3u8",
+      flvUrl: null,
+      expiresAt: "2099-12-31T23:59:59+08:00",
+    },
   },
 ];
 

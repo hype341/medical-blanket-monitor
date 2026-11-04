@@ -201,5 +201,7 @@ export interface MqttSettings {
   password: string;
   telemetryTopic: string;
   alarmTopic: string;
+  alarmTitleTemplate: string;
+  alarmDetailTemplate: string;
   qos: 0 | 1 | 2;
 }

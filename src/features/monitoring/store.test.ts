@@ -16,7 +16,7 @@ describe("monitoring store", () => {
 
   it("can replace a bed camera binding without changing another bed", () => {
     const store = useMonitoringStore();
-    store.setActiveRole("DEVELOPER");
+    store.setActiveRole("ADMIN");
     const otherBindingsBefore = store.getBedBindings("bed-a-02");
 
     store.updateBinding({
@@ -67,7 +67,7 @@ describe("monitoring store", () => {
         sensorDeviceId: "sensor-bed-a-01",
         cameraId: "camera-01",
       }),
-    ).toThrow("仅开发者可以修改设备绑定");
+    ).toThrow("仅管理员或开发者可以修改设备绑定");
   });
 
   it("turns a resolved warning into a resolved alarm state", () => {

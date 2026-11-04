@@ -14,7 +14,7 @@
       <p>
         传感器上报标准化设备事件，摄像头提供床旁画面。仅管理员可修改绑定，护士查看当前授权关系。
       </p>
-      <strong v-if="!store.canManageBindings">仅开发者可修改设备绑定</strong>
+      <strong v-if="!store.canManageBindings">仅管理员或开发者可修改设备绑定</strong>
     </section>
 
     <div class="binding-table">

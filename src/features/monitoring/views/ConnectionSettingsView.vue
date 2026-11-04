@@ -58,6 +58,12 @@
           <el-form-item label="告警主题">
             <el-input v-model.trim="form.alarmTopic" />
           </el-form-item>
+          <el-form-item label="告警标题模板">
+            <el-input v-model="form.alarmTitleTemplate" />
+          </el-form-item>
+          <el-form-item label="告警详情模板">
+            <el-input v-model="form.alarmDetailTemplate" type="textarea" :rows="3" />
+          </el-form-item>
         </el-form>
 
         <div class="message-template">

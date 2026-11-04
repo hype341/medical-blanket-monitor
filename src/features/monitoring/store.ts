@@ -48,6 +48,8 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     password: "demo-mqtt-secret",
     telemetryTopic: "medical-blanket/v1/+/+/+/sensor/+/telemetry",
     alarmTopic: "medical-blanket/v1/+/+/+/alarm/+",
+    alarmTitleTemplate: "{{deviceName}} 状态异常",
+    alarmDetailTemplate: "{{bedName}} 在 {{occurredAt}} 上报 {{alarmCode}}",
     qos: 1,
   });
   let bindingSequence = 100;
@@ -81,7 +83,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   const isPlatformManager = computed(
     () => activeRole.value === "ADMIN" || activeRole.value === "DEVELOPER",
   );
-  const canManageBindings = computed(() => activeRole.value === "DEVELOPER");
+  const canManageBindings = computed(() => isPlatformManager.value);
   const canManageOrganization = computed(() => isPlatformManager.value);
   const canManageStaff = computed(() => isPlatformManager.value);
   const canManageCameras = computed(() => activeRole.value === "DEVELOPER");
@@ -95,7 +97,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
 
   function updateBinding(input: BindingInput): void {
     if (!canManageBindings.value) {
-      throw new Error("仅开发者可以修改设备绑定");
+      throw new Error("仅管理员或开发者可以修改设备绑定");
     }
 
     const now = new Date().toISOString();

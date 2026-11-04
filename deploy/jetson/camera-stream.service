@@ -1,0 +1,18 @@
+[Unit]
+Description=Jetson IMX219 camera RTMP stream
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=lg
+Group=video
+Environment=GST_DEBUG=0
+ExecStart=/usr/local/bin/camera-stream.sh
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target
