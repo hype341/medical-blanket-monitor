@@ -64,7 +64,7 @@
           </el-form-item>
         </div>
         <el-form-item label="角色">
-          <el-radio-group v-model="form.role">
+          <el-radio-group v-model="form.role" @change="applyRoleDefaults(form.role)">
             <el-radio-button value="NURSE">护士</el-radio-button>
             <el-radio-button value="HEAD_NURSE">护士长</el-radio-button>
             <el-radio-button value="ADMIN">管理员</el-radio-button>
@@ -82,6 +82,17 @@
               :value="ward.id"
             />
           </el-select>
+        </el-form-item>
+        <el-form-item label="开放模块">
+          <el-checkbox-group v-model="form.modulePermissions" class="module-grid">
+            <el-checkbox
+              v-for="module in selectableModules"
+              :key="module.value"
+              :value="module.value"
+            >
+              {{ module.label }}
+            </el-checkbox>
+          </el-checkbox-group>
         </el-form-item>
         <el-form-item :label="editingStaffId ? '重置密码（可选）' : '登录密码'">
           <el-input
@@ -123,6 +134,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
+import { defaultModulesForRole, moduleOptions } from "../permissions";
 import { useMonitoringStore } from "../store";
 import type { MonitoringRole, StaffInput, StaffStatus } from "../types";
 
@@ -135,6 +147,7 @@ const form = reactive<StaffInput>({
   role: "NURSE",
   wardIds: [],
   status: "ACTIVE",
+  modulePermissions: defaultModulesForRole("NURSE"),
 });
 
 const activeCount = computed(
@@ -144,6 +157,11 @@ const visibleStaff = computed(() =>
   store.activeRole === "DEVELOPER"
     ? store.staff
     : store.staff.filter((member) => member.role !== "DEVELOPER"),
+);
+const selectableModules = computed(() =>
+  store.activeRole === "DEVELOPER"
+    ? moduleOptions
+    : moduleOptions.filter((module) => !["video", "mqtt", "developer"].includes(module.value)),
 );
 
 function openEditor(staffId?: string): void {
@@ -157,6 +175,7 @@ function openEditor(staffId?: string): void {
       role: member.role,
       wardIds: [...member.wardIds],
       status: member.status,
+      modulePermissions: [...(member.modulePermissions ?? [])],
       initialPassword: "",
     });
   } else {
@@ -166,6 +185,7 @@ function openEditor(staffId?: string): void {
       role: "NURSE" as MonitoringRole,
       wardIds: store.wards[0] ? [store.wards[0].id] : [],
       status: "ACTIVE" as StaffStatus,
+      modulePermissions: defaultModulesForRole("NURSE"),
       initialPassword: "",
     });
   }
@@ -196,6 +216,7 @@ function toggleStatus(staffId: string): void {
     role: member.role,
     wardIds: member.wardIds,
     status: member.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
+    modulePermissions: [...(member.modulePermissions ?? [])],
     initialPassword: "",
   });
   ElMessage.success("账号状态已更新");
@@ -215,6 +236,10 @@ function wardNames(wardIds: string[]): string {
     .filter((ward) => wardIds.includes(ward.id))
     .map((ward) => ward.name.replace(` · ${ward.name.split(" · ")[1]}`, ""));
   return names.length ? names.join("、") : "未授权";
+}
+
+function applyRoleDefaults(role: MonitoringRole): void {
+  form.modulePermissions = defaultModulesForRole(role);
 }
 </script>
 
@@ -356,6 +381,16 @@ function wardNames(wardIds: string[]): string {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 14px;
+  width: 100%;
+  padding: 12px;
+  background: #f6faf8;
+  border: 1px solid #e1e9e6;
 }
 
 @media (width <= 620px) {

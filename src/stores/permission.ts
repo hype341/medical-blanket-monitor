@@ -14,10 +14,12 @@ import type { RouteItem } from "@/api/system/menu";
 const Layout = () => import("../layouts/index.vue");
 
 function getProductRoutes(): RouteRecordRaw[] {
-  const role = useMonitoringStore().activeRole;
+  const monitoringStore = useMonitoringStore();
+  const role = monitoringStore.activeRole;
   return filterRoutesForRole(
     constantRoutes as unknown as RoleProtectedRoute[],
     role,
+    monitoringStore.activeModulePermissions,
   ) as RouteRecordRaw[];
 }
 

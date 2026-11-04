@@ -4,6 +4,17 @@ export type BedStatus = "AVAILABLE" | "OCCUPIED" | "CLEANING" | "OFFLINE";
 export type PatientStatus = "STABLE" | "OBSERVATION" | "CRITICAL";
 export type MonitoringRole = "NURSE" | "HEAD_NURSE" | "ADMIN" | "DEVELOPER";
 export type StaffStatus = "ACTIVE" | "DISABLED";
+export type PermissionModule =
+  | "overview"
+  | "beds"
+  | "monitor"
+  | "bindings"
+  | "organization"
+  | "staff"
+  | "policy"
+  | "video"
+  | "mqtt"
+  | "developer";
 export type BindingRole = "PRIMARY_SENSOR" | "PRIMARY_CAMERA";
 export type BindingStatus = "ACTIVE" | "INACTIVE";
 export type PlaybackProtocol = "webrtc" | "hls" | "flv";
@@ -172,6 +183,7 @@ export interface StaffMember {
   wardIds: string[];
   status: StaffStatus;
   passwordUpdatedAt?: string;
+  modulePermissions?: PermissionModule[];
 }
 
 export interface StaffInput {
@@ -181,6 +193,7 @@ export interface StaffInput {
   wardIds: string[];
   status: StaffStatus;
   initialPassword?: string;
+  modulePermissions?: PermissionModule[];
 }
 
 export interface CameraInput {

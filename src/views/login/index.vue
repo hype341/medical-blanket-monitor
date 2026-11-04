@@ -279,7 +279,7 @@ async function handleLoginSubmit() {
                 : "ADMIN";
         const wardIds =
           username === "nurse" || username === "head-nurse" ? ["ward-a"] : ["ward-a", "ward-b"];
-        monitoringStore.setActiveRole(role);
+        monitoringStore.setActiveRole(role, username);
         monitoringStore.setCurrentWardIds(wardIds);
         const redirectPath = (route.query.redirect as string) || "/";
         await router.push(decodeURIComponent(redirectPath));

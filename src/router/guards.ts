@@ -3,6 +3,7 @@ import NProgress from "@/plugins/nprogress";
 import router from "@/router";
 import { usePermissionStore, useUserStore } from "@/stores";
 import { useMonitoringStore } from "@/features/monitoring/store";
+import type { PermissionModule } from "@/features/monitoring/types";
 import { useTenantStoreHook } from "@/stores/tenant";
 import { isTenantEnabled } from "@/utils/tenant";
 
@@ -41,11 +42,20 @@ export function setupPermissionGuard() {
 
       const permissionStore = usePermissionStore();
       const userStore = useUserStore();
-      const role = useMonitoringStore().activeRole;
+      const monitoringStore = useMonitoringStore();
+      const role = monitoringStore.activeRole;
       const requiredRoles = to.matched.flatMap(
         (record) => (record.meta.roles as string[] | undefined) ?? [],
       );
       if (requiredRoles.length && !requiredRoles.includes(role)) {
+        NProgress.done();
+        return "/404";
+      }
+      const requiredModule = to.meta.module;
+      if (
+        typeof requiredModule === "string" &&
+        !monitoringStore.canAccessModule(requiredModule as PermissionModule)
+      ) {
         NProgress.done();
         return "/404";
       }

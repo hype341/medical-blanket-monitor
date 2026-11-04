@@ -294,4 +294,15 @@ describe("monitoring store", () => {
       }),
     ).toThrow("医院管理员不能创建系统开发者账号");
   });
+
+  it("separates module permissions by role", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("NURSE", "nurse");
+    expect(store.canAccessModule("monitor")).toBe(true);
+    expect(store.canAccessModule("mqtt")).toBe(false);
+
+    store.setActiveRole("DEVELOPER", "developer");
+    expect(store.canAccessModule("mqtt")).toBe(true);
+    expect(store.canAccessModule("video")).toBe(true);
+  });
 });

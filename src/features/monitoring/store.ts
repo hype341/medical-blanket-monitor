@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { createMonitoringFixture } from "./mock-data";
+import { defaultModulesForRole } from "./permissions";
 import type { AlarmEnvelope } from "./recording";
 import { getBedMonitorSummary } from "./selectors";
 import type {
@@ -15,6 +16,7 @@ import type {
   MonitoringPolicy,
   MonitoringRole,
   MqttSettings,
+  PermissionModule,
   PatientUpdateInput,
   SensorDevice,
   StaffInput,
@@ -60,6 +62,13 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   let cameraSequence = 100;
 
   const { hospital, wards, rooms, beds, sensors, cameras, bindings, staff } = fixture.value;
+  const activeUsername = ref(sessionStorage.getItem("monitoring-username") ?? "");
+  const storedModules = sessionStorage.getItem("monitoring-modules");
+  const activeModulePermissions = ref<PermissionModule[]>(
+    storedModules
+      ? (JSON.parse(storedModules) as PermissionModule[])
+      : defaultModulesForRole(activeRole.value),
+  );
 
   const currentWards = computed(() =>
     wards.filter((ward) => currentWardIds.value.includes(ward.id)),
@@ -138,9 +147,20 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     currentWardIds.value = wardIds;
   }
 
-  function setActiveRole(role: MonitoringRole): void {
+  function setActiveRole(role: MonitoringRole, username?: string): void {
     activeRole.value = role;
+    activeUsername.value = username ?? "";
     sessionStorage.setItem("monitoring-role", role);
+    if (username) sessionStorage.setItem("monitoring-username", username);
+    const member = username
+      ? staff.find((item) => item.username === username)
+      : staff.find((item) => item.role === role);
+    activeModulePermissions.value = [...(member?.modulePermissions ?? defaultModulesForRole(role))];
+    sessionStorage.setItem("monitoring-modules", JSON.stringify(activeModulePermissions.value));
+  }
+
+  function canAccessModule(module: PermissionModule): boolean {
+    return activeModulePermissions.value.includes(module);
   }
 
   function assertOrganizationAdmin(): void {
@@ -218,6 +238,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       wardIds: [...input.wardIds],
       status: input.status,
       passwordUpdatedAt: new Date().toISOString(),
+      modulePermissions: [...(input.modulePermissions ?? defaultModulesForRole(input.role))],
     });
     return staffId;
   }
@@ -239,6 +260,9 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     member.role = input.role;
     member.wardIds = [...input.wardIds];
     member.status = input.status;
+    member.modulePermissions = [
+      ...(input.modulePermissions ?? member.modulePermissions ?? defaultModulesForRole(input.role)),
+    ];
     if (input.initialPassword) {
       if (input.initialPassword.length < 6) {
         throw new Error("新密码不能少于 6 位");
@@ -394,6 +418,8 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     mqttSettings,
     currentWardIds,
     activeRole,
+    activeUsername,
+    activeModulePermissions,
     currentWards,
     visibleBeds,
     bedSummaries,
@@ -408,6 +434,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     updateBinding,
     setCurrentWardIds,
     setActiveRole,
+    canAccessModule,
     addWard,
     updateWard,
     addRoom,

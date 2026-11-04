@@ -80,11 +80,25 @@
         加密保存，浏览器通过鉴权接口读取，不下发摄像头源凭证。
       </p>
     </section>
+
+    <section class="raw-message-panel">
+      <header>
+        <div>
+          <span>订阅诊断</span>
+          <h2>MQTT 原始报文</h2>
+        </div>
+        <small>等待 Broker 连接</small>
+      </header>
+      <div class="raw-topic-list">
+        <code v-for="topic in bedTelemetryTopics" :key="topic">SUB {{ topic }}</code>
+      </div>
+      <p>连接成功后，这里查看 Topic、QoS、到达时间和原始 JSON。</p>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useMonitoringStore } from "../store";
 import type { MqttSettings } from "../types";
@@ -107,6 +121,11 @@ const alarmTemplate = JSON.stringify(
   },
   null,
   2,
+);
+const bedTelemetryTopics = computed(() =>
+  store.bedSummaries
+    .map((summary) => summary.telemetryTopic)
+    .filter((topic): topic is string => Boolean(topic)),
 );
 
 function save(): void {
@@ -226,6 +245,56 @@ function save(): void {
     font-size: 10px;
     line-height: 1.7;
     color: #78625e;
+  }
+}
+
+.raw-message-panel {
+  padding: 18px;
+  margin-top: 14px;
+  background: #fff;
+  border: 1px solid #dbe6e2;
+
+  > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    span,
+    small {
+      font-size: 9px;
+      color: #81918c;
+    }
+
+    h2 {
+      margin: 3px 0 0;
+      font-size: 15px;
+    }
+  }
+
+  > p {
+    margin: 10px 0 0;
+    font-size: 10px;
+    color: #7e8e89;
+  }
+}
+
+.raw-topic-list {
+  display: grid;
+  gap: 5px;
+  max-height: 180px;
+  padding: 10px;
+  margin-top: 12px;
+  overflow: auto;
+  background: #f5f9f7;
+  border-left: 3px solid #4c8c7b;
+
+  code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 9px;
+    color: #315f55;
+    white-space: nowrap;
   }
 }
 

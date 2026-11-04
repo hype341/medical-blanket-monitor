@@ -75,6 +75,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           title: "安全总览",
           icon: "homepage",
           affix: true,
+          module: "overview",
         },
       },
       {
@@ -84,6 +85,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: {
           title: "床位监护",
           icon: "table",
+          module: "beds",
         },
       },
       {
@@ -95,6 +97,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           icon: "table",
           hidden: true,
           keepAlive: true,
+          module: "beds",
         },
       },
       {
@@ -105,6 +108,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           title: "实时监控",
           icon: "monitor",
           keepAlive: true,
+          module: "monitor",
         },
       },
       {
@@ -114,6 +118,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: {
           title: "设备绑定",
           icon: "api",
+          module: "bindings",
         },
       },
       {
@@ -121,9 +126,10 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: "CameraManagement",
         component: () => import("@/features/monitoring/views/CameraListView.vue"),
         meta: {
-          title: "摄像头管理",
-          icon: "scan",
+          title: "视频管理",
+          icon: "monitor",
           roles: ["DEVELOPER"],
+          module: "video",
         },
       },
       {
@@ -134,6 +140,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           title: "病区与病房",
           icon: "system",
           roles: ["ADMIN", "DEVELOPER"],
+          module: "organization",
         },
       },
       {
@@ -144,6 +151,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           title: "人员权限",
           icon: "role",
           roles: ["ADMIN", "DEVELOPER"],
+          module: "staff",
         },
       },
       {
@@ -154,6 +162,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           title: "告警与录像策略",
           icon: "shield",
           roles: ["ADMIN", "DEVELOPER"],
+          module: "policy",
         },
       },
       {
@@ -161,9 +170,10 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: "SystemConnectionSettings",
         component: () => import("@/features/monitoring/views/ConnectionSettingsView.vue"),
         meta: {
-          title: "系统连接",
+          title: "MQTT 管理",
           icon: "api",
           roles: ["DEVELOPER"],
+          module: "mqtt",
         },
       },
       {
@@ -171,9 +181,10 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: "DeveloperConsole",
         component: () => import("@/features/monitoring/views/DeveloperConsoleView.vue"),
         meta: {
-          title: "开发者控制台",
+          title: "开发者概览",
           icon: "code",
           roles: ["DEVELOPER"],
+          module: "developer",
         },
       },
       {

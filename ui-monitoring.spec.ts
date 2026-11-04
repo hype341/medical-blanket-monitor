@@ -157,17 +157,18 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await loginAs(page, "developer");
   await expect(page.getByText("系统开发者", { exact: true })).toBeVisible();
 
-  await page.getByText("系统连接", { exact: true }).first().click();
+  await page.getByText("MQTT 管理", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
   await expect(page.getByText("EMQX 接入")).toBeVisible();
   await expect(page.getByText("告警主题", { exact: true })).toBeVisible();
-
-  await page.getByText("开发者控制台", { exact: true }).first().click();
-  await expect(page.getByRole("heading", { name: "开发者控制台" })).toBeVisible();
   await expect(page.getByText("MQTT 原始报文")).toBeVisible();
-  await expect(page.getByText("接口与密钥")).toBeVisible();
 
-  await page.getByText("摄像头管理", { exact: true }).first().click();
+  await page.getByText("开发者概览", { exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "开发者工作台" })).toBeVisible();
+  await expect(page.getByText("两条数据管线，一个运行视图")).toBeVisible();
+  await expect(page.getByText("开发者快捷信息")).toBeVisible();
+
+  await page.getByText("视频管理", { exact: true }).first().click();
   await page.getByRole("button", { name: "新增摄像头" }).click();
   await page.locator('input[placeholder="摄像头名称"]').fill("201 病房摄像头");
   await page.locator('input[placeholder="设备标识"]').fill("camera-02");

@@ -62,6 +62,13 @@
             编辑绑定
           </el-button>
         </div>
+        <div class="binding-row__pair">
+          <span>{{ row.room?.name ?? "未分房" }} · {{ row.bed.bedNo }} 床</span>
+          <strong>→</strong>
+          <span>{{ row.sensor?.name ?? "未绑定传感器" }}</span>
+          <strong>→</strong>
+          <span>{{ row.camera?.name ?? "未绑定摄像头" }}</span>
+        </div>
       </div>
     </div>
 
@@ -208,6 +215,24 @@ function saveBinding(payload: { sensorDeviceId: string | null; cameraId: string 
   align-items: center;
   min-width: 850px;
   padding: 0 16px;
+}
+
+.binding-row__pair {
+  display: flex !important;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 7px;
+  align-items: center;
+  padding: 7px 9px;
+  margin: -5px 0 8px;
+  font-size: 9px;
+  color: #687c76;
+  background: #f5f9f7;
+  border-left: 3px solid #68a291;
+
+  strong {
+    color: #4d8979;
+  }
 }
 
 .binding-table__head {
