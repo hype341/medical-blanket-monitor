@@ -29,6 +29,15 @@
       </form>
     </section>
 
+    <section class="alarm-test-panel">
+      <div>
+        <span>告警联调</span>
+        <h2>验证标红与消息提示</h2>
+        <p>向 301-01 床发送一条测试告警，页面会立即标红并弹出提醒。</p>
+      </div>
+      <el-button type="danger" plain @click="sendTestAlarm">发送测试告警并查看</el-button>
+    </section>
+
     <section class="developer-hero">
       <div>
         <span class="developer-hero__eyebrow">运行概览</span>
@@ -186,6 +195,29 @@ function saveHospitalName(): void {
     ElMessage.error(error instanceof Error ? error.message : "医院名称保存失败");
   }
 }
+
+function sendTestAlarm(): void {
+  const bed = store.beds.find((item) => item.id === "bed-a-01");
+  if (!bed) {
+    ElMessage.error("未找到测试床位");
+    return;
+  }
+  store.ingestAlarm({
+    alarmId: `developer-test-${Date.now()}`,
+    code: "DEVELOPER_TEST_ALARM",
+    level: "WARNING",
+    status: "OPEN",
+    title: "毯子状态异常",
+    detail: "开发者工作台触发的联调告警",
+    sensorKey: "blanket-001",
+    cameraKey: "camera-01",
+    wardId: bed.wardId,
+    roomId: bed.roomId,
+    bedId: bed.id,
+    occurredAt: new Date().toISOString(),
+  });
+  void router.push(`/beds/${bed.id}`);
+}
 </script>
 
 <style scoped lang="scss">
@@ -268,6 +300,42 @@ function saveHospitalName(): void {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
+  }
+}
+
+.alarm-test-panel {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  margin-top: 10px;
+  background: #fff7f4;
+  border: 1px solid #edd6d0;
+  border-left: 4px solid #c3594b;
+
+  > div {
+    display: grid;
+    gap: 3px;
+  }
+
+  span {
+    font-size: 9px;
+    font-weight: 700;
+    color: #a34a40;
+    letter-spacing: 0.1em;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 680;
+  }
+
+  p {
+    margin: 0;
+    font-size: 10px;
+    color: #806f6b;
   }
 }
 
@@ -681,6 +749,11 @@ dl {
 @media (width <= 800px) {
   .hospital-settings {
     grid-template-columns: 1fr;
+  }
+
+  .alarm-test-panel {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .pipeline-grid {

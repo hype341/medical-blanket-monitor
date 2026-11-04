@@ -1,5 +1,6 @@
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
+import { ElNotification } from "element-plus";
 import { createMonitoringFixture } from "./mock-data";
 import { defaultModulesForRole } from "./permissions";
 import type { AlarmEnvelope } from "./recording";
@@ -24,6 +25,15 @@ import type {
   UpdateWardInput,
 } from "./types";
 
+function loadStoredAlarms(): AlarmEnvelope[] {
+  try {
+    const value = JSON.parse(sessionStorage.getItem("monitoring-alarms") ?? "[]") as unknown;
+    return Array.isArray(value) ? (value as AlarmEnvelope[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export const useMonitoringStore = defineStore("monitoring", () => {
   const fixture = ref<MonitoringData>(createMonitoringFixture());
   const storedHospitalName = localStorage.getItem("monitoring-hospital-name");
@@ -41,7 +51,10 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       ? storedRole
       : "ADMIN",
   );
-  const alarms = ref<AlarmEnvelope[]>([]);
+  const alarms = ref<AlarmEnvelope[]>(loadStoredAlarms());
+  watch(alarms, (value) => sessionStorage.setItem("monitoring-alarms", JSON.stringify(value)), {
+    deep: true,
+  });
   const monitoringPolicy = ref<MonitoringPolicy>({
     clipBeforeSeconds: 30,
     clipAfterSeconds: 60,
@@ -422,6 +435,15 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     } else {
       alarms.value[existing] = normalizedAlarm;
     }
+    if (typeof window !== "undefined") {
+      ElNotification({
+        title: `${bed.bedNo} 床告警`,
+        message: alarm.title,
+        type: alarm.level === "INFO" ? "info" : "error",
+        duration: 6_000,
+        position: "top-right",
+      });
+    }
   }
 
   function resolveAlarm(alarmId: string): void {
@@ -429,10 +451,11 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     if (!alarm) return;
     alarm.status = "RESOLVED";
     alarm.resolvedAt = new Date().toISOString();
-    setTimeout(() => {
-      const index = alarms.value.findIndex((item) => item.alarmId === alarmId);
-      if (index >= 0) alarms.value.splice(index, 1);
-    }, 3000);
+  }
+
+  function removeAlarm(alarmId: string): void {
+    const index = alarms.value.findIndex((item) => item.alarmId === alarmId);
+    if (index >= 0) alarms.value.splice(index, 1);
   }
 
   function setSensorDevices(nextSensors: SensorDevice[]): void {
@@ -489,6 +512,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     updatePatient,
     ingestAlarm,
     resolveAlarm,
+    removeAlarm,
     setSensorDevices,
     setCameras,
   };

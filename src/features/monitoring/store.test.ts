@@ -5,6 +5,7 @@ import { useMonitoringStore } from "./store";
 describe("monitoring store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    sessionStorage.removeItem("monitoring-alarms");
   });
 
   it("only exposes beds from assigned wards", () => {
@@ -92,6 +93,8 @@ describe("monitoring store", () => {
     expect(store.alarms[0]?.status).toBe("RESOLVED");
     expect(store.alarms[0]?.resolvedAt).toBeTruthy();
     vi.advanceTimersByTime(3_100);
+    expect(store.alarms).toHaveLength(1);
+    store.removeAlarm("alarm-01");
     expect(store.alarms).toHaveLength(0);
     vi.useRealTimers();
   });

@@ -21,6 +21,7 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
 
   await expect(page.getByRole("heading", { name: "安全总览" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "功能模块" })).toBeVisible();
+  await expect(page.getByText("功能列表", { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/monitoring-overview.png", fullPage: true });
   await page.getByText("床位监护", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "床位监护" })).toBeVisible();
@@ -247,4 +248,29 @@ test("head nurse only receives the assigned ward", async ({ page }) => {
   await expect(page.getByText("A 病区 · 外科").first()).toBeVisible();
   await expect(page.getByText("B 病区 · 康复")).toHaveCount(0);
   await expect(page.getByText("管理中心", { exact: true })).toHaveCount(0);
+});
+
+test("warning turns red and requires nurse actions to resolve and delete", async ({ page }) => {
+  await loginAs(page, "developer");
+  await page.getByText("开发者概览", { exact: true }).first().click();
+  await page.getByRole("button", { name: "发送测试告警并查看" }).click();
+
+  await expect(page).toHaveURL(/\/beds\/bed-a-01/);
+  await expect(page.locator(".el-notification")).toContainText("01 床告警");
+  const alarmCard = page.locator(".alarm-card").first();
+  await expect(alarmCard).toHaveAttribute("data-status", "OPEN");
+  await expect(alarmCard).toHaveAttribute("data-level", "WARNING");
+  await expect(alarmCard).toContainText("毯子状态异常");
+  await alarmCard.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: "test-results/monitoring-alarm-open.png", fullPage: true });
+
+  await page.getByRole("button", { name: "标记已解决" }).click();
+  await expect(alarmCard).toHaveAttribute("data-status", "RESOLVED");
+  await alarmCard.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/monitoring-alarm-resolved.png", fullPage: true });
+  await page.waitForTimeout(3_300);
+  await expect(alarmCard).toHaveAttribute("data-status", "RESOLVED");
+  await page.getByRole("button", { name: "删除记录" }).click();
+  await expect(page.getByText("床位状态平稳").first()).toBeVisible();
 });

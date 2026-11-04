@@ -38,6 +38,10 @@
         class="layout-sidebar"
         :class="{ 'is-collapsed': !isSidebarOpen }"
       >
+        <div v-if="isSidebarOpen" class="layout-sidebar__section">
+          <span>功能列表</span>
+          <small>{{ sideMenuRoutes.length }} 个模块</small>
+        </div>
         <el-scrollbar>
           <el-menu
             :default-active="activeSideMenuPath"
@@ -228,6 +232,8 @@ const useMenuColors = computed(
 
 .layout-sidebar {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: $sidebar-width;
   height: 100%;
   background-color: var(--menu-background);
@@ -240,8 +246,31 @@ const useMenuColors = computed(
     overflow: hidden; // 裁剪 .el-menu--collapse 溢出，防止其可见溢出推挤 .layout-container 宽度
   }
 
+  &__section {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 16px 8px;
+    color: var(--menu-text);
+
+    span {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+    }
+
+    small {
+      font-size: 9px;
+      color: color-mix(in srgb, var(--menu-text) 62%, transparent);
+    }
+  }
+
   :deep(.el-scrollbar) {
     @include sidebar-scroll-height-with-toggle;
+    flex: 1;
+    height: auto;
+    min-height: 0;
 
     .el-scrollbar__wrap {
       overflow-x: hidden !important;

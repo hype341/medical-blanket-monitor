@@ -68,6 +68,7 @@
           :location-label="`${summary.ward?.name ?? ''} · ${summary.room?.name ?? ''} · ${summary.bed.bedNo} 床`"
           :topic="summary.alarmTopic ?? ''"
           @resolve="store.resolveAlarm"
+          @remove="store.removeAlarm"
         />
       </section>
 

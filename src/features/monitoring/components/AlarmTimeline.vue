@@ -15,6 +15,7 @@
       <li
         v-for="alarm in alarms"
         :key="alarm.alarmId"
+        class="alarm-card"
         :data-level="alarm.level"
         :data-status="alarm.status"
       >
@@ -39,6 +40,7 @@
         >
           标记已解决
         </button>
+        <button v-else type="button" @click="emit('remove', alarm.alarmId)">删除记录</button>
       </li>
     </ol>
 
@@ -77,6 +79,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   resolve: [alarmId: string];
+  remove: [alarmId: string];
 }>();
 
 const unresolvedCount = computed(
@@ -387,6 +390,15 @@ function formatTime(value: string): string {
       }
     }
 
+    &[data-level="WARNING"] {
+      background: #fff0ee;
+      border-color: #e2aaa3;
+
+      &::before {
+        background: #c84a3f;
+      }
+    }
+
     &[data-status="RESOLVED"] {
       background: #f3faf6;
       border-color: #c6dfd6;
@@ -417,7 +429,7 @@ function formatTime(value: string): string {
   align-items: center;
   font-size: 9px;
   font-weight: 650;
-  color: #955033;
+  color: #a43d34;
 
   i {
     width: 6px;
@@ -472,6 +484,11 @@ function formatTime(value: string): string {
     background: #a84237;
     border-color: #a84237;
   }
+}
+
+.alarm-timeline__list li[data-status="RESOLVED"] button {
+  color: #2d7d62;
+  border-color: #a9cdbf;
 }
 
 .alarm-timeline footer {
