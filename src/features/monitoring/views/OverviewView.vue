@@ -154,8 +154,25 @@ const wardBoards = computed(() =>
   }),
 );
 
-const attentionItems = computed(() =>
-  summaries.value
+const attentionItems = computed(() => {
+  const alarmItems = store.alarms
+    .filter((alarm) => alarm.status !== "RESOLVED")
+    .map((alarm) => {
+      const summary = summaries.value.find((item) => item.bed.id === alarm.bedId);
+      return {
+        id: alarm.alarmId,
+        bedId: alarm.bedId,
+        title: `${alarm.title} · ${summary?.room?.name ?? ""} ${summary?.bed.bedNo ?? ""}床`,
+        detail: alarm.detail,
+        tone: "alert" as const,
+        time: new Intl.DateTimeFormat("zh-CN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).format(new Date(alarm.occurredAt)),
+      };
+    });
+  const sensorItems = summaries.value
     .filter((item) => item.sensor && item.sensor.status !== "ONLINE")
     .map((item) => {
       const tone =
@@ -182,8 +199,10 @@ const attentionItems = computed(() =>
           hour12: false,
         }).format(new Date(item.bed.updatedAt)),
       };
-    }),
-);
+    });
+
+  return [...alarmItems, ...sensorItems];
+});
 </script>
 
 <style scoped lang="scss">

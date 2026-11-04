@@ -14,10 +14,6 @@
       </div>
 
       <div class="layout-toolbar__item">
-        <LangSelect />
-      </div>
-
-      <div class="layout-toolbar__item">
         <NoticeCenter />
       </div>
 

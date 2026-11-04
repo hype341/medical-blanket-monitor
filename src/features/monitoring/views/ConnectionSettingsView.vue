@@ -94,18 +94,52 @@
       </div>
       <p>连接成功后，这里查看 Topic、QoS、到达时间和原始 JSON。</p>
     </section>
+
+    <section class="document-panel">
+      <header>
+        <div>
+          <span>在线生成</span>
+          <h2>MQTT 连接文档</h2>
+          <p>根据当前病区、床位、传感器和 MQTT 配置实时生成。</p>
+        </div>
+        <div class="document-panel__actions">
+          <el-button @click="regenerateMqttDocument">重新生成</el-button>
+          <el-button @click="copyMqttDocument">复制文档</el-button>
+          <el-button type="primary" @click="downloadMqttDocument">下载 Markdown</el-button>
+        </div>
+      </header>
+      <pre>{{ mqttDocument }}</pre>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
+import { generateMqttDocumentation } from "../documentation";
 import { useMonitoringStore } from "../store";
 import type { MqttSettings } from "../types";
 
 const store = useMonitoringStore();
 const form = reactive<MqttSettings>({ ...store.mqttSettings });
 const showPassword = ref(false);
+const generatedAt = ref(new Date().toLocaleString("zh-CN", { hour12: false }));
+const mqttDocument = computed(() =>
+  generateMqttDocumentation(
+    {
+      hospital: store.hospital,
+      wards: store.wards,
+      rooms: store.rooms,
+      beds: store.beds,
+      sensors: store.sensors,
+      cameras: store.cameras,
+      bindings: store.bindings,
+      staff: store.staff,
+    },
+    form,
+    generatedAt.value,
+  ),
+);
 const alarmTemplate = JSON.stringify(
   {
     alarmId: "alarm-01",
@@ -136,6 +170,28 @@ function save(): void {
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "MQTT 配置保存失败");
   }
+}
+
+function regenerateMqttDocument(): void {
+  generatedAt.value = new Date().toLocaleString("zh-CN", { hour12: false });
+}
+
+async function copyMqttDocument(): Promise<void> {
+  await navigator.clipboard.writeText(mqttDocument.value);
+  ElMessage.success("MQTT 文档已复制");
+}
+
+function downloadMqttDocument(): void {
+  downloadText("mqtt-connection.md", mqttDocument.value);
+}
+
+function downloadText(fileName: string, content: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: "text/markdown;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 </script>
 
@@ -298,6 +354,56 @@ function save(): void {
   }
 }
 
+.document-panel {
+  padding: 18px;
+  margin-top: 14px;
+  background: #fff;
+  border: 1px solid #dbe6e2;
+
+  > header {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    span {
+      font-size: 9px;
+      font-weight: 650;
+      color: #4f766c;
+    }
+
+    h2 {
+      margin: 4px 0;
+      font-size: 16px;
+    }
+
+    p {
+      margin: 0;
+      font-size: 10px;
+      color: #80908b;
+    }
+  }
+
+  pre {
+    max-height: 520px;
+    padding: 16px;
+    margin: 14px 0 0;
+    overflow: auto;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.7;
+    color: #d9ebe5;
+    white-space: pre-wrap;
+    background: #092f2c;
+  }
+}
+
+.document-panel__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
 @media (width <= 800px) {
   .admin-page-header {
     flex-direction: column;
@@ -306,6 +412,14 @@ function save(): void {
 
   .connection-grid {
     grid-template-columns: 1fr;
+  }
+
+  .document-panel > header {
+    flex-direction: column;
+  }
+
+  .document-panel__actions {
+    flex-wrap: wrap;
   }
 }
 </style>

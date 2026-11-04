@@ -231,15 +231,7 @@ const staff: StaffMember[] = [
     wardIds: ["ward-a", "ward-b"],
     status: "ACTIVE",
     passwordUpdatedAt: "2026-11-01T09:00:00+08:00",
-    modulePermissions: [
-      "overview",
-      "beds",
-      "monitor",
-      "bindings",
-      "organization",
-      "staff",
-      "policy",
-    ],
+    modulePermissions: ["overview", "beds", "bindings", "organization", "staff", "policy"],
   },
   {
     id: "staff-nurse",
@@ -249,7 +241,7 @@ const staff: StaffMember[] = [
     wardIds: ["ward-a"],
     status: "ACTIVE",
     passwordUpdatedAt: "2026-11-01T09:00:00+08:00",
-    modulePermissions: ["overview", "beds", "monitor", "bindings"],
+    modulePermissions: ["overview", "beds", "bindings"],
   },
   {
     id: "staff-head-nurse",
@@ -259,7 +251,7 @@ const staff: StaffMember[] = [
     wardIds: ["ward-a"],
     status: "ACTIVE",
     passwordUpdatedAt: "2026-11-01T09:00:00+08:00",
-    modulePermissions: ["overview", "beds", "monitor", "bindings"],
+    modulePermissions: ["overview", "beds", "bindings"],
   },
   {
     id: "staff-developer",
@@ -272,7 +264,6 @@ const staff: StaffMember[] = [
     modulePermissions: [
       "overview",
       "beds",
-      "monitor",
       "bindings",
       "organization",
       "staff",

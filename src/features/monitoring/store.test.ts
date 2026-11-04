@@ -298,11 +298,28 @@ describe("monitoring store", () => {
   it("separates module permissions by role", () => {
     const store = useMonitoringStore();
     store.setActiveRole("NURSE", "nurse");
-    expect(store.canAccessModule("monitor")).toBe(true);
+    expect(store.canAccessModule("beds")).toBe(true);
     expect(store.canAccessModule("mqtt")).toBe(false);
 
     store.setActiveRole("DEVELOPER", "developer");
     expect(store.canAccessModule("mqtt")).toBe(true);
     expect(store.canAccessModule("video")).toBe(true);
+  });
+
+  it("prevents hospital administrators from changing module grants", () => {
+    const store = useMonitoringStore();
+    const member = store.staff.find((item) => item.username === "nurse")!;
+    store.setActiveRole("ADMIN");
+
+    expect(() =>
+      store.updateStaff(member.id, {
+        username: member.username,
+        displayName: member.displayName,
+        role: member.role,
+        wardIds: member.wardIds,
+        status: member.status,
+        modulePermissions: ["overview", "beds"],
+      }),
+    ).toThrow("仅开发者可以修改人员模块权限");
   });
 });

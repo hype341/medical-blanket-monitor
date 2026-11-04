@@ -101,17 +101,6 @@ export const constantRoutes: RouteRecordRaw[] = [
         },
       },
       {
-        path: "monitor",
-        name: "MonitoringVideoWall",
-        component: () => import("@/features/monitoring/views/VideoWallView.vue"),
-        meta: {
-          title: "实时监控",
-          icon: "monitor",
-          keepAlive: true,
-          module: "monitor",
-        },
-      },
-      {
         path: "bindings",
         name: "DeviceBindings",
         component: () => import("@/features/monitoring/views/BindingsView.vue"),
@@ -130,6 +119,17 @@ export const constantRoutes: RouteRecordRaw[] = [
           icon: "monitor",
           roles: ["DEVELOPER"],
           module: "video",
+          hidden: true,
+        },
+      },
+      {
+        path: "admin/management",
+        name: "ManagementCenter",
+        component: () => import("@/features/monitoring/views/ManagementCenterView.vue"),
+        meta: {
+          title: "管理设置",
+          icon: "setting",
+          roles: ["ADMIN", "DEVELOPER"],
         },
       },
       {
@@ -141,6 +141,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           icon: "system",
           roles: ["ADMIN", "DEVELOPER"],
           module: "organization",
+          hidden: true,
         },
       },
       {
@@ -152,6 +153,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           icon: "role",
           roles: ["ADMIN", "DEVELOPER"],
           module: "staff",
+          hidden: true,
         },
       },
       {
@@ -163,6 +165,7 @@ export const constantRoutes: RouteRecordRaw[] = [
           icon: "shield",
           roles: ["ADMIN", "DEVELOPER"],
           module: "policy",
+          hidden: true,
         },
       },
       {

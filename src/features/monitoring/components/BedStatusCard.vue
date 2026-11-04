@@ -41,6 +41,11 @@
     </div>
     <div v-else class="bed-card__empty">尚未绑定毯子传感器</div>
 
+    <div v-if="unresolvedAlarms.length" class="bed-card__alarm">
+      <span>{{ unresolvedAlarms.length }} 条未解决告警</span>
+      <strong>{{ unresolvedAlarms[0]?.title }}</strong>
+    </div>
+
     <footer class="bed-card__footer">
       <span>{{ summary.cameras.length }} 路摄像头</span>
       <span>{{ updateLabel }}</span>
@@ -50,10 +55,12 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import type { AlarmEnvelope } from "../recording";
 import type { BedMonitorSummary, SensorStatus } from "../types";
 
 const props = defineProps<{
   summary: BedMonitorSummary;
+  alarms?: AlarmEnvelope[];
 }>();
 
 const emit = defineEmits<{
@@ -95,6 +102,9 @@ const updateLabel = computed(() =>
     second: "2-digit",
     hour12: false,
   }).format(new Date(props.summary.bed.updatedAt)),
+);
+const unresolvedAlarms = computed(() =>
+  (props.alarms ?? []).filter((alarm) => alarm.status !== "RESOLVED"),
 );
 </script>
 
@@ -308,6 +318,28 @@ const updateLabel = computed(() =>
   color: #7b8986;
   text-align: center;
   border: 1px dashed #d4dfdc;
+}
+
+.bed-card__alarm {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  margin-top: 10px;
+  color: #a43d34;
+  background: #fff0ee;
+  border-left: 3px solid #c84a3f;
+
+  span {
+    font-size: 9px;
+    font-weight: 650;
+  }
+
+  strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;
+    white-space: nowrap;
+  }
 }
 
 .bed-card__footer {

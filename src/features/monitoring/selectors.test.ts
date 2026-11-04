@@ -129,7 +129,6 @@ describe("hospital product routes", () => {
         "/overview",
         "/beds",
         "/beds/:bedId",
-        "/monitor",
         "/bindings",
         "/devices/cameras",
         "/admin/wards",

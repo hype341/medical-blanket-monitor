@@ -223,6 +223,13 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     if (input.role === "DEVELOPER" && activeRole.value !== "DEVELOPER") {
       throw new Error("医院管理员不能创建系统开发者账号");
     }
+    const requestedModules = input.modulePermissions ?? defaultModulesForRole(input.role);
+    if (
+      activeRole.value !== "DEVELOPER" &&
+      !sameModules(requestedModules, defaultModulesForRole(input.role))
+    ) {
+      throw new Error("仅开发者可以修改人员模块权限");
+    }
     if (staff.some((item) => item.username === input.username.trim())) {
       throw new Error("登录账号已存在");
     }
@@ -238,7 +245,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       wardIds: [...input.wardIds],
       status: input.status,
       passwordUpdatedAt: new Date().toISOString(),
-      modulePermissions: [...(input.modulePermissions ?? defaultModulesForRole(input.role))],
+      modulePermissions: [...requestedModules],
     });
     return staffId;
   }
@@ -255,14 +262,21 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     ) {
       throw new Error("医院管理员不能管理系统开发者账号");
     }
+    const requestedModules = input.modulePermissions ?? [
+      ...(member.modulePermissions ?? defaultModulesForRole(member.role)),
+    ];
+    if (
+      activeRole.value !== "DEVELOPER" &&
+      !sameModules(requestedModules, member.modulePermissions ?? defaultModulesForRole(member.role))
+    ) {
+      throw new Error("仅开发者可以修改人员模块权限");
+    }
     member.username = input.username.trim();
     member.displayName = input.displayName.trim();
     member.role = input.role;
     member.wardIds = [...input.wardIds];
     member.status = input.status;
-    member.modulePermissions = [
-      ...(input.modulePermissions ?? member.modulePermissions ?? defaultModulesForRole(input.role)),
-    ];
+    member.modulePermissions = [...requestedModules];
     if (input.initialPassword) {
       if (input.initialPassword.length < 6) {
         throw new Error("新密码不能少于 6 位");
@@ -303,6 +317,10 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     camera.name = input.name.trim();
     camera.vendor = input.vendor?.trim() || undefined;
     camera.model = input.model?.trim() || undefined;
+  }
+
+  function sameModules(left: PermissionModule[], right: PermissionModule[]): boolean {
+    return left.length === right.length && left.every((module) => right.includes(module));
   }
 
   function updateMonitoringPolicy(policy: MonitoringPolicy): void {

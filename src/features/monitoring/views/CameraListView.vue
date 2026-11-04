@@ -38,6 +38,22 @@
       </el-table-column>
     </el-table>
 
+    <section class="camera-document">
+      <header>
+        <div>
+          <span>在线生成</span>
+          <h2>视频连接文档</h2>
+          <p>根据当前摄像头、病房和床位绑定关系实时生成。</p>
+        </div>
+        <div class="camera-document__actions">
+          <el-button @click="regenerateDocument">重新生成</el-button>
+          <el-button @click="copyDocument">复制文档</el-button>
+          <el-button type="primary" @click="downloadDocument">下载 Markdown</el-button>
+        </div>
+      </header>
+      <pre>{{ videoDocument }}</pre>
+    </section>
+
     <section class="protocol-notes">
       <article>
         <span>01</span>
@@ -64,12 +80,29 @@
 import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import CameraEditorDialog from "../components/CameraEditorDialog.vue";
+import { generateVideoDocumentation } from "../documentation";
 import { useMonitoringStore } from "../store";
 import type { CameraInput, CameraStatus } from "../types";
 
 const store = useMonitoringStore();
 const editorVisible = ref(false);
 const editingCameraId = ref("");
+const generatedAt = ref(new Date().toLocaleString("zh-CN", { hour12: false }));
+const videoDocument = computed(() =>
+  generateVideoDocumentation(
+    {
+      hospital: store.hospital,
+      wards: store.wards,
+      rooms: store.rooms,
+      beds: store.beds,
+      sensors: store.sensors,
+      cameras: store.cameras,
+      bindings: store.bindings,
+      staff: store.staff,
+    },
+    generatedAt.value,
+  ),
+);
 const editorCamera = computed(
   () => store.cameras.find((camera) => camera.id === editingCameraId.value) ?? null,
 );
@@ -113,6 +146,26 @@ function saveCamera(input: CameraInput, cameraId: string | null): void {
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "摄像头保存失败");
   }
+}
+
+function regenerateDocument(): void {
+  generatedAt.value = new Date().toLocaleString("zh-CN", { hour12: false });
+}
+
+async function copyDocument(): Promise<void> {
+  await navigator.clipboard.writeText(videoDocument.value);
+  ElMessage.success("视频文档已复制");
+}
+
+function downloadDocument(): void {
+  const url = URL.createObjectURL(
+    new Blob([videoDocument.value], { type: "text/markdown;charset=utf-8" }),
+  );
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "video-connection.md";
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 </script>
 
@@ -176,6 +229,56 @@ function saveCamera(input: CameraInput, cameraId: string | null): void {
   border: 1px solid #dbe6e2;
 }
 
+.camera-document {
+  padding: 18px;
+  margin-top: 16px;
+  background: #fff;
+  border: 1px solid #dbe6e2;
+
+  > header {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    span {
+      font-size: 9px;
+      font-weight: 650;
+      color: #4f766c;
+    }
+
+    h2 {
+      margin: 4px 0;
+      font-size: 16px;
+    }
+
+    p {
+      margin: 0;
+      font-size: 10px;
+      color: #80908b;
+    }
+  }
+
+  pre {
+    max-height: 520px;
+    padding: 16px;
+    margin: 14px 0 0;
+    overflow: auto;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.7;
+    color: #d9ebe5;
+    white-space: pre-wrap;
+    background: #092f2c;
+  }
+}
+
+.camera-document__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
 .protocol-notes {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -214,6 +317,14 @@ function saveCamera(input: CameraInput, cameraId: string | null): void {
   .camera-guidance {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .camera-document > header {
+    flex-direction: column;
+  }
+
+  .camera-document__actions {
+    flex-wrap: wrap;
   }
 
   .protocol-notes {

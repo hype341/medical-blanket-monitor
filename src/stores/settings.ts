@@ -36,6 +36,11 @@ export const useSettingsStore = defineStore("setting", () => {
     STORAGE_KEYS.SIDEBAR_COLOR_SCHEME,
     defaults.sidebarColorScheme,
   );
+  const SIDEBAR_THEME_VERSION = "medical-classic-v1";
+  if (localStorage.getItem("medical-sidebar-theme-version") !== SIDEBAR_THEME_VERSION) {
+    sidebarColorScheme.value = SidebarColor.CLASSIC_BLUE;
+    localStorage.setItem("medical-sidebar-theme-version", SIDEBAR_THEME_VERSION);
+  }
 
   // 主题
   const theme = useStorage<ThemeMode>(STORAGE_KEYS.THEME, defaults.theme);

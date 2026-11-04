@@ -3,7 +3,6 @@ import type { MonitoringRole, PermissionModule } from "./types";
 export const moduleOptions: Array<{ value: PermissionModule; label: string }> = [
   { value: "overview", label: "安全总览" },
   { value: "beds", label: "床位监护" },
-  { value: "monitor", label: "实时监控" },
   { value: "bindings", label: "设备绑定" },
   { value: "organization", label: "病区与病房" },
   { value: "staff", label: "人员权限" },
@@ -14,9 +13,9 @@ export const moduleOptions: Array<{ value: PermissionModule; label: string }> = 
 ];
 
 const roleDefaults: Record<MonitoringRole, PermissionModule[]> = {
-  NURSE: ["overview", "beds", "monitor", "bindings"],
-  HEAD_NURSE: ["overview", "beds", "monitor", "bindings"],
-  ADMIN: ["overview", "beds", "monitor", "bindings", "organization", "staff", "policy"],
+  NURSE: ["overview", "beds", "bindings"],
+  HEAD_NURSE: ["overview", "beds", "bindings"],
+  ADMIN: ["overview", "beds", "bindings", "organization", "staff", "policy"],
   DEVELOPER: moduleOptions.map((option) => option.value),
 };
 

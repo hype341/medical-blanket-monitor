@@ -55,6 +55,7 @@
             v-for="summary in room.beds"
             :key="summary.bed.id"
             :summary="summary"
+            :alarms="store.alarms.filter((alarm) => alarm.bedId === summary.bed.id)"
             @open="openBed"
           />
         </div>

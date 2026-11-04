@@ -83,7 +83,7 @@ export const defaults = {
   theme: prefersDark ? ThemeMode.DARK : ThemeMode.LIGHT,
   themePalette: defaultThemePalette.id,
   themeColors: { ...defaultThemePalette.colors },
-  sidebarColorScheme: SidebarColor.MINIMAL_WHITE,
+  sidebarColorScheme: SidebarColor.CLASSIC_BLUE,
   layout: LayoutMode.LEFT,
   size: ComponentSize.DEFAULT,
   language: LanguageEnum.ZH_CN,

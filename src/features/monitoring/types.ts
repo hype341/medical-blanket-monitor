@@ -7,7 +7,6 @@ export type StaffStatus = "ACTIVE" | "DISABLED";
 export type PermissionModule =
   | "overview"
   | "beds"
-  | "monitor"
   | "bindings"
   | "organization"
   | "staff"

@@ -83,7 +83,7 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="开放模块">
+        <el-form-item v-if="store.activeRole === 'DEVELOPER'" label="开放模块">
           <el-checkbox-group v-model="form.modulePermissions" class="module-grid">
             <el-checkbox
               v-for="module in selectableModules"
@@ -94,6 +94,9 @@
             </el-checkbox>
           </el-checkbox-group>
         </el-form-item>
+        <div v-else class="permission-readonly">
+          开放模块由开发者配置，医院管理员不能增加或移除模块权限。
+        </div>
         <el-form-item :label="editingStaffId ? '重置密码（可选）' : '登录密码'">
           <el-input
             v-model="form.initialPassword"
@@ -391,6 +394,15 @@ function applyRoleDefaults(role: MonitoringRole): void {
   padding: 12px;
   background: #f6faf8;
   border: 1px solid #e1e9e6;
+}
+
+.permission-readonly {
+  padding: 10px 12px;
+  margin-bottom: 18px;
+  font-size: 10px;
+  color: #7a625d;
+  background: #fff6f3;
+  border-left: 3px solid #b96b5f;
 }
 
 @media (width <= 620px) {
