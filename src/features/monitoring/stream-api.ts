@@ -2,7 +2,7 @@ import mqtt, { type MqttClient } from "mqtt";
 import type { CameraPlayback, MqttSettings } from "./types";
 import type { SensorTelemetryEnvelope } from "./processing";
 import { parseAlarmMessage, type AlarmEnvelope } from "./recording";
-import { SENSOR_EVENT_TOPIC } from "./messaging";
+import { LEGACY_SENSOR_EVENT_TOPIC, SENSOR_DATA_TOPIC } from "./messaging";
 import { getPlaybackCandidates } from "@/components/UniversalVideoPlayer/usePlayback";
 
 export interface SensorStreamHandlers {
@@ -49,7 +49,7 @@ export function openMqttSensorStream(
       if (!client || closed) return;
       handlers.onStatus?.("connected");
       client.subscribe(
-        [SENSOR_EVENT_TOPIC, settings.alarmTopic],
+        [SENSOR_DATA_TOPIC, LEGACY_SENSOR_EVENT_TOPIC, settings.alarmTopic],
         { qos: settings.qos },
         (error) => {
           if (error) handlers.onError?.(error);

@@ -20,6 +20,7 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await loginAsAdmin(page);
 
   await expect(page.getByRole("heading", { name: "安全总览" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "功能模块" })).toBeVisible();
   await page.screenshot({ path: "test-results/monitoring-overview.png", fullPage: true });
   await page.getByText("床位监护", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "床位监护" })).toBeVisible();
@@ -32,6 +33,9 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
     page.getByText("medical-blanket/v1/H001/WARD-A/301/alarm", {
       exact: true,
     }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/medical-blanket\/v1\/H001\/WARD-A\/301-01\/sensor\/blanket-001\/data/),
   ).toBeVisible();
   await expect(page.getByText(/sensor\/.+\/telemetry/)).toHaveCount(0);
   await expect(page.getByText("毯面温度")).toHaveCount(0);
@@ -176,18 +180,28 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await page.getByText("MQTT 管理", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
   await expect(page.getByText("EMQX 接入")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "独立告警主题" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "数据与告警主题" })).toBeVisible();
+  await expect(page.getByText("9 个数据主题")).toBeVisible();
+  await expect(page.getByText("1 张床位待绑定传感器")).toBeVisible();
   await expect(page.getByText("6 个病房告警主题")).toBeVisible();
-  await page.locator(".room-topic-cards").getByRole("button", { name: "复制" }).first().click();
+  await page.locator(".topic-panel--data").getByRole("button", { name: "复制" }).first().click();
+  await expect(page.getByText("床位数据主题已复制")).toBeVisible();
+  await page.locator(".topic-panel--alarm").getByRole("button", { name: "复制" }).first().click();
   await expect(page.getByText("病房告警主题已复制")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "传感器数据报文" })).toBeVisible();
+  await expect(
+    page.locator(".message-card--data").getByRole("heading", { name: "传感器数据报文" }),
+  ).toBeVisible();
   await expect(page.locator(".message-card--data pre")).toContainText('"metrics": {}');
   await expect(page.getByText("MQTT 原始报文")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "MQTT 连接文档" })).toBeVisible();
-  await expect(page.locator(".document-panel pre")).toContainText(
+  await expect(page.getByRole("heading", { name: "MQTT 连接文档", exact: true })).toBeVisible();
+  await expect(page.locator(".document-panel .document-preview")).toContainText(
     "medical-blanket/v1/H001/WARD-A/301/alarm",
   );
-  await expect(page.locator(".document-panel pre")).not.toContainText("遥测主题");
+  await expect(page.locator(".document-panel .document-preview")).toContainText(
+    "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data",
+  );
+  await expect(page.locator(".document-panel .document-preview")).not.toContainText("遥测主题");
+  await expect(page.getByRole("button", { name: "导出 PDF" }).first()).toBeVisible();
   await page.waitForTimeout(400);
   await page.locator(".connection-page").screenshot({ path: "test-results/monitoring-mqtt.png" });
   await page
@@ -212,8 +226,8 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await expect(page.getByText("WebRTC 浏览器观看").first()).toBeVisible();
   await page.locator(".camera-links").first().getByRole("button", { name: "复制" }).first().click();
   await expect(page.getByText("WebRTC 浏览器观看已复制")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "视频连接文档" })).toBeVisible();
-  await expect(page.locator(".camera-document pre")).toContainText(
+  await expect(page.getByRole("heading", { name: "视频连接文档", exact: true })).toBeVisible();
+  await expect(page.locator(".camera-document .document-preview")).toContainText(
     "http://10.208.236.131:8889/camera-01/whep",
   );
 });

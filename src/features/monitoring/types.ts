@@ -119,6 +119,7 @@ export interface BedMonitorSummary {
   sensor: SensorDevice | null;
   cameras: Camera[];
   bindingIds: string[];
+  dataTopic: string | null;
   alarmTopic: string | null;
 }
 

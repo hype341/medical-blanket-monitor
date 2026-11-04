@@ -5,7 +5,7 @@ import type {
   MonitoringLookupData,
   PlaybackProtocol,
 } from "./types";
-import { buildRoomAlarmTopic } from "./messaging";
+import { buildBedDataTopic, buildRoomAlarmTopic } from "./messaging";
 
 export function getBedMonitorSummary(
   bedId: string,
@@ -41,6 +41,16 @@ export function getBedMonitorSummary(
           roomNo: room.roomNo,
         })
       : null;
+  const dataTopic =
+    sensor && ward && room
+      ? buildBedDataTopic({
+          hospitalCode: data.hospital?.code ?? "H001",
+          wardCode: ward.code,
+          roomNo: room.roomNo,
+          bedNo: bed.bedNo,
+          deviceKey: sensor.deviceKey,
+        })
+      : null;
 
   return {
     bed,
@@ -49,6 +59,7 @@ export function getBedMonitorSummary(
     sensor,
     cameras,
     bindingIds: activeBindings.map((binding) => binding.id),
+    dataTopic,
     alarmTopic,
   };
 }

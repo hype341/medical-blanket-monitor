@@ -52,10 +52,11 @@
         <div class="camera-document__actions">
           <el-button @click="regenerateDocument">重新生成</el-button>
           <el-button @click="copyDocument">复制文档</el-button>
-          <el-button type="primary" @click="downloadDocument">下载 Markdown</el-button>
+          <el-button @click="downloadDocument">下载 Markdown</el-button>
+          <el-button type="primary" @click="exportVideoPdf">导出 PDF</el-button>
         </div>
       </header>
-      <pre>{{ videoDocument }}</pre>
+      <DocumentPreview :content="videoDocument" />
     </section>
 
     <section class="protocol-notes">
@@ -85,10 +86,12 @@ import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import CameraEditorDialog from "../components/CameraEditorDialog.vue";
 import CameraLinkPanel from "../components/CameraLinkPanel.vue";
+import DocumentPreview from "../components/DocumentPreview.vue";
 import { generateVideoDocumentation } from "../documentation";
 import { useMonitoringStore } from "../store";
 import type { CameraInput, CameraStatus } from "../types";
 import { copyText } from "@/utils/clipboard";
+import { printMarkdownDocument } from "@/utils/document-export";
 
 const store = useMonitoringStore();
 const editorVisible = ref(false);
@@ -176,6 +179,15 @@ function downloadDocument(): void {
   anchor.download = "video-connection.md";
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function exportVideoPdf(): void {
+  try {
+    printMarkdownDocument("智能毯平台视频连接文档", videoDocument.value);
+    ElMessage.info("请在打印窗口中选择“另存为 PDF”");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "PDF 导出失败");
+  }
 }
 </script>
 
@@ -287,6 +299,10 @@ function downloadDocument(): void {
     color: #d9ebe5;
     white-space: pre-wrap;
     background: #092f2c;
+  }
+
+  .document-preview {
+    margin-top: 14px;
   }
 }
 

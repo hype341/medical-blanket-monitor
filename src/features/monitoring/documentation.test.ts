@@ -21,6 +21,8 @@ describe("online documentation", () => {
     const document = generateMqttDocumentation(data, settings, generatedAt);
 
     expect(document).toContain("medical-blanket/v1/H001/WARD-A/301/alarm");
+    expect(document).toContain("medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data");
+    expect(document).toContain("medical-blanket/v1/+/+/+/sensor/+/data");
     expect(document).not.toContain("遥测主题");
     expect(document).not.toContain('"sensorKey"');
     expect(document).toContain("## 传感器数据报文");

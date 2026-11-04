@@ -1,4 +1,5 @@
-export const SENSOR_EVENT_TOPIC = "medical-blanket/v1/+/+/+/sensor/+/telemetry";
+export const SENSOR_DATA_TOPIC = "medical-blanket/v1/+/+/+/sensor/+/data";
+export const LEGACY_SENSOR_EVENT_TOPIC = "medical-blanket/v1/+/+/+/sensor/+/telemetry";
 
 export interface RoomMqttTopicInput {
   hospitalCode: string;
@@ -14,6 +15,24 @@ export function buildRoomAlarmTopic(input: RoomMqttTopicInput): string {
     normalize(input.wardCode),
     normalize(input.roomNo),
     "alarm",
+  ].join("/");
+}
+
+export interface BedDataTopicInput extends RoomMqttTopicInput {
+  bedNo: string;
+  deviceKey: string;
+}
+
+export function buildBedDataTopic(input: BedDataTopicInput): string {
+  return [
+    "medical-blanket",
+    "v1",
+    normalize(input.hospitalCode),
+    normalize(input.wardCode),
+    `${normalize(input.roomNo)}-${normalize(input.bedNo)}`,
+    "sensor",
+    normalize(input.deviceKey),
+    "data",
   ].join("/");
 }
 

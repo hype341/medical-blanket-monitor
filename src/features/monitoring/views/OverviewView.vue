@@ -88,6 +88,30 @@
         </div>
       </aside>
     </div>
+
+    <section class="module-directory">
+      <header class="section-heading">
+        <div>
+          <h2>功能模块</h2>
+          <p>当前账号可打开的页面集中排列，点击直接进入。</p>
+        </div>
+      </header>
+      <div class="module-directory__list">
+        <button
+          v-for="module in moduleLinks"
+          :key="module.path"
+          type="button"
+          @click="router.push(module.path)"
+        >
+          <span>{{ module.kind }}</span>
+          <div>
+            <strong>{{ module.label }}</strong>
+            <small>{{ module.description }}</small>
+          </div>
+          <i>打开</i>
+        </button>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -202,6 +226,54 @@ const attentionItems = computed(() => {
     });
 
   return [...alarmItems, ...sensorItems];
+});
+
+const moduleLinks = computed(() => {
+  const links = [
+    {
+      path: "/beds",
+      kind: "监护",
+      label: "床位监护",
+      description: "查看病房、床位、患者、视频和传感器图形",
+      visible: store.canAccessModule("beds"),
+    },
+    {
+      path: "/bindings",
+      kind: "设备",
+      label: "设备绑定",
+      description: "查看床位与传感器、摄像头的对应关系",
+      visible: store.canAccessModule("bindings"),
+    },
+    {
+      path: "/devices/cameras",
+      kind: "视频",
+      label: "视频管理",
+      description: "维护摄像头、直接观看地址和回放索引",
+      visible: store.canAccessModule("video"),
+    },
+    {
+      path: "/admin/management",
+      kind: "行政",
+      label: "管理设置",
+      description: "病区病房、人员权限、告警与录像策略",
+      visible: store.activeRole === "ADMIN" || store.activeRole === "DEVELOPER",
+    },
+    {
+      path: "/admin/connections",
+      kind: "数据",
+      label: "MQTT 管理",
+      description: "床位数据主题、病房告警主题和在线文档",
+      visible: store.canAccessModule("mqtt"),
+    },
+    {
+      path: "/admin/developer",
+      kind: "开发",
+      label: "开发者概览",
+      description: "查看数据管线、服务状态和运行信息",
+      visible: store.canAccessModule("developer"),
+    },
+  ];
+  return links.filter((link) => link.visible);
 });
 </script>
 
@@ -499,6 +571,75 @@ const attentionItems = computed(() => {
   border-radius: 2px;
 }
 
+.module-directory {
+  padding: 20px;
+  margin-top: 18px;
+  background: #fff;
+  border: 1px solid var(--monitor-line);
+}
+
+.module-directory__list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+
+  button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 12px;
+    color: #173c3a;
+    text-align: left;
+    cursor: pointer;
+    background: #f8fbfa;
+    border: 1px solid #e0e9e5;
+    transition:
+      border-color 150ms ease,
+      background-color 150ms ease;
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+      background: #edf7f2;
+      border-color: #9cc1b5;
+    }
+
+    > span {
+      padding: 4px 6px;
+      font-size: 8px;
+      font-weight: 700;
+      color: #3d7568;
+      background: #e4f1eb;
+    }
+
+    div {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    strong {
+      font-size: 11px;
+    }
+
+    small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 9px;
+      color: #7a8b86;
+      white-space: nowrap;
+    }
+
+    i {
+      font-size: 9px;
+      font-style: normal;
+      color: #2f806a;
+    }
+  }
+}
+
 @media (width <= 1100px) {
   .overview-grid {
     grid-template-columns: 1fr;
@@ -515,6 +656,10 @@ const attentionItems = computed(() => {
   .stat-strip__item:nth-child(-n + 2) {
     border-bottom: 1px solid var(--monitor-line);
   }
+
+  .module-directory__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (width <= 760px) {
@@ -528,6 +673,10 @@ const attentionItems = computed(() => {
   }
 
   .ward-board__wards {
+    grid-template-columns: 1fr;
+  }
+
+  .module-directory__list {
     grid-template-columns: 1fr;
   }
 }

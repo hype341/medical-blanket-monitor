@@ -1,5 +1,6 @@
 import type { MonitoringData, MqttSettings } from "./types";
 import { getBedMonitorSummary } from "./selectors";
+import { SENSOR_DATA_TOPIC } from "./messaging";
 
 export function generateMqttDocumentation(
   data: MonitoringData,
@@ -17,7 +18,7 @@ export function generateMqttDocumentation(
       const room = data.rooms.find((item) => item.id === bed.roomId);
       return `| ${ward?.name ?? "-"} | ${room?.roomNo ?? "-"} | ${bed.bedNo} | ${
         summary?.sensor?.deviceKey ?? "未绑定"
-      } | ${summary?.alarmTopic ?? "未生成"} |`;
+      } | ${summary?.dataTopic ?? "未生成"} | ${summary?.alarmTopic ?? "未生成"} |`;
     })
     .join("\n");
 
@@ -37,6 +38,7 @@ export function generateMqttDocumentation(
 | 用户名 | \`${settings.username}\` |
 | 密码 | \`${settings.password}\` |
 | QoS | \`${settings.qos}\` |
+| 传感器数据订阅 | \`${SENSOR_DATA_TOPIC}\` |
 | 告警订阅 | \`${settings.alarmTopic}\` |
 
 ## 第三方直接订阅函数
@@ -60,10 +62,12 @@ const stream = openMqttSensorStream(settings, {
 stream.close();
 \`\`\`
 
-## 病房、床位与独立告警 Topic
+## 病房、床位、数据与告警 Topic
 
-| 病区 | 病房 | 床位 | 传感器 | 病房告警 Topic |
-| --- | --- | --- | --- | --- |
+每张床位拥有独立传感器数据 Topic，每间病房拥有独立告警 Topic。
+
+| 病区 | 病房 | 床位 | 传感器 | 床位数据 Topic | 病房告警 Topic |
+| --- | --- | --- | --- | --- | --- |
 ${topicRows}
 
 ## 传感器数据报文

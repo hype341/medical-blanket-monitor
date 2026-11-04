@@ -117,8 +117,9 @@
         <div class="sensor-contract">
           <span>数据接口</span>
           <p>传感器只上报标准化设备事件，由后续分析处理器解释和扩展。</p>
+          <code v-if="summary.dataTopic">数据：{{ summary.dataTopic }}</code>
           <code v-if="summary.alarmTopic">告警：{{ summary.alarmTopic }}</code>
-          <small>病房独立告警 Topic → Java 订阅 → WebSocket → 告警记录 / 分析处理器</small>
+          <small>床位数据主题 → 传感器图；病房告警主题 → 告警记录与录像定位</small>
         </div>
         <AnalysisExtensionPanel />
       </section>

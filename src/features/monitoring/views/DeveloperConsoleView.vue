@@ -41,8 +41,8 @@
             <strong>{{ store.mqttSettings.brokerUrl }}</strong>
           </div>
           <div>
-            <small>病房告警 Topic</small>
-            <strong>{{ roomAlarmTopics.length }} 个</strong>
+            <small>MQTT 主题</small>
+            <strong>{{ dataTopicCount }} 数据 / {{ roomAlarmTopics.length }} 告警</strong>
           </div>
           <div>
             <small>QoS</small>
@@ -150,6 +150,9 @@ const roomAlarmTopics = computed(() =>
         .filter((topic): topic is string => Boolean(topic)),
     ),
   ),
+);
+const dataTopicCount = computed(
+  () => store.bedSummaries.filter((summary) => Boolean(summary.dataTopic)).length,
 );
 </script>
 

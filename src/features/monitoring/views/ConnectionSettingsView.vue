@@ -4,7 +4,7 @@
       <div>
         <span>{{ store.hospital.name }} · 开发者区域</span>
         <h1>系统连接与 MQTT</h1>
-        <p>管理 Broker 接入、病房告警主题、数据报文和第三方读取方式。</p>
+        <p>管理 Broker 接入、床位数据主题、病房告警主题和两类报文。</p>
       </div>
       <div class="admin-page-header__actions">
         <span class="connection-mode">开发环境配置</span>
@@ -24,9 +24,9 @@
         <small>浏览器实时订阅</small>
       </article>
       <article>
-        <span>病房告警主题</span>
-        <strong>{{ roomAlarmTopics.length }} 个</strong>
-        <small>按病房独立生成</small>
+        <span>主题通道</span>
+        <strong>{{ dataTopicCount }} 数据 / {{ roomAlarmTopics.length }} 告警</strong>
+        <small>数据按床位，告警按病房</small>
       </article>
       <article>
         <span>服务质量</span>
@@ -82,21 +82,59 @@
       <section class="connection-card connection-card--alerts">
         <header class="connection-card__header">
           <div>
-            <span>病房告警</span>
-            <h2>独立告警主题</h2>
+            <span>MQTT 主题</span>
+            <h2>数据与告警主题</h2>
           </div>
-          <small>报文中的 bedId 用于定位床位</small>
+          <small>数据按床位独立，告警按病房独立</small>
         </header>
         <div class="alarm-subscription">
           <div>
-            <span>全局订阅规则</span>
-            <strong>自动接收所有病房</strong>
+            <span>传感器数据订阅</span>
+            <strong>{{ dataTopicCount }} 张已绑定床位</strong>
           </div>
-          <code>{{ form.alarmTopic }}</code>
-          <small>新增病房后，后端使用通配符自动覆盖对应主题。</small>
+          <code>{{ SENSOR_DATA_TOPIC }}</code>
+          <small>传感器状态、时间和识别扩展数据进入此数据通道。</small>
         </div>
 
-        <div class="room-topic-panel">
+        <div class="room-topic-panel topic-panel--data">
+          <header>
+            <div>
+              <span>床位独立数据通道</span>
+              <strong>{{ dataTopicCount }} 个数据主题</strong>
+            </div>
+            <small>{{ dataTopicRows.length - dataTopicCount }} 张床位待绑定传感器</small>
+          </header>
+          <div class="room-topic-cards">
+            <article v-for="row in dataTopicRows" :key="row.bedId">
+              <div>
+                <strong>{{ row.roomName }} · {{ row.bedNo }} 床</strong>
+                <span>{{ row.wardName }} · {{ row.sensorName }}</span>
+              </div>
+              <code :title="row.dataTopic || '绑定传感器后生成'">
+                {{ row.dataTopic || "绑定传感器后生成" }}
+              </code>
+              <el-button
+                text
+                type="primary"
+                :disabled="!row.dataTopic"
+                @click="row.dataTopic && copyTopic(row.dataTopic, '床位数据主题')"
+              >
+                复制
+              </el-button>
+            </article>
+          </div>
+        </div>
+
+        <div class="alarm-subscription alarm-subscription--warning">
+          <div>
+            <span>病房告警订阅</span>
+            <strong>{{ roomAlarmTopics.length }} 间病房</strong>
+          </div>
+          <code>{{ form.alarmTopic }}</code>
+          <small>新增病房后，后端使用通配符自动覆盖对应告警主题。</small>
+        </div>
+
+        <div class="room-topic-panel topic-panel--alarm">
           <header>
             <div>
               <span>病房独立通道</span>
@@ -111,7 +149,9 @@
                 <span>{{ group.wardName }} · {{ group.bedNos.length }} 张床位</span>
               </div>
               <code :title="group.topic">{{ group.topic }}</code>
-              <el-button text type="primary" @click="copyTopic(group.topic)">复制</el-button>
+              <el-button text type="primary" @click="copyTopic(group.topic, '病房告警主题')">
+                复制
+              </el-button>
             </article>
           </div>
         </div>
@@ -178,7 +218,8 @@
         </span>
       </header>
       <div class="raw-topic-list raw-topic-list--diagnostics">
-        <code v-for="topic in roomAlarmTopics" :key="topic">SUB {{ topic }}</code>
+        <code>SUB {{ SENSOR_DATA_TOPIC }}</code>
+        <code>SUB {{ form.alarmTopic }}</code>
       </div>
     </section>
 
@@ -192,10 +233,11 @@
         <div class="document-panel__actions">
           <el-button @click="regenerateMqttDocument">重新生成</el-button>
           <el-button @click="copyMqttDocument">复制文档</el-button>
-          <el-button type="primary" @click="downloadMqttDocument">下载 Markdown</el-button>
+          <el-button @click="downloadMqttDocument">下载 Markdown</el-button>
+          <el-button type="primary" @click="exportMqttPdf">导出 PDF</el-button>
         </div>
       </header>
-      <pre>{{ mqttDocument }}</pre>
+      <DocumentPreview :content="mqttDocument" />
     </section>
   </div>
 </template>
@@ -203,10 +245,13 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
+import DocumentPreview from "../components/DocumentPreview.vue";
 import { generateMqttDocumentation } from "../documentation";
 import { useMonitoringStore } from "../store";
 import type { MqttSettings } from "../types";
 import { copyText } from "@/utils/clipboard";
+import { SENSOR_DATA_TOPIC } from "../messaging";
+import { printMarkdownDocument } from "@/utils/document-export";
 
 const store = useMonitoringStore();
 const form = reactive<MqttSettings>({ ...store.mqttSettings });
@@ -251,6 +296,19 @@ const sensorDataTemplate = JSON.stringify(
   null,
   2,
 );
+const dataTopicRows = computed(() =>
+  store.bedSummaries.map((summary) => ({
+    bedId: summary.bed.id,
+    dataTopic: summary.dataTopic,
+    wardName: summary.ward?.name ?? "未分病区",
+    roomName: summary.room?.name ?? "未分病房",
+    bedNo: summary.bed.bedNo,
+    sensorName: summary.sensor?.name ?? "未绑定传感器",
+  })),
+);
+const dataTopicCount = computed(
+  () => dataTopicRows.value.filter((row) => Boolean(row.dataTopic)).length,
+);
 const alarmTopicGroups = computed(() => {
   const groups = new Map<
     string,
@@ -281,10 +339,10 @@ function save(): void {
   }
 }
 
-async function copyTopic(topic: string): Promise<void> {
+async function copyTopic(topic: string, label = "主题"): Promise<void> {
   try {
     await copyText(topic);
-    ElMessage.success("病房告警主题已复制");
+    ElMessage.success(`${label}已复制`);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "主题复制失败");
   }
@@ -305,6 +363,15 @@ async function copyMqttDocument(): Promise<void> {
 
 function downloadMqttDocument(): void {
   downloadText("mqtt-connection.md", mqttDocument.value);
+}
+
+function exportMqttPdf(): void {
+  try {
+    printMarkdownDocument("智能毯平台 MQTT 连接文档", mqttDocument.value);
+    ElMessage.info("请在打印窗口中选择“另存为 PDF”");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "PDF 导出失败");
+  }
 }
 
 function downloadText(fileName: string, content: string): void {
@@ -497,6 +564,11 @@ function downloadText(fileName: string, content: string): void {
     grid-column: 1 / -1;
     line-height: 1.55;
   }
+
+  &--warning {
+    background: #fff6f3;
+    border-left-color: #c3594b;
+  }
 }
 
 .room-topic-panel {
@@ -526,6 +598,14 @@ function downloadText(fileName: string, content: string): void {
       font-size: 11px;
       color: #35675c;
     }
+  }
+
+  &--data {
+    border-left: 3px solid #438b78;
+  }
+
+  &--alarm {
+    border-left: 3px solid #c3594b;
   }
 }
 
@@ -574,6 +654,12 @@ function downloadText(fileName: string, content: string): void {
       white-space: nowrap;
     }
   }
+}
+
+.topic-panel--data .room-topic-cards {
+  max-height: 270px;
+  padding-right: 3px;
+  overflow: auto;
 }
 
 .alarm-template-settings {
@@ -807,6 +893,10 @@ function downloadText(fileName: string, content: string): void {
     color: #d9ebe5;
     white-space: pre-wrap;
     background: #092f2c;
+  }
+
+  .document-preview {
+    margin-top: 14px;
   }
 }
 
