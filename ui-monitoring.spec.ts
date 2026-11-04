@@ -4,7 +4,7 @@ async function loginAsAdmin(page: Page): Promise<void> {
   await loginAs(page, "admin");
 }
 
-async function loginAs(page: Page, username: "admin" | "nurse"): Promise<void> {
+async function loginAs(page: Page, username: "admin" | "nurse" | "developer"): Promise<void> {
   await page.goto("/#/overview", { waitUntil: "networkidle" });
   await page.locator('input[placeholder="用户名"]').fill(username);
   await page.locator('input[placeholder="密码"]').fill("123456");
@@ -51,7 +51,7 @@ test("video monitor exposes the single camera and explicit unavailable state", a
 });
 
 test("binding page maps one camera to a bed without side-view options", async ({ page }) => {
-  await loginAsAdmin(page);
+  await loginAs(page, "developer");
 
   await page.getByText("设备绑定", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "设备绑定" })).toBeVisible();
@@ -86,8 +86,9 @@ test("nurse can add and update a patient but cannot manage bindings", async ({ p
   await expect(page.getByText("患者信息已保存")).toBeVisible();
 
   await page.getByText("设备绑定", { exact: true }).first().click();
-  await expect(page.getByText("仅管理员可修改设备绑定")).toBeVisible();
+  await expect(page.getByText("仅开发者可修改设备绑定")).toBeVisible();
   await expect(page.getByRole("button", { name: "编辑绑定" }).first()).toBeDisabled();
+  await expect(page.getByText("病区与病房", { exact: true })).toHaveCount(0);
 });
 
 test("administrator can edit bed location and overwrite patient content", async ({ page }) => {
@@ -106,4 +107,52 @@ test("administrator can edit bed location and overwrite patient content", async 
   await expect(page.getByText("患者信息已保存")).toBeVisible();
   await expect(page.getByRole("heading", { name: /08 床 · 管理员覆盖患者/ })).toBeVisible();
   await expect(page.getByText("最后修改：管理员")).toBeVisible();
+});
+
+test("only administrators can manage wards and rooms", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByText("管理中心", { exact: true }).first().click();
+  await page.getByText("病区与病房", { exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "病区与病房管理" })).toBeVisible();
+
+  await page.getByRole("button", { name: "新增病区" }).click();
+  await page.locator('input[placeholder="病区编码"]').fill("WARD-C");
+  await page.locator('input[placeholder="病区名称"]').fill("C 病区 · 内科");
+  await page.getByRole("button", { name: "保存病区" }).click();
+  await expect(page.getByText("C 病区 · 内科").first()).toBeVisible();
+
+  await page.getByText("人员权限", { exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "人员权限管理" })).toBeVisible();
+  await page.getByRole("button", { name: "新增人员" }).click();
+  await page.locator('input[placeholder="登录账号"]').fill("nurse-li");
+  await page.locator('input[placeholder="人员姓名"]').fill("李护士");
+  await page.locator('input[placeholder="登录密码"]').fill("Nurse@123456");
+  await page.getByRole("button", { name: "保存人员权限" }).click();
+  await expect(page.getByText("李护士").first()).toBeVisible();
+
+  await page.getByText("告警与录像策略", { exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "告警与录像策略" })).toBeVisible();
+  await expect(page.getByText("系统连接", { exact: true })).toHaveCount(0);
+});
+
+test("developer can inspect MQTT credentials and runtime diagnostics", async ({ page }) => {
+  await loginAs(page, "developer");
+
+  await page.getByText("管理中心", { exact: true }).first().click();
+  await page.getByText("系统连接", { exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
+  await expect(page.getByText("EMQX 接入")).toBeVisible();
+  await expect(page.getByText("告警主题", { exact: true })).toBeVisible();
+
+  await page.getByText("开发者控制台", { exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "开发者控制台" })).toBeVisible();
+  await expect(page.getByText("MQTT 原始报文")).toBeVisible();
+  await expect(page.getByText("接口与密钥")).toBeVisible();
+
+  await page.getByText("摄像头管理", { exact: true }).first().click();
+  await page.getByRole("button", { name: "新增摄像头" }).click();
+  await page.locator('input[placeholder="摄像头名称"]').fill("201 病房摄像头");
+  await page.locator('input[placeholder="设备标识"]').fill("camera-02");
+  await page.getByRole("button", { name: "保存摄像头" }).click();
+  await expect(page.getByText("201 病房摄像头").first()).toBeVisible();
 });

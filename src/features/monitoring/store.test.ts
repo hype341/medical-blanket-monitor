@@ -16,7 +16,7 @@ describe("monitoring store", () => {
 
   it("can replace a bed camera binding without changing another bed", () => {
     const store = useMonitoringStore();
-    store.setActiveRole("ADMIN");
+    store.setActiveRole("DEVELOPER");
     const otherBindingsBefore = store.getBedBindings("bed-a-02");
 
     store.updateBinding({
@@ -67,7 +67,7 @@ describe("monitoring store", () => {
         sensorDeviceId: "sensor-bed-a-01",
         cameraId: "camera-01",
       }),
-    ).toThrow("仅管理员可以修改设备绑定");
+    ).toThrow("仅开发者可以修改设备绑定");
   });
 
   it("turns a resolved warning into a resolved alarm state", () => {
@@ -118,5 +118,142 @@ describe("monitoring store", () => {
     expect(bed?.roomId).toBe("room-b-203");
     expect(bed?.bedNo).toBe("09");
     expect(bed?.lastEditedBy).toBe("ADMIN");
+  });
+
+  it("lets an administrator manage wards and rooms", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+
+    const wardId = store.addWard({ code: "WARD-C", name: "C 病区 · 内科" });
+    const roomId = store.addRoom({
+      wardId,
+      roomNo: "501",
+      name: "501 病房",
+    });
+    store.updateWard(wardId, { code: "WARD-C", name: "C 病区 · 呼吸内科" });
+    store.updateRoom(roomId, { roomNo: "502", name: "502 病房" });
+
+    expect(store.wards.find((ward) => ward.id === wardId)?.name).toBe("C 病区 · 呼吸内科");
+    expect(store.rooms.find((room) => room.id === roomId)?.roomNo).toBe("502");
+  });
+
+  it("prevents a nurse from managing wards and rooms", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("NURSE");
+
+    expect(() => store.addWard({ code: "WARD-C", name: "C 病区" })).toThrow(
+      "仅管理员可以管理病区和病房",
+    );
+  });
+
+  it("lets an administrator manage staff roles and ward permissions", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+
+    const staffId = store.addStaff({
+      username: "nurse-li",
+      displayName: "李护士",
+      role: "NURSE",
+      wardIds: ["ward-a"],
+      status: "ACTIVE",
+      initialPassword: "Nurse@123456",
+    });
+    store.updateStaff(staffId, {
+      username: "nurse-li",
+      displayName: "李护士",
+      role: "HEAD_NURSE",
+      wardIds: ["ward-a", "ward-b"],
+      status: "ACTIVE",
+      initialPassword: "Reset@123456",
+    });
+
+    expect(store.staff.find((item) => item.id === staffId)?.role).toBe("HEAD_NURSE");
+    expect(store.staff.find((item) => item.id === staffId)?.wardIds).toEqual(["ward-a", "ward-b"]);
+    expect(store.staff.find((item) => item.id === staffId)?.passwordUpdatedAt).toBeTruthy();
+  });
+
+  it("prevents a nurse from managing staff permissions", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("NURSE");
+
+    expect(() =>
+      store.addStaff({
+        username: "nurse-li",
+        displayName: "李护士",
+        role: "NURSE",
+        wardIds: ["ward-a"],
+        status: "ACTIVE",
+        initialPassword: "Nurse@123456",
+      }),
+    ).toThrow("仅管理员可以管理人员权限");
+  });
+
+  it("lets an administrator add any number of cameras", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("DEVELOPER");
+    const before = store.cameras.length;
+
+    store.addCamera({ cameraKey: "camera-02", name: "201 病房摄像头" });
+    store.addCamera({ cameraKey: "camera-03", name: "202 病房摄像头" });
+
+    expect(store.cameras.length).toBe(before + 2);
+  });
+
+  it("lets only an administrator change alert and recording policy", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+    store.updateMonitoringPolicy({
+      clipBeforeSeconds: 45,
+      clipAfterSeconds: 90,
+      recordingRetentionMinutes: 60,
+    });
+
+    expect(store.monitoringPolicy.recordingRetentionMinutes).toBe(60);
+
+    store.setActiveRole("NURSE");
+    expect(() =>
+      store.updateMonitoringPolicy({
+        clipBeforeSeconds: 10,
+        clipAfterSeconds: 20,
+        recordingRetentionMinutes: 10,
+      }),
+    ).toThrow("仅管理员可以修改告警与录像策略");
+  });
+
+  it("shows and updates MQTT account settings only for developers", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("DEVELOPER");
+    store.updateMqttSettings({
+      ...store.mqttSettings,
+      brokerUrl: "mqtt://192.168.86.128:1883",
+      websocketUrl: "ws://192.168.86.128:8083/mqtt",
+      username: "blanket-service",
+      password: "Mqtt@123456",
+      qos: 1,
+    });
+
+    expect(store.mqttSettings.username).toBe("blanket-service");
+    expect(store.mqttSettings.qos).toBe(1);
+
+    store.setActiveRole("ADMIN");
+    expect(() =>
+      store.updateMqttSettings({
+        ...store.mqttSettings,
+        qos: 2,
+      }),
+    ).toThrow("仅开发者可以修改 MQTT 配置");
+  });
+
+  it("gives the developer technical visibility beyond hospital administrators", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+    expect(store.canViewConnections).toBe(false);
+    expect(store.canViewDeveloperConsole).toBe(false);
+
+    store.setActiveRole("DEVELOPER");
+    expect(store.canManageStaff).toBe(true);
+    expect(store.canManageBindings).toBe(true);
+    expect(store.canViewConnections).toBe(true);
+    expect(store.canViewDeveloperConsole).toBe(true);
   });
 });

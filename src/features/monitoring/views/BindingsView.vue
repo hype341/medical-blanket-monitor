@@ -14,7 +14,7 @@
       <p>
         传感器上报标准化设备事件，摄像头提供床旁画面。仅管理员可修改绑定，护士查看当前授权关系。
       </p>
-      <strong v-if="!store.canManageBindings">仅管理员可修改设备绑定</strong>
+      <strong v-if="!store.canManageBindings">仅开发者可修改设备绑定</strong>
     </section>
 
     <div class="binding-table">
@@ -42,7 +42,7 @@
           <span class="device-glyph device-glyph--camera">C</span>
           <div>
             <strong>{{ row.camera?.name ?? "未绑定" }}</strong>
-            <small>{{ row.camera?.cameraKey ?? "当前只有一路摄像头" }}</small>
+            <small>{{ row.camera?.cameraKey ?? "尚未选择摄像头" }}</small>
           </div>
         </div>
         <div>

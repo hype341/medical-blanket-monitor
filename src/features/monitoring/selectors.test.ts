@@ -132,6 +132,9 @@ describe("hospital product routes", () => {
         "/monitor",
         "/bindings",
         "/devices/cameras",
+        "/admin/wards",
+        "/admin/staff",
+        "/admin/policy",
       ]),
     );
   });

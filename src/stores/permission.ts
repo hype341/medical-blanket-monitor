@@ -1,4 +1,6 @@
 import type { RouteRecordRaw } from "vue-router";
+import { useMonitoringStore } from "@/features/monitoring/store";
+import { filterRoutesForRole, type RoleProtectedRoute } from "@/features/monitoring/organization";
 import { constantRoutes } from "@/router";
 import { resolveComponent } from "@/router/views";
 import { store } from "@/stores";
@@ -10,6 +12,14 @@ import MenuAPI from "@/api/system/menu";
 import type { RouteItem } from "@/api/system/menu";
 
 const Layout = () => import("../layouts/index.vue");
+
+function getProductRoutes(): RouteRecordRaw[] {
+  const role = useMonitoringStore().activeRole;
+  return filterRoutesForRole(
+    constantRoutes as unknown as RoleProtectedRoute[],
+    role,
+  ) as RouteRecordRaw[];
+}
 
 /**
  * 按用户权限生成并维护动态路由。
@@ -24,7 +34,7 @@ export const usePermissionStore = defineStore("permission", () => {
    */
   async function generateRoutes(): Promise<RouteRecordRaw[]> {
     if (import.meta.env.VITE_DYNAMIC_ROUTES_ENABLED === "false") {
-      routes.value = [...constantRoutes];
+      routes.value = getProductRoutes();
       mixLayoutSideMenus.value = [];
       isRouteGenerated.value = true;
       return [];
@@ -71,7 +81,7 @@ export const usePermissionStore = defineStore("permission", () => {
   const resetRouter = () => {
     removeDynamicRoutes(routes.value);
 
-    routes.value = [...constantRoutes];
+    routes.value = getProductRoutes();
     mixLayoutSideMenus.value = [];
     isRouteGenerated.value = false;
   };

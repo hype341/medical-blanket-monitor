@@ -121,6 +121,7 @@ export const constantRoutes: RouteRecordRaw[] = [
         meta: {
           title: "摄像头管理",
           icon: "scan",
+          roles: ["DEVELOPER"],
         },
       },
       {
@@ -170,6 +171,69 @@ export const constantRoutes: RouteRecordRaw[] = [
         name: "RouteExampleEdit",
         component: () => import("@/views/demo/route/navigate/edit.vue"),
         meta: { title: "跳转编辑页", icon: "user", hidden: true },
+      },
+    ],
+  },
+  {
+    path: "/admin",
+    name: "AdminCenter",
+    component: Layout,
+    redirect: "/admin/wards",
+    meta: {
+      title: "管理中心",
+      icon: "setting",
+      roles: ["ADMIN", "DEVELOPER"],
+    },
+    children: [
+      {
+        path: "wards",
+        name: "WardRoomManagement",
+        component: () => import("@/features/monitoring/views/OrganizationView.vue"),
+        meta: {
+          title: "病区与病房",
+          icon: "system",
+          roles: ["ADMIN", "DEVELOPER"],
+        },
+      },
+      {
+        path: "staff",
+        name: "StaffPermissionManagement",
+        component: () => import("@/features/monitoring/views/StaffView.vue"),
+        meta: {
+          title: "人员权限",
+          icon: "role",
+          roles: ["ADMIN", "DEVELOPER"],
+        },
+      },
+      {
+        path: "policy",
+        name: "MonitoringPolicyManagement",
+        component: () => import("@/features/monitoring/views/PolicyView.vue"),
+        meta: {
+          title: "告警与录像策略",
+          icon: "shield",
+          roles: ["ADMIN", "DEVELOPER"],
+        },
+      },
+      {
+        path: "connections",
+        name: "SystemConnectionSettings",
+        component: () => import("@/features/monitoring/views/ConnectionSettingsView.vue"),
+        meta: {
+          title: "系统连接",
+          icon: "api",
+          roles: ["DEVELOPER"],
+        },
+      },
+      {
+        path: "developer",
+        name: "DeveloperConsole",
+        component: () => import("@/features/monitoring/views/DeveloperConsoleView.vue"),
+        meta: {
+          title: "开发者控制台",
+          icon: "code",
+          roles: ["DEVELOPER"],
+        },
       },
     ],
   },

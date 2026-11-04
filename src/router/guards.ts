@@ -2,6 +2,7 @@ import type { RouteRecordRaw } from "vue-router";
 import NProgress from "@/plugins/nprogress";
 import router from "@/router";
 import { usePermissionStore, useUserStore } from "@/stores";
+import { useMonitoringStore } from "@/features/monitoring/store";
 import { useTenantStoreHook } from "@/stores/tenant";
 import { isTenantEnabled } from "@/utils/tenant";
 
@@ -40,6 +41,14 @@ export function setupPermissionGuard() {
 
       const permissionStore = usePermissionStore();
       const userStore = useUserStore();
+      const role = useMonitoringStore().activeRole;
+      const requiredRoles = to.matched.flatMap(
+        (record) => (record.meta.roles as string[] | undefined) ?? [],
+      );
+      if (requiredRoles.length && !requiredRoles.includes(role)) {
+        NProgress.done();
+        return "/404";
+      }
 
       // 动态路由生成
       if (!permissionStore.isRouteGenerated) {

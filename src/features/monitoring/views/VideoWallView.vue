@@ -4,40 +4,47 @@
       <div>
         <span>{{ store.hospital.name }} · 床旁视频</span>
         <h1>实时监控</h1>
-        <p>当前系统接入一路摄像头，实时画面与授权床位关联。</p>
+        <p>摄像头按实际登记数量展示，实时画面与授权床位关联。</p>
       </div>
-      <span class="live-view__count">1 路摄像头</span>
+      <span class="live-view__count">{{ cameras.length }} 路摄像头</span>
     </header>
 
-    <article v-if="camera" class="live-camera" data-testid="video-tile">
-      <header>
-        <div>
-          <span>单路床旁视频</span>
-          <h2>{{ camera.name }}</h2>
-        </div>
-        <span class="camera-state" :data-status="camera.status">
-          {{ cameraStatusLabel }}
-        </span>
-      </header>
+    <div v-if="cameras.length" class="live-grid">
+      <article
+        v-for="camera in cameras"
+        :key="camera.id"
+        class="live-camera"
+        data-testid="video-tile"
+      >
+        <header>
+          <div>
+            <span>床旁视频</span>
+            <h2>{{ camera.name }}</h2>
+          </div>
+          <span class="camera-state" :data-status="camera.status">
+            {{ statusLabel(camera.status) }}
+          </span>
+        </header>
 
-      <UniversalVideoPlayer
-        :camera-name="camera.name"
-        :camera-status="camera.status"
-        :playback="camera.playback"
-      />
+        <UniversalVideoPlayer
+          :camera-name="camera.name"
+          :camera-status="camera.status"
+          :playback="camera.playback"
+        />
 
-      <footer class="live-camera__footer">
-        <div>
-          <span>关联床位</span>
-          <strong>{{ linkedBeds }}</strong>
-        </div>
-        <div>
-          <span>接入策略</span>
-          <strong>标准 RTSP / WebRTC / HLS / FLV</strong>
-        </div>
-        <el-button plain type="primary" @click="router.push('/bindings')">调整床位绑定</el-button>
-      </footer>
-    </article>
+        <footer class="live-camera__footer">
+          <div>
+            <span>关联床位</span>
+            <strong>{{ linkedBeds(camera.id) }}</strong>
+          </div>
+          <div>
+            <span>接入策略</span>
+            <strong>RTSP / WebRTC / HLS / FLV</strong>
+          </div>
+          <el-button plain type="primary" @click="router.push('/bindings')">调整床位绑定</el-button>
+        </footer>
+      </article>
+    </div>
 
     <el-empty v-else description="系统中尚未登记摄像头">
       <el-button type="primary" @click="router.push('/bindings')">去配置绑定</el-button>
@@ -53,24 +60,24 @@ import { useMonitoringStore } from "../store";
 
 const router = useRouter();
 const store = useMonitoringStore();
-const camera = computed(() => store.cameras[0] ?? null);
+const cameras = computed(() => store.cameras);
 
-const cameraStatusLabel = computed(() => {
+function statusLabel(status: "ONLINE" | "OFFLINE" | "STALE"): string {
   const labels = { ONLINE: "设备在线", STALE: "连接延迟", OFFLINE: "设备离线" };
-  return labels[camera.value?.status ?? "OFFLINE"];
-});
+  return labels[status];
+}
 
-const linkedBeds = computed(() => {
+function linkedBeds(cameraId: string): string {
   const bedIds = new Set(
     store.bedSummaries
-      .filter((summary) => summary.cameras.some((item) => item.id === camera.value?.id))
+      .filter((summary) => summary.cameras.some((item) => item.id === cameraId))
       .map((summary) => summary.bed.id),
   );
   const labels = store.bedSummaries
     .filter((summary) => bedIds.has(summary.bed.id))
     .map((summary) => `${summary.room?.roomNo ?? ""} 房 ${summary.bed.bedNo} 床`);
   return labels.length ? labels.join("、") : "尚未绑定";
-});
+}
 </script>
 
 <style scoped lang="scss">
@@ -141,6 +148,12 @@ const linkedBeds = computed(() => {
   }
 }
 
+.live-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 14px;
+}
+
 .camera-state {
   padding: 5px 8px;
   font-weight: 650;
@@ -191,6 +204,10 @@ const linkedBeds = computed(() => {
 }
 
 @media (width <= 760px) {
+  .live-grid {
+    grid-template-columns: 1fr;
+  }
+
   .live-camera {
     padding: 14px;
   }

@@ -2,7 +2,8 @@ export type CameraStatus = "ONLINE" | "OFFLINE" | "STALE";
 export type SensorStatus = "ONLINE" | "OFFLINE" | "STALE" | "ALARM";
 export type BedStatus = "AVAILABLE" | "OCCUPIED" | "CLEANING" | "OFFLINE";
 export type PatientStatus = "STABLE" | "OBSERVATION" | "CRITICAL";
-export type MonitoringRole = "NURSE" | "ADMIN";
+export type MonitoringRole = "NURSE" | "HEAD_NURSE" | "ADMIN" | "DEVELOPER";
+export type StaffStatus = "ACTIVE" | "DISABLED";
 export type BindingRole = "PRIMARY_SENSOR" | "PRIMARY_CAMERA";
 export type BindingStatus = "ACTIVE" | "INACTIVE";
 export type PlaybackProtocol = "webrtc" | "hls" | "flv";
@@ -91,9 +92,13 @@ export interface MonitoringData {
   sensors: SensorDevice[];
   cameras: Camera[];
   bindings: DeviceBinding[];
+  staff: StaffMember[];
 }
 
-export type MonitoringLookupData = Omit<MonitoringData, "hospital" | "wards" | "rooms"> &
+export type MonitoringLookupData = Pick<
+  MonitoringData,
+  "beds" | "sensors" | "cameras" | "bindings"
+> &
   Partial<Pick<MonitoringData, "hospital" | "wards" | "rooms">>;
 
 export interface BedMonitorSummary {
@@ -133,4 +138,68 @@ export interface PatientUpdateInput {
   wardId?: string;
   roomId?: string;
   bedNo?: string;
+}
+
+export interface AddWardInput {
+  code: string;
+  name: string;
+}
+
+export interface UpdateWardInput {
+  code: string;
+  name: string;
+}
+
+export interface AddRoomInput {
+  wardId: string;
+  roomNo: string;
+  name: string;
+}
+
+export interface UpdateRoomInput {
+  roomNo: string;
+  name: string;
+}
+
+export interface StaffMember {
+  id: string;
+  username: string;
+  displayName: string;
+  role: MonitoringRole;
+  wardIds: string[];
+  status: StaffStatus;
+  passwordUpdatedAt?: string;
+}
+
+export interface StaffInput {
+  username: string;
+  displayName: string;
+  role: MonitoringRole;
+  wardIds: string[];
+  status: StaffStatus;
+  initialPassword?: string;
+}
+
+export interface CameraInput {
+  cameraKey: string;
+  name: string;
+  vendor?: string;
+  model?: string;
+}
+
+export interface MonitoringPolicy {
+  clipBeforeSeconds: number;
+  clipAfterSeconds: number;
+  recordingRetentionMinutes: number;
+}
+
+export interface MqttSettings {
+  brokerUrl: string;
+  websocketUrl: string;
+  clientId: string;
+  username: string;
+  password: string;
+  telemetryTopic: string;
+  alarmTopic: string;
+  qos: 0 | 1 | 2;
 }

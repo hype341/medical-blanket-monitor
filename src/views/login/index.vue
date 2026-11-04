@@ -142,6 +142,13 @@
                   >
                     护士演示
                   </button>
+                  <button
+                    type="button"
+                    class="login-card__demo-chip"
+                    @click="fillDemoAccount('developer')"
+                  >
+                    开发者演示
+                  </button>
                 </div>
               </div>
 
@@ -229,7 +236,7 @@ const loginRules = computed(() => ({
 /**
  * 填充演示账号
  */
-function fillDemoAccount(username: "admin" | "nurse"): void {
+function fillDemoAccount(username: "admin" | "nurse" | "developer"): void {
   loginFormData.value.username = username;
   loginFormData.value.password = "123456";
 }
@@ -262,7 +269,9 @@ async function handleLoginSubmit() {
     await userStore.login(loginFormData.value).then(
       async () => {
         const isNurse = loginFormData.value.username === "nurse";
-        monitoringStore.setActiveRole(isNurse ? "NURSE" : "ADMIN");
+        const role =
+          loginFormData.value.username === "developer" ? "DEVELOPER" : isNurse ? "NURSE" : "ADMIN";
+        monitoringStore.setActiveRole(role);
         monitoringStore.setCurrentWardIds(isNurse ? ["ward-a"] : ["ward-a", "ward-b"]);
         const redirectPath = (route.query.redirect as string) || "/";
         await router.push(decodeURIComponent(redirectPath));

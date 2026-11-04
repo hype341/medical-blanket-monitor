@@ -6,7 +6,7 @@
         <h1>摄像头管理</h1>
         <p>统一维护摄像头接入方式，浏览器只接收平台签发的播放地址。</p>
       </div>
-      <el-button type="primary" disabled>新增摄像头</el-button>
+      <el-button type="primary" @click="openEditor()">新增摄像头</el-button>
     </header>
 
     <section class="camera-guidance">
@@ -31,6 +31,11 @@
           <span>{{ row.playback ? "已签发" : "待接入" }}</span>
         </template>
       </el-table-column>
+      <el-table-column label="操作" width="90">
+        <template #default="{ row }">
+          <el-button text type="primary" @click="openEditor(row.id)">编辑</el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <section class="protocol-notes">
@@ -50,15 +55,24 @@
         <p>摄像头不直接暴露给患者；护士只能查看授权病区关联的床位。</p>
       </article>
     </section>
+
+    <CameraEditorDialog v-model="editorVisible" :camera="editorCamera" @save="saveCamera" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { ElMessage } from "element-plus";
+import CameraEditorDialog from "../components/CameraEditorDialog.vue";
 import { useMonitoringStore } from "../store";
-import type { CameraStatus } from "../types";
+import type { CameraInput, CameraStatus } from "../types";
 
 const store = useMonitoringStore();
+const editorVisible = ref(false);
+const editingCameraId = ref("");
+const editorCamera = computed(
+  () => store.cameras.find((camera) => camera.id === editingCameraId.value) ?? null,
+);
 
 const tableRows = computed(() =>
   store.cameras.map((camera) => {
@@ -80,6 +94,25 @@ function statusLabel(status: CameraStatus): string {
 function statusType(status: CameraStatus): "success" | "warning" | "info" {
   const types = { ONLINE: "success", STALE: "warning", OFFLINE: "info" } as const;
   return types[status];
+}
+
+function openEditor(cameraId?: string): void {
+  editingCameraId.value = cameraId ?? "";
+  editorVisible.value = true;
+}
+
+function saveCamera(input: CameraInput, cameraId: string | null): void {
+  try {
+    if (cameraId) {
+      store.updateCamera(cameraId, input);
+    } else {
+      store.addCamera(input);
+    }
+    editorVisible.value = false;
+    ElMessage.success("摄像头已保存");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "摄像头保存失败");
+  }
 }
 </script>
 

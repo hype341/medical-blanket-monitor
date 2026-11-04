@@ -1,4 +1,11 @@
-import type { Bed, Camera, DeviceBinding, MonitoringData, SensorDevice } from "./types";
+import type {
+  Bed,
+  Camera,
+  DeviceBinding,
+  MonitoringData,
+  SensorDevice,
+  StaffMember,
+} from "./types";
 
 const wards = [
   { id: "ward-a", hospitalId: "hospital-001", code: "WARD-A", name: "A 病区 · 外科" },
@@ -207,6 +214,45 @@ const bindings: DeviceBinding[] = [
   },
 ];
 
+const staff: StaffMember[] = [
+  {
+    id: "staff-admin",
+    username: "admin",
+    displayName: "系统管理员",
+    role: "ADMIN",
+    wardIds: ["ward-a", "ward-b"],
+    status: "ACTIVE",
+    passwordUpdatedAt: "2026-11-01T09:00:00+08:00",
+  },
+  {
+    id: "staff-nurse",
+    username: "nurse",
+    displayName: "值班护士",
+    role: "NURSE",
+    wardIds: ["ward-a"],
+    status: "ACTIVE",
+    passwordUpdatedAt: "2026-11-01T09:00:00+08:00",
+  },
+  {
+    id: "staff-head-nurse",
+    username: "head-nurse",
+    displayName: "A 病区护士长",
+    role: "HEAD_NURSE",
+    wardIds: ["ward-a"],
+    status: "ACTIVE",
+    passwordUpdatedAt: "2026-11-01T09:00:00+08:00",
+  },
+  {
+    id: "staff-developer",
+    username: "developer",
+    displayName: "系统开发者",
+    role: "DEVELOPER",
+    wardIds: ["ward-a", "ward-b"],
+    status: "ACTIVE",
+    passwordUpdatedAt: "2026-11-01T09:00:00+08:00",
+  },
+];
+
 export function createMonitoringFixture(): MonitoringData {
   return {
     hospital: {
@@ -220,5 +266,6 @@ export function createMonitoringFixture(): MonitoringData {
     sensors: structuredClone(sensors),
     cameras: structuredClone(cameras),
     bindings: structuredClone(bindings),
+    staff: structuredClone(staff),
   };
 }
