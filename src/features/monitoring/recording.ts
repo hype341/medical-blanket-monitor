@@ -45,6 +45,29 @@ export interface RecordingClipService {
   ): Promise<{ clipId: string; status: "PENDING" | "READY" | "FAILED" }>;
 }
 
+export interface MediaMtxPlaybackItem {
+  start: string;
+  duration: number;
+  url: string;
+}
+
+export function mapMediaMtxPlaybackItems(
+  items: MediaMtxPlaybackItem[],
+  cameraKey: string,
+  playbackOrigin: string,
+): RecordingSegment[] {
+  return items.map((item, index) => {
+    const startMs = new Date(item.start).getTime();
+    return {
+      id: `${cameraKey}-${startMs}-${index}`,
+      cameraKey,
+      startAt: item.start,
+      endAt: new Date(startMs + item.duration * 1000).toISOString(),
+      playbackUrl: item.url.replace(/^https?:\/\/[^/]+/, playbackOrigin),
+    };
+  });
+}
+
 const alarmLevels = new Set<AlarmLevel>(["INFO", "WARNING", "CRITICAL"]);
 
 export function parseAlarmMessage(payload: string): AlarmEnvelope | null {

@@ -28,6 +28,11 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await page.locator('[data-testid="bed-card"]').first().click();
   await expect(page).toHaveURL(/#\/beds\/bed-/);
   await expect(page.getByTestId("sensor-graphic")).toBeVisible();
+  await expect(
+    page.getByText("medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/telemetry", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(page.getByText("毯面温度")).toHaveCount(0);
   await expect(page.getByText("设备电量")).toHaveCount(0);
   const refreshRate = page.getByLabel("传感器图形帧率");
@@ -38,8 +43,13 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(page.getByText("智能识别扩展")).toBeVisible();
   await expect(page.getByText("录像回放").first()).toBeVisible();
   await expect(page.getByText("告警时间线").first()).toBeVisible();
-  await expect(page.getByText("暂无录像片段").first()).toBeVisible();
+  await expect(page.locator(".recording-timeline__segment").first()).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByLabel("录像回放进度")).toBeEnabled();
   await expect(page.getByText("暂无告警").first()).toBeVisible();
+  await page.locator(".recording-timeline__segment").first().click();
+  await expect(page.locator("video.detail-playback")).toBeVisible();
   await page.waitForTimeout(600);
   await page.screenshot({ path: "test-results/monitoring-bed-detail.png", fullPage: true });
 });
@@ -76,6 +86,7 @@ test("binding page maps one camera to a bed without side-view options", async ({
 
 test("nurse can add and update a patient but cannot manage bindings", async ({ page }) => {
   await loginAs(page, "nurse");
+  await expect(page.getByText("值班护士", { exact: true })).toBeVisible();
 
   await page.getByText("床位监护", { exact: true }).first().click();
   await page.getByRole("button", { name: "新增床位" }).click();
@@ -118,7 +129,6 @@ test("administrator can edit bed location and overwrite patient content", async 
 
 test("only administrators can manage wards and rooms", async ({ page }) => {
   await loginAsAdmin(page);
-  await page.getByText("管理中心", { exact: true }).first().click();
   await page.getByText("病区与病房", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "病区与病房管理" })).toBeVisible();
 
@@ -145,8 +155,8 @@ test("only administrators can manage wards and rooms", async ({ page }) => {
 
 test("developer can inspect MQTT credentials and runtime diagnostics", async ({ page }) => {
   await loginAs(page, "developer");
+  await expect(page.getByText("系统开发者", { exact: true })).toBeVisible();
 
-  await page.getByText("管理中心", { exact: true }).first().click();
   await page.getByText("系统连接", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
   await expect(page.getByText("EMQX 接入")).toBeVisible();
@@ -161,12 +171,14 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await page.getByRole("button", { name: "新增摄像头" }).click();
   await page.locator('input[placeholder="摄像头名称"]').fill("201 病房摄像头");
   await page.locator('input[placeholder="设备标识"]').fill("camera-02");
+  await page.locator('input[placeholder="媒体路径"]').fill("camera-02");
   await page.getByRole("button", { name: "保存摄像头" }).click();
   await expect(page.getByText("201 病房摄像头").first()).toBeVisible();
 });
 
 test("head nurse only receives the assigned ward", async ({ page }) => {
   await loginAs(page, "head-nurse");
+  await expect(page.getByText("A 病区护士长", { exact: true })).toBeVisible();
   await page.getByText("床位监护", { exact: true }).first().click();
 
   await expect(page.getByText("A 病区 · 外科").first()).toBeVisible();

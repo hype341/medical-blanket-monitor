@@ -32,7 +32,7 @@
           type="button"
           @click="emit('resolve', alarm.alarmId)"
         >
-          标记已解决
+          解决并自动删除
         </button>
       </li>
     </ol>

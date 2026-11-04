@@ -66,6 +66,7 @@ export interface CameraPlayback {
 export interface Camera {
   id: string;
   cameraKey: string;
+  mediaPath?: string;
   name: string;
   vendor?: string;
   model?: string;
@@ -108,6 +109,8 @@ export interface BedMonitorSummary {
   sensor: SensorDevice | null;
   cameras: Camera[];
   bindingIds: string[];
+  telemetryTopic: string | null;
+  alarmTopic: string | null;
 }
 
 export interface BedFilters {
@@ -182,6 +185,7 @@ export interface StaffInput {
 
 export interface CameraInput {
   cameraKey: string;
+  mediaPath: string;
   name: string;
   vendor?: string;
   model?: string;

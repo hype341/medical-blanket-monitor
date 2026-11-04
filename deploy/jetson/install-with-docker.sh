@@ -11,6 +11,8 @@ if [[ ! -f /opt/mediamtx/mediamtx.yml ]]; then
   docker cp mediamtx-config-template:/mediamtx.yml /opt/mediamtx/mediamtx.yml
   docker rm mediamtx-config-template >/dev/null
   sed -i 's/^  record: false/  record: true/' /opt/mediamtx/mediamtx.yml
+  sed -i 's/^playback: false/playback: true/' /opt/mediamtx/mediamtx.yml
+  sed -i 's/^  recordSegmentDuration: 1h/  recordSegmentDuration: 1m/' /opt/mediamtx/mediamtx.yml
   sed -i 's/^  recordDeleteAfter: 1d/  recordDeleteAfter: 24h/' /opt/mediamtx/mediamtx.yml
 fi
 

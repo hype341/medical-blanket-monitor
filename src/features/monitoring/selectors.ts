@@ -5,6 +5,7 @@ import type {
   MonitoringLookupData,
   PlaybackProtocol,
 } from "./types";
+import { buildBedMqttTopics } from "./messaging";
 
 export function getBedMonitorSummary(
   bedId: string,
@@ -30,13 +31,28 @@ export function getBedMonitorSummary(
     .map((binding) => data.cameras.find((camera) => camera.id === binding.cameraId))
     .filter((camera) => camera !== undefined);
 
+  const ward = data.wards?.find((item) => item.id === bed.wardId) ?? null;
+  const room = data.rooms?.find((item) => item.id === bed.roomId) ?? null;
+  const topics =
+    sensor && ward && room
+      ? buildBedMqttTopics({
+          hospitalCode: data.hospital?.code ?? "H001",
+          wardCode: ward.code,
+          roomNo: room.roomNo,
+          bedNo: bed.bedNo,
+          deviceKey: sensor.deviceKey,
+        })
+      : null;
+
   return {
     bed,
-    ward: data.wards?.find((ward) => ward.id === bed.wardId) ?? null,
-    room: data.rooms?.find((room) => room.id === bed.roomId) ?? null,
+    ward,
+    room,
     sensor,
     cameras,
     bindingIds: activeBindings.map((binding) => binding.id),
+    telemetryTopic: topics?.telemetry ?? null,
+    alarmTopic: topics?.alarm ?? null,
   };
 }
 

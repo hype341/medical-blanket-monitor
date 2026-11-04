@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildClipWindow,
   findPlaybackSegment,
+  mapMediaMtxPlaybackItems,
   parseAlarmMessage,
   pruneExpiredSegments,
 } from "./recording";
@@ -62,6 +63,26 @@ describe("recording clip window", () => {
 describe("rolling recording timeline", () => {
   it("finds the segment containing a requested timestamp", () => {
     expect(findPlaybackSegment(segments, "2026-11-04T17:07:00+08:00")?.id).toBe("segment-02");
+  });
+
+  it("maps MediaMTX playback files to browser URLs", () => {
+    expect(
+      mapMediaMtxPlaybackItems(
+        [
+          {
+            start: "2026-11-04T10:24:19.000Z",
+            duration: 60,
+            url: "http://127.0.0.1:9996/get?path=camera-01&start=10%3A24%3A19Z",
+          },
+        ],
+        "camera-01",
+        "http://10.208.236.131:9996",
+      )[0],
+    ).toMatchObject({
+      startAt: "2026-11-04T10:24:19.000Z",
+      endAt: "2026-11-04T10:25:19.000Z",
+      playbackUrl: "http://10.208.236.131:9996/get?path=camera-01&start=10%3A24%3A19Z",
+    });
   });
 
   it("removes segments outside the server retention window", () => {

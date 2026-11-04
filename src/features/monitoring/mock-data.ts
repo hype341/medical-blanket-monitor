@@ -125,6 +125,7 @@ const cameras: Camera[] = [
   {
     id: "camera-01",
     cameraKey: "camera-ward-a-301",
+    mediaPath: "camera-01",
     name: "301 病房摄像头",
     status: "ONLINE",
     playback: {

@@ -258,6 +258,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     cameras.push({
       id: cameraId,
       cameraKey: input.cameraKey.trim(),
+      mediaPath: input.mediaPath.trim(),
       name: input.name.trim(),
       vendor: input.vendor?.trim() || undefined,
       model: input.model?.trim() || undefined,
@@ -274,6 +275,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     const camera = cameras.find((item) => item.id === cameraId);
     if (!camera) throw new Error("摄像头不存在");
     camera.cameraKey = input.cameraKey.trim();
+    camera.mediaPath = input.mediaPath.trim();
     camera.name = input.name.trim();
     camera.vendor = input.vendor?.trim() || undefined;
     camera.model = input.model?.trim() || undefined;
@@ -364,6 +366,10 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     if (!alarm) return;
     alarm.status = "RESOLVED";
     alarm.resolvedAt = new Date().toISOString();
+    setTimeout(() => {
+      const index = alarms.value.findIndex((item) => item.alarmId === alarmId);
+      if (index >= 0) alarms.value.splice(index, 1);
+    }, 3000);
   }
 
   function setSensorDevices(nextSensors: SensorDevice[]): void {

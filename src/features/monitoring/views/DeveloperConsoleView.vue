@@ -27,7 +27,9 @@
         </header>
         <div class="message-empty">
           <code>SUB {{ store.mqttSettings.telemetryTopic }}</code>
-          <code>SUB {{ store.mqttSettings.alarmTopic }}</code>
+          <div class="bed-topic-list">
+            <code v-for="topic in bedTelemetryTopics" :key="topic">{{ topic }}</code>
+          </div>
           <p>EMQX 尚未接入，原始消息到达后会在这里显示 Topic、QoS、到达时间和 JSON 报文。</p>
         </div>
       </section>
@@ -77,6 +79,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { useMonitoringStore } from "../store";
 
 const store = useMonitoringStore();
@@ -86,6 +89,11 @@ const services = [
   { name: "EMQX", state: "未接入" },
   { name: "MediaMTX", state: "未接入" },
 ];
+const bedTelemetryTopics = computed(() =>
+  store.bedSummaries
+    .map((summary) => summary.telemetryTopic)
+    .filter((topic): topic is string => Boolean(topic)),
+);
 </script>
 
 <style scoped lang="scss">
@@ -229,6 +237,13 @@ const services = [
     line-height: 1.7;
     color: #7d8d88;
   }
+}
+
+.bed-topic-list {
+  display: grid;
+  gap: 4px;
+  max-height: 150px;
+  overflow: auto;
 }
 
 dl {

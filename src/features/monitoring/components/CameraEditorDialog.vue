@@ -12,6 +12,9 @@
       <el-form-item label="设备标识">
         <el-input v-model.trim="form.cameraKey" placeholder="设备标识" maxlength="60" />
       </el-form-item>
+      <el-form-item label="MediaMTX 路径">
+        <el-input v-model.trim="form.mediaPath" placeholder="媒体路径" maxlength="60" />
+      </el-form-item>
       <div class="camera-editor__row">
         <el-form-item label="厂商（可选）">
           <el-input v-model.trim="form.vendor" placeholder="厂商" maxlength="40" />
@@ -28,7 +31,11 @@
     </el-form>
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :disabled="!form.name || !form.cameraKey" @click="save">
+      <el-button
+        type="primary"
+        :disabled="!form.name || !form.cameraKey || !form.mediaPath"
+        @click="save"
+      >
         保存摄像头
       </el-button>
     </template>
@@ -57,6 +64,7 @@ const visible = computed({
 const cameraId = computed(() => props.camera?.id ?? null);
 const form = reactive<CameraInput>({
   cameraKey: "",
+  mediaPath: "",
   name: "",
   vendor: "",
   model: "",
@@ -68,6 +76,7 @@ watch(
     if (!open) return;
     Object.assign(form, {
       cameraKey: props.camera?.cameraKey ?? "",
+      mediaPath: props.camera?.mediaPath ?? "",
       name: props.camera?.name ?? "",
       vendor: props.camera?.vendor ?? "",
       model: props.camera?.model ?? "",

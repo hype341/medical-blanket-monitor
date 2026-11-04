@@ -40,12 +40,14 @@
     </div>
 
     <div class="recording-timeline__rail" :data-empty="!visibleSegments.length">
-      <span
+      <button
         v-for="segment in positionedSegments"
         :key="segment.id"
+        type="button"
         class="recording-timeline__segment"
         :style="{ left: `${segment.left}%`, width: `${segment.width}%` }"
         :title="`${formatTime(segment.startAt)} - ${formatTime(segment.endAt)}`"
+        @click="emit('seek', segment.startAt)"
       />
       <button
         v-for="alarm in positionedAlarms"
@@ -284,7 +286,9 @@ onBeforeUnmount(() => {
   top: 10px;
   min-width: 2px;
   height: 13px;
+  cursor: pointer;
   background: #65a28f;
+  border: 0;
   opacity: 0.72;
 }
 

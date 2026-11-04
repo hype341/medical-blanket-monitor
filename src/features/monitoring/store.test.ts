@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMonitoringStore } from "./store";
 
 describe("monitoring store", () => {
@@ -71,6 +71,7 @@ describe("monitoring store", () => {
   });
 
   it("turns a resolved warning into a resolved alarm state", () => {
+    vi.useFakeTimers();
     const store = useMonitoringStore();
     store.ingestAlarm({
       alarmId: "alarm-01",
@@ -88,6 +89,9 @@ describe("monitoring store", () => {
 
     expect(store.alarms[0]?.status).toBe("RESOLVED");
     expect(store.alarms[0]?.resolvedAt).toBeTruthy();
+    vi.advanceTimersByTime(3_100);
+    expect(store.alarms).toHaveLength(0);
+    vi.useRealTimers();
   });
 
   it("lets an administrator overwrite patient content edited by a nurse", () => {
@@ -193,8 +197,16 @@ describe("monitoring store", () => {
     store.setActiveRole("DEVELOPER");
     const before = store.cameras.length;
 
-    store.addCamera({ cameraKey: "camera-02", name: "201 病房摄像头" });
-    store.addCamera({ cameraKey: "camera-03", name: "202 病房摄像头" });
+    store.addCamera({
+      cameraKey: "camera-02",
+      mediaPath: "camera-02",
+      name: "201 病房摄像头",
+    });
+    store.addCamera({
+      cameraKey: "camera-03",
+      mediaPath: "camera-03",
+      name: "202 病房摄像头",
+    });
 
     expect(store.cameras.length).toBe(before + 2);
   });

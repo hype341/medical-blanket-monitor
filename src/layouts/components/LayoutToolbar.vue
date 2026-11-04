@@ -32,7 +32,7 @@
           <div class="layout-user__avatar">
             <img :src="userStore.userInfo.avatar" class="layout-user__avatar-img" />
           </div>
-          <span class="layout-user__name">{{ userStore.userInfo.nickname }}</span>
+          <span class="layout-user__name">{{ displayName }}</span>
         </div>
         <template #dropdown>
           <el-dropdown-menu>
@@ -62,6 +62,7 @@ import { useRoute, useRouter } from "vue-router";
 import { appConfig, defaults } from "@/settings";
 import { DeviceEnum, SidebarColor, ThemeMode, LayoutMode } from "@/enums/settings";
 import { useAppStore, useSettingsStore, useUserStore } from "@/stores";
+import { useMonitoringStore } from "@/features/monitoring/store";
 
 import { useTenantStoreHook } from "@/stores/tenant";
 
@@ -69,6 +70,7 @@ const { t } = useI18n();
 const appStore = useAppStore();
 const settingStore = useSettingsStore();
 const userStore = useUserStore();
+const monitoringStore = useMonitoringStore();
 const tenantStore = useTenantStoreHook();
 
 const route = useRoute();
@@ -77,6 +79,22 @@ const router = useRouter();
 const isDesktop = computed(() => appStore.device === DeviceEnum.DESKTOP);
 
 const canSwitchTenant = computed(() => userStore.userInfo?.canSwitchTenant === true);
+
+const displayName = computed(() => {
+  if (
+    import.meta.env.VITE_MOCK_ENABLED === "true" ||
+    userStore.userInfo.nickname === "系统管理员"
+  ) {
+    const roleNames = {
+      NURSE: "值班护士",
+      HEAD_NURSE: "A 病区护士长",
+      ADMIN: "系统管理员",
+      DEVELOPER: "系统开发者",
+    };
+    return roleNames[monitoringStore.activeRole];
+  }
+  return userStore.userInfo.nickname;
+});
 
 const showTenantSwitcher = computed(() => {
   if (!canSwitchTenant.value) {

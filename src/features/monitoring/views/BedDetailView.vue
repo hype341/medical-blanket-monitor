@@ -36,12 +36,23 @@
           <span class="video-panel__protocol">待接入媒体地址</span>
         </header>
 
+        <video
+          v-if="recordingUrl"
+          class="detail-player detail-playback"
+          :src="recordingUrl"
+          controls
+          autoplay
+        />
         <UniversalVideoPlayer
+          v-else
           class="detail-player"
           :camera-name="selectedCamera?.name ?? '床旁摄像头'"
           :camera-status="selectedCamera?.status ?? 'OFFLINE'"
           :playback="selectedCamera?.playback ?? null"
         />
+        <button v-if="recordingUrl" type="button" class="back-to-live" @click="recordingUrl = ''">
+          返回实时画面
+        </button>
         <RecordingTimeline
           :segments="recordingSegments"
           :alarms="alarms"
@@ -98,7 +109,9 @@
         <div class="sensor-contract">
           <span>数据接口</span>
           <p>传感器只上报标准化设备事件，由后续分析处理器解释和扩展。</p>
-          <small>MQTT → Java 订阅 → WebSocket → 传感器图 / 分析处理器</small>
+          <code v-if="summary.telemetryTopic">{{ summary.telemetryTopic }}</code>
+          <code v-if="summary.alarmTopic">告警：{{ summary.alarmTopic }}</code>
+          <small>每张床位独立 Topic → Java 订阅 → WebSocket → 传感器图 / 分析处理器</small>
         </div>
         <AnalysisExtensionPanel />
       </section>
@@ -121,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 import UniversalVideoPlayer from "@/components/UniversalVideoPlayer/index.vue";
@@ -130,7 +143,13 @@ import AnalysisExtensionPanel from "../components/AnalysisExtensionPanel.vue";
 import PatientEditor from "../components/PatientEditor.vue";
 import RecordingTimeline from "../components/RecordingTimeline.vue";
 import SensorDeviceGraphic from "../components/SensorDeviceGraphic.vue";
-import type { AlarmEnvelope, RecordingSegment } from "../recording";
+import {
+  findPlaybackSegment,
+  mapMediaMtxPlaybackItems,
+  type AlarmEnvelope,
+  type MediaMtxPlaybackItem,
+  type RecordingSegment,
+} from "../recording";
 import { useMonitoringStore } from "../store";
 import type { PatientUpdateInput } from "../types";
 
@@ -178,15 +197,22 @@ const lastSeenLabel = computed(() => {
 });
 
 // 回放与告警数据由 RecordingTimelineSource / MQTT 告警主题接入。
-const recordingSegments: RecordingSegment[] = [];
+const recordingSegments = ref<RecordingSegment[]>([]);
+const recordingUrl = ref("");
+let recordingTimer: ReturnType<typeof setInterval> | null = null;
 const alarms = computed(() => store.alarms.filter((alarm) => alarm.bedId === route.params.bedId));
 
-function seekRecording(_targetAt: string): void {
-  // RecordingClipService 接入后切换到对应回放分段。
+function openRecordingAt(targetAt: string): void {
+  const segment = findPlaybackSegment(recordingSegments.value, targetAt);
+  if (segment) recordingUrl.value = segment.playbackUrl;
 }
 
-function selectAlarm(_alarm: AlarmEnvelope): void {
-  // 告警片段服务接入后定位到告警前后视频。
+function seekRecording(targetAt: string): void {
+  openRecordingAt(targetAt);
+}
+
+function selectAlarm(alarm: AlarmEnvelope): void {
+  openRecordingAt(alarm.occurredAt);
 }
 
 function savePatient(input: PatientUpdateInput): void {
@@ -200,6 +226,40 @@ function normalizeRefreshRate(): void {
   const value = Number(sensorRefreshRate.value);
   sensorRefreshRate.value = Number.isFinite(value) ? Math.min(10, Math.max(0.1, value)) : 1;
 }
+
+async function refreshRecordings(): Promise<void> {
+  if (!selectedCamera.value) return;
+  const start = new Date(Date.now() - store.monitoringPolicy.recordingRetentionMinutes * 60_000);
+  const end = new Date(Date.now() + 60_000);
+  const mediaPath = selectedCamera.value.mediaPath ?? selectedCamera.value.cameraKey;
+  const query = new URLSearchParams({
+    path: mediaPath,
+    start: start.toISOString(),
+    end: end.toISOString(),
+  });
+
+  try {
+    const response = await fetch(`http://10.208.236.131:9996/list?${query}`);
+    if (!response.ok) return;
+    const items = (await response.json()) as MediaMtxPlaybackItem[];
+    recordingSegments.value = mapMediaMtxPlaybackItems(
+      items,
+      mediaPath,
+      "http://10.208.236.131:9996",
+    );
+  } catch {
+    // Keep the latest successful recording index during temporary media-server outages.
+  }
+}
+
+onMounted(() => {
+  void refreshRecordings();
+  recordingTimer = setInterval(() => void refreshRecordings(), 15_000);
+});
+
+onBeforeUnmount(() => {
+  if (recordingTimer) clearInterval(recordingTimer);
+});
 </script>
 
 <style scoped lang="scss">
@@ -352,6 +412,22 @@ function normalizeRefreshRate(): void {
   margin-top: 16px;
 }
 
+.detail-playback {
+  width: 100%;
+  object-fit: contain;
+  background: #052421;
+}
+
+.back-to-live {
+  padding: 6px 9px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: #2f6b5e;
+  cursor: pointer;
+  background: #f3f8f6;
+  border: 1px solid #c8dcd5;
+}
+
 .sensor-contract {
   display: grid;
   gap: 5px;
@@ -376,6 +452,15 @@ function normalizeRefreshRate(): void {
   small {
     font-size: 9px;
     color: #81918c;
+  }
+
+  code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 9px;
+    color: #2f665a;
+    white-space: nowrap;
   }
 }
 
