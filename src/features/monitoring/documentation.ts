@@ -88,13 +88,8 @@ ${topicRows}
 \`\`\`json
 {
   "alarmId": "alarm-01",
-  "code": "SENSOR_STATE_CHANGED",
   "level": "WARNING",
-  "status": "OPEN",
-  "title": "${settings.alarmTitleTemplate}",
-  "detail": "${settings.alarmDetailTemplate}",
-  "sensorKey": "${sampleSensor?.deviceKey ?? "blanket-001"}",
-  "cameraKey": "${data.cameras[0]?.cameraKey ?? "camera-001"}",
+  "title": "毯子状态异常",
   "bedId": "${sampleBed?.id ?? "bed-a-01"}",
   "occurredAt": "${generatedAt}"
 }

@@ -10,6 +10,8 @@ export interface AlarmEnvelope {
   detail: string;
   sensorKey: string;
   cameraKey: string;
+  wardId: string;
+  roomId: string;
   bedId: string;
   occurredAt: string;
   resolvedAt?: string;
@@ -79,29 +81,22 @@ export function parseAlarmMessage(payload: string): AlarmEnvelope | null {
   }
 
   if (!isRecord(parsed)) return null;
-  const requiredStrings = [
-    "alarmId",
-    "code",
-    "title",
-    "detail",
-    "sensorKey",
-    "cameraKey",
-    "bedId",
-    "occurredAt",
-  ] as const;
+  const requiredStrings = ["alarmId", "title", "bedId", "occurredAt"] as const;
   if (!requiredStrings.every((key) => typeof parsed[key] === "string")) return null;
   if (typeof parsed.level !== "string" || !alarmLevels.has(parsed.level as AlarmLevel)) return null;
 
   return {
     alarmId: parsed.alarmId as string,
-    code: parsed.code as string,
+    code: typeof parsed.code === "string" ? parsed.code : "BED_ALARM",
     level: parsed.level as AlarmLevel,
     status:
       parsed.status === "ACKNOWLEDGED" || parsed.status === "RESOLVED" ? parsed.status : "OPEN",
     title: parsed.title as string,
-    detail: parsed.detail as string,
-    sensorKey: parsed.sensorKey as string,
-    cameraKey: parsed.cameraKey as string,
+    detail: typeof parsed.detail === "string" ? parsed.detail : (parsed.title as string),
+    sensorKey: typeof parsed.sensorKey === "string" ? parsed.sensorKey : "",
+    cameraKey: typeof parsed.cameraKey === "string" ? parsed.cameraKey : "",
+    wardId: typeof parsed.wardId === "string" ? parsed.wardId : "",
+    roomId: typeof parsed.roomId === "string" ? parsed.roomId : "",
     bedId: parsed.bedId as string,
     occurredAt: parsed.occurredAt as string,
   };

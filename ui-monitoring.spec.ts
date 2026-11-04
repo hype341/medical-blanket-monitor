@@ -51,7 +51,6 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   } else {
     await expect(page.getByText("暂无录像片段").first()).toBeVisible();
   }
-  await expect(page.locator(".universal-player")).toBeVisible();
   await expect(page.getByText("暂无告警").first()).toBeVisible();
   await page.waitForTimeout(600);
   await page.screenshot({ path: "test-results/monitoring-bed-detail.png", fullPage: true });

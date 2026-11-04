@@ -40,7 +40,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   const monitoringPolicy = ref<MonitoringPolicy>({
     clipBeforeSeconds: 30,
     clipAfterSeconds: 60,
-    recordingRetentionMinutes: 30,
+    recordingRetentionMinutes: 1_440,
   });
   const mqttSettings = ref<MqttSettings>({
     brokerUrl: "mqtt://192.168.86.128:1883",
@@ -49,7 +49,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     username: "blanket-service",
     password: "demo-mqtt-secret",
     telemetryTopic: "medical-blanket/v1/+/+/+/sensor/+/telemetry",
-    alarmTopic: "medical-blanket/v1/+/+/+/alarm/+",
+    alarmTopic: "medical-blanket/v1/+/+/+/alarm",
     alarmTitleTemplate: "{{deviceName}} 状态异常",
     alarmDetailTemplate: "{{bedName}} 在 {{occurredAt}} 上报 {{alarmCode}}",
     qos: 1,
@@ -395,11 +395,18 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   }
 
   function ingestAlarm(alarm: AlarmEnvelope): void {
+    const bed = beds.find((item) => item.id === alarm.bedId);
+    if (!bed) throw new Error("告警必须关联有效床位");
+    const normalizedAlarm = {
+      ...alarm,
+      wardId: alarm.wardId || bed.wardId,
+      roomId: alarm.roomId || bed.roomId,
+    };
     const existing = alarms.value.findIndex((item) => item.alarmId === alarm.alarmId);
     if (existing === -1) {
-      alarms.value.unshift(alarm);
+      alarms.value.unshift(normalizedAlarm);
     } else {
-      alarms.value[existing] = alarm;
+      alarms.value[existing] = normalizedAlarm;
     }
   }
 

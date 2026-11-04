@@ -35,6 +35,8 @@ describe("alarm MQTT contract", () => {
         detail: "设备上报状态变化",
         sensorKey: "blanket-001",
         cameraKey: "camera-01",
+        wardId: "ward-a",
+        roomId: "room-a-301",
         bedId: "bed-a-01",
         occurredAt: "2026-11-04T17:04:20+08:00",
       }),
@@ -43,6 +45,22 @@ describe("alarm MQTT contract", () => {
     expect(alarm?.cameraKey).toBe("camera-01");
     expect(alarm?.occurredAt).toBe("2026-11-04T17:04:20+08:00");
     expect(alarm?.status).toBe("OPEN");
+  });
+
+  it("accepts a simplified room alarm payload", () => {
+    const alarm = parseAlarmMessage(
+      JSON.stringify({
+        alarmId: "alarm-simple",
+        level: "WARNING",
+        title: "床位状态异常",
+        bedId: "bed-a-01",
+        occurredAt: "2026-11-04T17:04:20+08:00",
+      }),
+    );
+
+    expect(alarm?.code).toBe("BED_ALARM");
+    expect(alarm?.bedId).toBe("bed-a-01");
+    expect(alarm?.detail).toBe("床位状态异常");
   });
 });
 

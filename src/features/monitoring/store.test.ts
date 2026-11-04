@@ -82,6 +82,8 @@ describe("monitoring store", () => {
       detail: "设备上报状态变化",
       sensorKey: "blanket-001",
       cameraKey: "camera-01",
+      wardId: "ward-a",
+      roomId: "room-a-301",
       bedId: "bed-a-01",
       occurredAt: "2026-11-04T17:20:00+08:00",
     });

@@ -23,7 +23,7 @@
           </strong>
           <p>{{ alarm.detail }}</p>
           <small>
-            {{ alarm.code }} · {{ alarm.cameraKey }}
+            {{ locationLabel }} · {{ alarm.code }} · {{ alarm.cameraKey }}
             <template v-if="alarm.resolvedAt">· {{ formatTime(alarm.resolvedAt) }} 解决</template>
           </small>
         </div>
@@ -59,9 +59,11 @@ import type { AlarmEnvelope } from "../recording";
 withDefaults(
   defineProps<{
     alarms?: AlarmEnvelope[];
+    locationLabel?: string;
   }>(),
   {
     alarms: () => [],
+    locationLabel: "",
   },
 );
 

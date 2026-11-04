@@ -22,7 +22,14 @@ export function buildBedMqttTopics(input: BedMqttTopicInput): BedMqttTopics {
 
   return {
     telemetry: `${base}/sensor/${normalize(input.deviceKey)}/telemetry`,
-    alarm: `${base}/alarm/+`,
+    alarm: [
+      "medical-blanket",
+      "v1",
+      normalize(input.hospitalCode),
+      normalize(input.wardCode),
+      normalize(input.roomNo),
+      "alarm",
+    ].join("/"),
   };
 }
 

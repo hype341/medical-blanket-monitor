@@ -13,7 +13,7 @@ describe("per-bed MQTT topics", () => {
       }),
     ).toEqual({
       telemetry: "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/telemetry",
-      alarm: "medical-blanket/v1/H001/WARD-A/301-01/alarm/+",
+      alarm: "medical-blanket/v1/H001/WARD-A/301/alarm",
     });
   });
 });

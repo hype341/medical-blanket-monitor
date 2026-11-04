@@ -11,7 +11,7 @@ const settings = {
   username: "blanket-service",
   password: "secret",
   telemetryTopic: "medical-blanket/v1/+/+/+/sensor/+/telemetry",
-  alarmTopic: "medical-blanket/v1/+/+/+/alarm/+",
+  alarmTopic: "medical-blanket/v1/+/+/+/alarm",
   alarmTitleTemplate: "{{deviceName}} 状态异常",
   alarmDetailTemplate: "{{bedName}} 上报 {{alarmCode}}",
   qos: 1 as const,

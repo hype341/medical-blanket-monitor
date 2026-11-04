@@ -56,11 +56,15 @@
         <RecordingTimeline
           :segments="recordingSegments"
           :alarms="alarms"
-          :retention-minutes="30"
+          :retention-minutes="store.monitoringPolicy.recordingRetentionMinutes"
           @seek="seekRecording"
           @select-alarm="selectAlarm"
         />
-        <AlarmTimeline :alarms="alarms" @resolve="store.resolveAlarm" />
+        <AlarmTimeline
+          :alarms="alarms"
+          :location-label="`${summary.ward?.name ?? ''} · ${summary.room?.name ?? ''} · ${summary.bed.bedNo} 床`"
+          @resolve="store.resolveAlarm"
+        />
       </section>
 
       <section class="sensor-panel">
