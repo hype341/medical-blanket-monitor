@@ -119,7 +119,6 @@ export const constantRoutes: RouteRecordRaw[] = [
           icon: "monitor",
           roles: ["DEVELOPER"],
           module: "video",
-          hidden: true,
         },
       },
       {
