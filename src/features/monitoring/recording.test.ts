@@ -83,6 +83,18 @@ describe("rolling recording timeline", () => {
     expect(findPlaybackSegment(segments, "2026-11-04T17:07:00+08:00")?.id).toBe("segment-02");
   });
 
+  it("allows second-level input near a millisecond segment boundary", () => {
+    const preciseSegments = [
+      {
+        ...segments[0],
+        startAt: "2026-11-04T17:00:00.700+08:00",
+      },
+    ];
+    expect(findPlaybackSegment(preciseSegments, "2026-11-04T17:00:00+08:00", 2_000)?.id).toBe(
+      "segment-01",
+    );
+  });
+
   it("maps MediaMTX playback files to browser URLs", () => {
     expect(
       mapMediaMtxPlaybackItems(

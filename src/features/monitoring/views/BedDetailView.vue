@@ -54,6 +54,7 @@
         <button v-if="recordingAt" type="button" class="back-to-live" @click="returnToLive">
           返回实时画面
         </button>
+        <CameraLinkPanel :camera="selectedCamera" compact />
         <RecordingTimeline
           :segments="recordingSegments"
           :alarms="alarms"
@@ -146,6 +147,7 @@ import { useRoute, useRouter } from "vue-router";
 import UniversalVideoPlayer from "@/components/UniversalVideoPlayer/index.vue";
 import AlarmTimeline from "../components/AlarmTimeline.vue";
 import AnalysisExtensionPanel from "../components/AnalysisExtensionPanel.vue";
+import CameraLinkPanel from "../components/CameraLinkPanel.vue";
 import PatientEditor from "../components/PatientEditor.vue";
 import RecordingPlayer from "../components/RecordingPlayer.vue";
 import RecordingTimeline from "../components/RecordingTimeline.vue";
@@ -211,7 +213,7 @@ let recordingTimer: ReturnType<typeof setInterval> | null = null;
 const alarms = computed(() => store.alarms.filter((alarm) => alarm.bedId === route.params.bedId));
 
 function openRecordingAt(targetAt: string): void {
-  const segment = findPlaybackSegment(recordingSegments.value, targetAt);
+  const segment = findPlaybackSegment(recordingSegments.value, targetAt, 2_000);
   if (segment) {
     recordingAt.value = targetAt;
     playbackPositionAt.value = targetAt;

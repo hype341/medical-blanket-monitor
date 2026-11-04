@@ -87,30 +87,46 @@
           </div>
           <small>报文中的 bedId 用于定位床位</small>
         </header>
-        <el-form label-position="top">
-          <el-form-item label="告警主题">
-            <el-input v-model.trim="form.alarmTopic" />
-          </el-form-item>
-          <el-form-item label="告警标题模板">
-            <el-input v-model="form.alarmTitleTemplate" />
-          </el-form-item>
-          <el-form-item label="告警详情模板">
-            <el-input v-model="form.alarmDetailTemplate" type="textarea" :rows="3" />
-          </el-form-item>
-        </el-form>
+        <div class="alarm-subscription">
+          <div>
+            <span>全局订阅规则</span>
+            <strong>自动接收所有病房</strong>
+          </div>
+          <code>{{ form.alarmTopic }}</code>
+          <small>新增病房后，后端使用通配符自动覆盖对应主题。</small>
+        </div>
 
         <div class="room-topic-panel">
           <header>
             <div>
-              <span>已生成主题</span>
-              <strong>{{ roomAlarmTopics.length }} 个病房通道</strong>
+              <span>病房独立通道</span>
+              <strong>{{ alarmTopicGroups.length }} 个病房告警主题</strong>
             </div>
-            <small>只读</small>
+            <small>逐项复制 · 只读</small>
           </header>
-          <div class="raw-topic-list">
-            <code v-for="topic in roomAlarmTopics" :key="topic">{{ topic }}</code>
+          <div class="room-topic-cards">
+            <article v-for="group in alarmTopicGroups" :key="group.topic">
+              <div>
+                <strong>{{ group.roomName }}</strong>
+                <span>{{ group.wardName }} · {{ group.bedNos.length }} 张床位</span>
+              </div>
+              <code :title="group.topic">{{ group.topic }}</code>
+              <el-button text type="primary" @click="copyTopic(group.topic)">复制</el-button>
+            </article>
           </div>
         </div>
+
+        <details class="alarm-template-settings">
+          <summary>告警展示文案</summary>
+          <el-form label-position="top">
+            <el-form-item label="告警标题模板">
+              <el-input v-model="form.alarmTitleTemplate" />
+            </el-form-item>
+            <el-form-item label="告警详情模板">
+              <el-input v-model="form.alarmDetailTemplate" type="textarea" :rows="3" />
+            </el-form-item>
+          </el-form>
+        </details>
       </section>
     </div>
 
@@ -190,6 +206,7 @@ import { ElMessage } from "element-plus";
 import { generateMqttDocumentation } from "../documentation";
 import { useMonitoringStore } from "../store";
 import type { MqttSettings } from "../types";
+import { copyText } from "@/utils/clipboard";
 
 const store = useMonitoringStore();
 const form = reactive<MqttSettings>({ ...store.mqttSettings });
@@ -234,15 +251,25 @@ const sensorDataTemplate = JSON.stringify(
   null,
   2,
 );
-const roomAlarmTopics = computed(() =>
-  Array.from(
-    new Set(
-      store.bedSummaries
-        .map((summary) => summary.alarmTopic)
-        .filter((topic): topic is string => Boolean(topic)),
-    ),
-  ),
-);
+const alarmTopicGroups = computed(() => {
+  const groups = new Map<
+    string,
+    { topic: string; wardName: string; roomName: string; bedNos: string[] }
+  >();
+  store.bedSummaries.forEach((summary) => {
+    if (!summary.alarmTopic) return;
+    const group = groups.get(summary.alarmTopic) ?? {
+      topic: summary.alarmTopic,
+      wardName: summary.ward?.name ?? "未分病区",
+      roomName: summary.room?.name ?? "未分病房",
+      bedNos: [],
+    };
+    group.bedNos.push(summary.bed.bedNo);
+    groups.set(summary.alarmTopic, group);
+  });
+  return Array.from(groups.values());
+});
+const roomAlarmTopics = computed(() => alarmTopicGroups.value.map((group) => group.topic));
 
 function save(): void {
   try {
@@ -254,13 +281,26 @@ function save(): void {
   }
 }
 
+async function copyTopic(topic: string): Promise<void> {
+  try {
+    await copyText(topic);
+    ElMessage.success("病房告警主题已复制");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "主题复制失败");
+  }
+}
+
 function regenerateMqttDocument(): void {
   generatedAt.value = new Date().toLocaleString("zh-CN", { hour12: false });
 }
 
 async function copyMqttDocument(): Promise<void> {
-  await navigator.clipboard.writeText(mqttDocument.value);
-  ElMessage.success("MQTT 文档已复制");
+  try {
+    await copyText(mqttDocument.value);
+    ElMessage.success("MQTT 文档已复制");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "MQTT 文档复制失败");
+  }
 }
 
 function downloadMqttDocument(): void {
@@ -419,9 +459,49 @@ function downloadText(fileName: string, content: string): void {
   gap: 12px;
 }
 
+.alarm-subscription {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  padding: 12px;
+  background: #edf7f2;
+  border-left: 3px solid #2f806a;
+
+  div {
+    display: grid;
+    gap: 3px;
+  }
+
+  span,
+  small {
+    font-size: 9px;
+    color: #72877f;
+  }
+
+  strong {
+    font-size: 11px;
+    color: #2e6558;
+  }
+
+  code {
+    align-self: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 9px;
+    color: #2d6b5d;
+    white-space: nowrap;
+  }
+
+  small {
+    grid-column: 1 / -1;
+    line-height: 1.55;
+  }
+}
+
 .room-topic-panel {
   padding: 12px;
-  margin-top: 4px;
+  margin-top: 12px;
   background: #f7fbf9;
   border: 1px solid #e0eae6;
 
@@ -446,6 +526,71 @@ function downloadText(fileName: string, content: string): void {
       font-size: 11px;
       color: #35675c;
     }
+  }
+}
+
+.room-topic-cards {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+
+  article {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 9px 10px;
+    background: #fff;
+    border: 1px solid #e3ebe8;
+
+    > div {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 10px;
+      color: #315f55;
+      white-space: nowrap;
+    }
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 8px;
+      color: #81918c;
+      white-space: nowrap;
+    }
+
+    code {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 9px;
+      color: #2f6b5e;
+      white-space: nowrap;
+    }
+  }
+}
+
+.alarm-template-settings {
+  margin-top: 10px;
+  background: #fbfcfb;
+  border: 1px solid #e4ece9;
+
+  summary {
+    padding: 10px 12px;
+    font-size: 9px;
+    font-weight: 650;
+    color: #5d746d;
+    cursor: pointer;
+  }
+
+  .el-form {
+    padding: 0 12px 12px;
   }
 }
 
@@ -723,6 +868,24 @@ function downloadText(fileName: string, content: string): void {
 
   .connection-row {
     grid-template-columns: 1fr;
+  }
+
+  .alarm-subscription {
+    grid-template-columns: 1fr;
+
+    small {
+      grid-column: auto;
+    }
+  }
+
+  .room-topic-cards article {
+    grid-template-columns: 1fr auto;
+
+    code {
+      grid-column: 1 / -1;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
   }
 
   .connection-summary {

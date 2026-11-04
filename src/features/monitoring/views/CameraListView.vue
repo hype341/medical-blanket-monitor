@@ -14,6 +14,10 @@
       <p>后端生成 MediaMTX 路径，前端按 WebRTC、HLS、HTTP-FLV 自动选择播放线路。</p>
     </section>
 
+    <div class="camera-link-grid">
+      <CameraLinkPanel v-for="camera in store.cameras" :key="camera.id" :camera="camera" />
+    </div>
+
     <el-table :data="tableRows" class="camera-table">
       <el-table-column prop="name" label="摄像头" min-width="180" />
       <el-table-column prop="cameraKey" label="设备标识" min-width="170" />
@@ -80,9 +84,11 @@
 import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import CameraEditorDialog from "../components/CameraEditorDialog.vue";
+import CameraLinkPanel from "../components/CameraLinkPanel.vue";
 import { generateVideoDocumentation } from "../documentation";
 import { useMonitoringStore } from "../store";
 import type { CameraInput, CameraStatus } from "../types";
+import { copyText } from "@/utils/clipboard";
 
 const store = useMonitoringStore();
 const editorVisible = ref(false);
@@ -153,8 +159,12 @@ function regenerateDocument(): void {
 }
 
 async function copyDocument(): Promise<void> {
-  await navigator.clipboard.writeText(videoDocument.value);
-  ElMessage.success("视频文档已复制");
+  try {
+    await copyText(videoDocument.value);
+    ElMessage.success("视频文档已复制");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "视频文档复制失败");
+  }
 }
 
 function downloadDocument(): void {
@@ -226,7 +236,14 @@ function downloadDocument(): void {
 }
 
 .camera-table {
+  margin-top: 16px;
   border: 1px solid #dbe6e2;
+}
+
+.camera-link-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 14px;
 }
 
 .camera-document {
@@ -328,6 +345,10 @@ function downloadDocument(): void {
   }
 
   .protocol-notes {
+    grid-template-columns: 1fr;
+  }
+
+  .camera-link-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -127,8 +127,8 @@ function findSegmentAt(targetAt: string): RecordingSegment | null {
   return (
     sortedSegments.value.find(
       (segment) =>
-        new Date(segment.startAt).getTime() <= target &&
-        new Date(segment.endAt).getTime() >= target,
+        new Date(segment.startAt).getTime() - 2_000 <= target &&
+        new Date(segment.endAt).getTime() + 2_000 >= target,
     ) ?? null
   );
 }

@@ -129,12 +129,16 @@ export function generateVideoDocumentation(data: MonitoringData, generatedAt: st
       })
       .join("\n");
     const mediaPath = camera.mediaPath ?? camera.cameraKey;
+    const webRtcViewUrl =
+      camera.playback?.webrtcUrl?.replace(/\/whep\/?$/i, "") ??
+      `http://10.208.236.131:8889/${mediaPath}`;
 
     return `## ${camera.name}
 
 - 设备标识：\`${camera.cameraKey}\`
 - MediaMTX 路径：\`${mediaPath}\`
 - 设备状态：\`${camera.status}\`
+- 浏览器直接观看：\`${webRtcViewUrl}\`
 - WebRTC：\`${camera.playback?.webrtcUrl ?? `http://10.208.236.131:8889/${mediaPath}/whep`}\`
 - HLS：\`${camera.playback?.hlsUrl ?? `http://10.208.236.131:8888/${mediaPath}/index.m3u8`}\`
 - RTSP：\`rtsp://10.208.236.131:8554/${mediaPath}\`

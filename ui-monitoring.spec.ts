@@ -47,8 +47,17 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   const recordingSegment = page.locator(".recording-timeline__segment").first();
   if (await recordingSegment.count()) {
     await expect(page.getByLabel("录像回放进度")).toBeEnabled();
-    await recordingSegment.click();
+    const startAt = await recordingSegment.getAttribute("data-start-at");
+    expect(startAt).toBeTruthy();
+    const localTime = await page.evaluate((value: string) => {
+      const date = new Date(value);
+      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+      return local.toISOString().slice(0, 19);
+    }, startAt!);
+    await page.getByLabel("按时间定位回放").fill(localTime);
+    await page.getByRole("button", { name: "回放此时间" }).click();
     await expect(page.locator(".recording-player")).toBeVisible();
+    await expect(page.getByText("按时间定位").first()).toBeVisible();
   } else {
     await expect(page.getByText("暂无录像片段").first()).toBeVisible();
   }
@@ -167,7 +176,10 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await page.getByText("MQTT 管理", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
   await expect(page.getByText("EMQX 接入")).toBeVisible();
-  await expect(page.getByText("告警主题", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "独立告警主题" })).toBeVisible();
+  await expect(page.getByText("6 个病房告警主题")).toBeVisible();
+  await page.locator(".room-topic-cards").getByRole("button", { name: "复制" }).first().click();
+  await expect(page.getByText("病房告警主题已复制")).toBeVisible();
   await expect(page.getByRole("heading", { name: "传感器数据报文" })).toBeVisible();
   await expect(page.locator(".message-card--data pre")).toContainText('"metrics": {}');
   await expect(page.getByText("MQTT 原始报文")).toBeVisible();
@@ -178,6 +190,9 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await expect(page.locator(".document-panel pre")).not.toContainText("遥测主题");
   await page.waitForTimeout(400);
   await page.locator(".connection-page").screenshot({ path: "test-results/monitoring-mqtt.png" });
+  await page
+    .locator(".connection-card--alerts")
+    .screenshot({ path: "test-results/monitoring-mqtt-topics.png" });
   await page
     .locator(".message-grid")
     .screenshot({ path: "test-results/monitoring-mqtt-messages.png" });
@@ -194,6 +209,9 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await page.locator('input[placeholder="媒体路径"]').fill("camera-02");
   await page.getByRole("button", { name: "保存摄像头" }).click();
   await expect(page.getByText("201 病房摄像头").first()).toBeVisible();
+  await expect(page.getByText("WebRTC 浏览器观看").first()).toBeVisible();
+  await page.locator(".camera-links").first().getByRole("button", { name: "复制" }).first().click();
+  await expect(page.getByText("WebRTC 浏览器观看已复制")).toBeVisible();
   await expect(page.getByRole("heading", { name: "视频连接文档" })).toBeVisible();
   await expect(page.locator(".camera-document pre")).toContainText(
     "http://10.208.236.131:8889/camera-01/whep",

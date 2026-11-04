@@ -115,13 +115,14 @@ export function buildClipWindow(occurredAt: string, config: ClipWindowConfig): C
 export function findPlaybackSegment(
   segments: readonly RecordingSegment[],
   targetAt: string,
+  toleranceMs = 0,
 ): RecordingSegment | null {
   const target = new Date(targetAt).getTime();
   return (
     segments.find(
       (segment) =>
-        new Date(segment.startAt).getTime() <= target &&
-        new Date(segment.endAt).getTime() >= target,
+        new Date(segment.startAt).getTime() - toleranceMs <= target &&
+        new Date(segment.endAt).getTime() + toleranceMs >= target,
     ) ?? null
   );
 }

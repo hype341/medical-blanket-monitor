@@ -26,6 +26,25 @@
       </div>
     </header>
 
+    <form class="recording-timeline__jump" @submit.prevent="seekToInputTime">
+      <label>
+        <span>按时间定位</span>
+        <input
+          v-model="jumpValue"
+          type="datetime-local"
+          step="1"
+          :min="jumpMin"
+          :max="jumpMax"
+          aria-label="按时间定位回放"
+          @input="jumpDirty = true"
+        />
+      </label>
+      <button type="submit" :disabled="!visibleSegments.length">回放此时间</button>
+      <small :data-error="Boolean(jumpError)">
+        {{ jumpError || "支持精确到秒，范围以实际录像片段为准" }}
+      </small>
+    </form>
+
     <div class="recording-timeline__clock">
       <span>{{ windowStartLabel }}</span>
       <strong>{{ cursorTime }}</strong>
@@ -40,6 +59,8 @@
         class="recording-timeline__segment"
         :style="{ left: `${segment.left}%`, width: `${segment.width}%` }"
         :title="`${formatTime(segment.startAt)} - ${formatTime(segment.endAt)}`"
+        :data-start-at="segment.startAt"
+        :data-end-at="segment.endAt"
         @click="emit('seek', segment.startAt)"
       />
       <button
@@ -86,7 +107,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { AlarmEnvelope, RecordingSegment } from "../recording";
-import { pruneExpiredSegments } from "../recording";
+import { findPlaybackSegment, pruneExpiredSegments } from "../recording";
 
 const props = withDefaults(
   defineProps<{
@@ -111,6 +132,9 @@ const emit = defineEmits<{
 const now = ref(Date.now());
 const cursorPercent = ref(100);
 const isScrubbing = ref(false);
+const jumpDirty = ref(false);
+const jumpValue = ref(toDateTimeLocal(Date.now()));
+const jumpError = ref("");
 let clockTimer: ReturnType<typeof setInterval> | null = null;
 
 const windowStart = computed(() => now.value - props.retentionMinutes * 60_000);
@@ -127,6 +151,8 @@ const cursorTime = computed(() =>
 );
 const windowStartLabel = computed(() => formatTime(new Date(windowStart.value).toISOString()));
 const windowEndLabel = computed(() => formatTime(new Date(now.value).toISOString()));
+const jumpMin = computed(() => toDateTimeLocal(windowStart.value));
+const jumpMax = computed(() => toDateTimeLocal(now.value));
 
 const positionedSegments = computed(() =>
   visibleSegments.value.map((segment) => {
@@ -175,6 +201,7 @@ function shiftCursor(seconds: number): void {
 
 function commitSeek(): void {
   isScrubbing.value = false;
+  jumpError.value = "";
   emit(
     "seek",
     new Date(windowStart.value + (cursorPercent.value / 100) * windowSpan.value).toISOString(),
@@ -184,6 +211,7 @@ function commitSeek(): void {
 function syncCursor(): void {
   if (!props.currentAt) {
     cursorPercent.value = 100;
+    if (!jumpDirty.value) jumpValue.value = toDateTimeLocal(now.value);
     return;
   }
   const target = new Date(props.currentAt).getTime();
@@ -191,6 +219,34 @@ function syncCursor(): void {
     100,
     Math.max(0, ((target - windowStart.value) / windowSpan.value) * 100),
   );
+  if (!jumpDirty.value) jumpValue.value = toDateTimeLocal(target);
+}
+
+function seekToInputTime(): void {
+  const target = new Date(jumpValue.value).getTime();
+  if (!Number.isFinite(target)) {
+    jumpError.value = "请输入有效的日期和时间";
+    return;
+  }
+  if (target < windowStart.value || target > now.value) {
+    jumpError.value = "该时间不在当前录像保留范围内";
+    return;
+  }
+  const targetAt = new Date(target).toISOString();
+  if (!findPlaybackSegment(visibleSegments.value, targetAt, 2_000)) {
+    jumpError.value = "该时间没有对应录像片段，请换个时间";
+    return;
+  }
+
+  jumpError.value = "";
+  cursorPercent.value = ((target - windowStart.value) / windowSpan.value) * 100;
+  jumpDirty.value = false;
+  emit("seek", targetAt);
+}
+
+function toDateTimeLocal(value: number): string {
+  const local = new Date(value - new Date(value).getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 19);
 }
 
 watch(() => props.currentAt, syncCursor, { immediate: true });
@@ -263,6 +319,79 @@ onBeforeUnmount(() => {
     &:focus-visible {
       outline: 2px solid #2f806a;
       outline-offset: 2px;
+    }
+  }
+}
+
+.recording-timeline__jump {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  margin-top: 13px;
+  background: #f5f9f7;
+  border: 1px solid #dce7e3;
+
+  label {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+
+    span {
+      font-size: 9px;
+      font-weight: 650;
+      color: #527068;
+      white-space: nowrap;
+    }
+  }
+
+  input {
+    min-width: 190px;
+    height: 30px;
+    padding: 0 8px;
+    font-family: "Avenir Next", "Noto Sans SC", sans-serif;
+    font-size: 10px;
+    color: #245d51;
+    background: #fff;
+    border: 1px solid #c8dad4;
+
+    &:focus {
+      outline: 2px solid #2f806a;
+      outline-offset: 1px;
+    }
+  }
+
+  button {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 9px;
+    font-weight: 650;
+    color: #fff;
+    cursor: pointer;
+    background: #2f806a;
+    border: 1px solid #2f806a;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #174e46;
+      outline-offset: 2px;
+    }
+  }
+
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 9px;
+    color: #82918d;
+    white-space: nowrap;
+
+    &[data-error="true"] {
+      color: #a53d34;
     }
   }
 }
@@ -370,6 +499,25 @@ onBeforeUnmount(() => {
 @media (width <= 600px) {
   .recording-timeline > header {
     flex-direction: column;
+  }
+
+  .recording-timeline__jump {
+    grid-template-columns: 1fr auto;
+
+    label {
+      grid-column: 1 / -1;
+      justify-content: space-between;
+    }
+
+    input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    small {
+      grid-column: 1 / -1;
+      white-space: normal;
+    }
   }
 }
 </style>
