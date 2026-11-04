@@ -1,5 +1,100 @@
 <div align="center">
 
+# 医用智能毯安全监护平台
+
+面向医院病区的智能毯传感器、床位告警和摄像头联动管理平台。
+
+</div>
+
+> 当前仓库为演示与原型版本，使用模拟患者数据和演示账号，不可直接作为生产医疗系统上线。正式使用前必须接入真实后端、数据库、MQTT Broker、身份认证、审计与医疗数据合规方案。
+
+## 核心能力
+
+- 安全总览：病区、病房、床位、传感器和视频设备统一查看。
+- 床位监护：患者状态、毯子传感器图形、摄像头实时画面和录像回放。
+- 时间回放：输入日期时间直接定位录像，告警可直接跳转到发生时刻。
+- 告警处理：告警标红并弹出提示；护士标记已解决后变绿，再手动删除。
+- MQTT 主题：按床位独立的数据主题和告警主题，支持逐条复制与在线文档。
+- 传感器数据：每张床位独立接入，图形刷新率可配置。
+- 视频接入：支持 WebRTC、HLS 和 RTSP，兼容 MediaMTX。
+- 权限管理：系统管理员、护士、护士长和系统开发者分角色访问。
+- 文档导出：MQTT 与视频接入文档支持预览、复制、Markdown 和 PDF 导出。
+
+## 演示账号
+
+所有演示账号密码均为 `123456`。
+
+| 账号 | 角色 |
+| --- | --- |
+| `admin` | 系统管理员 |
+| `nurse` | 值班护士 |
+| `head-nurse` | 病区护士长 |
+| `developer` | 系统开发者 |
+
+## 技术栈
+
+- Vue 3 + Vite + TypeScript
+- Element Plus
+- Pinia + Vue Router
+- HLS.js + flv.js
+- MQTT.js
+
+视频与物联网接入目标架构：
+
+```text
+摄像头 / 传感器
+      │
+      ├── RTSP / RTMP / SRT ──> MediaMTX ──> WebRTC / HLS
+      │
+      └── MQTT ──> EMQX ──> Java Spring Boot ──> MySQL / Redis
+                                      │
+                                      └── WebSocket ──> Vue 3 前端
+```
+
+## 本地运行
+
+```bash
+git clone https://github.com/hype341/medical-blanket-monitor.git
+cd medical-blanket-monitor
+npm install --global pnpm@10.34.5
+pnpm install
+pnpm run dev
+```
+
+访问 `http://localhost:3000`。
+
+## 主要页面
+
+| 路径 | 功能 |
+| --- | --- |
+| `/overview` | 安全总览与模块入口 |
+| `/beds` | 床位列表 |
+| `/beds/:bedId` | 实时视频、回放、传感器图形与告警处理 |
+| `/bindings` | 床位、传感器和摄像头绑定 |
+| `/admin/management` | 病区、人员权限与录像策略 |
+| `/admin/connections` | MQTT 数据主题、告警主题与在线文档 |
+| `/devices/cameras` | 摄像头和视频直连地址 |
+| `/admin/developer` | 开发者工作台、医院名称与告警联调 |
+
+## 验证
+
+```bash
+pnpm test
+pnpm test:e2e
+pnpm build
+```
+
+## 说明
+
+当前演示部署没有连接正式 EMQX Broker，MQTT 主题与报文接口已经预留。摄像头地址取决于本地网络和 MediaMTX 服务，公开网络访问需要额外的鉴权代理、TLS 和访问控制。
+
+---
+
+<details>
+<summary>底层 vue3-element-admin 模板原始说明</summary>
+
+<div align="center">
+
 # <img alt="logo" width="40" valign="middle" src="./src/assets/images/logo.png"> vue3-element-admin
 
 **Vue3 + Vite + TypeScript 企业级中后台前端**
@@ -210,4 +305,6 @@ pnpm run build
 </table>
 
 <p align="center"><em>技术交流 · 问题反馈 · 商务合作</em></p>
+
+</details>
 
