@@ -2,11 +2,9 @@
   <section class="layout-content" :style="{ height: appMainHeight }">
     <router-view>
       <template #default="{ Component, route }">
-        <transition :name="transitionName" mode="out-in">
-          <keep-alive :include="cachedViews">
-            <component :is="currentComponent(Component, route)" :key="route.fullPath" />
-          </keep-alive>
-        </transition>
+        <keep-alive :include="cachedViews">
+          <component :is="currentComponent(Component, route)" :key="route.fullPath" />
+        </keep-alive>
       </template>
     </router-view>
 
@@ -69,9 +67,6 @@ const appMainHeight = computed(() => {
   }
 });
 
-const transitionName = computed(() => {
-  return settingsStore.pageSwitchingAnimation ?? "";
-});
 </script>
 
 <style lang="scss" scoped>
@@ -81,43 +76,5 @@ const transitionName = computed(() => {
   background-color: var(--page-bg);
   background-image: var(--page-bg-image);
   background-attachment: fixed;
-
-  /* fade */
-  .fade-enter-active,
-  .fade-leave-active {
-    transition: opacity 0.3s ease-in-out;
-  }
-  .fade-enter-from,
-  .fade-leave-to {
-    opacity: 0;
-  }
-
-  /* fade-slide */
-  .fade-slide-leave-active,
-  .fade-slide-enter-active {
-    transition: all 0.3s;
-  }
-  .fade-slide-enter-from {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-  .fade-slide-leave-to {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-
-  /* fade-scale */
-  .fade-scale-leave-active,
-  .fade-scale-enter-active {
-    transition: all 0.28s;
-  }
-  .fade-scale-enter-from {
-    opacity: 0;
-    transform: scale(1.2);
-  }
-  .fade-scale-leave-to {
-    opacity: 0;
-    transform: scale(0.8);
-  }
 }
 </style>

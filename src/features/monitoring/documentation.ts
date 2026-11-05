@@ -1,5 +1,6 @@
 import type { MonitoringData, MqttSettings } from "./types";
-import { getBedMonitorSummary } from "./selectors";
+import { buildBedMonitorSummaries, getBedMonitorSummary } from "./selectors";
+import { getCameraMediaEndpoints } from "./media-endpoints";
 import { buildSensorDataApiPath, SENSOR_DATA_TOPIC, SYSTEM_TIME_TOPIC } from "./messaging";
 
 export function generateMqttDocumentation(
@@ -278,32 +279,30 @@ openSensorDataStream(settings, dataTopic, handlers);
 }
 
 export function generateVideoDocumentation(data: MonitoringData, generatedAt: string): string {
+  const bedLocationsByCamera = new Map<string, string[]>();
+  for (const summary of buildBedMonitorSummaries(data)) {
+    const location = `- ${summary.ward?.name ?? "-"} / ${summary.room?.name ?? "-"} / ${summary.bed.bedNo} 床`;
+    for (const camera of summary.cameras) {
+      const locations = bedLocationsByCamera.get(camera.id) ?? [];
+      locations.push(location);
+      bedLocationsByCamera.set(camera.id, locations);
+    }
+  }
+
   const sections = data.cameras.map((camera) => {
-    const linked = data.beds
-      .map((bed) => ({ bed, summary: getBedMonitorSummary(bed.id, data) }))
-      .filter(({ summary }) => summary?.cameras.some((item) => item.id === camera.id));
-    const mappings = linked
-      .map(({ bed }) => {
-        const ward = data.wards.find((item) => item.id === bed.wardId);
-        const room = data.rooms.find((item) => item.id === bed.roomId);
-        return `- ${ward?.name ?? "-"} / ${room?.name ?? "-"} / ${bed.bedNo} 床`;
-      })
-      .join("\n");
-    const mediaPath = camera.mediaPath ?? camera.cameraKey;
-    const webRtcViewUrl =
-      camera.playback?.webrtcUrl?.replace(/\/whep\/?$/i, "") ??
-      `http://10.208.236.131:8889/${mediaPath}`;
+    const mappings = (bedLocationsByCamera.get(camera.id) ?? []).join("\n");
+    const endpoints = getCameraMediaEndpoints(camera);
 
     return `## ${camera.name}
 
 - 设备标识：\`${camera.cameraKey}\`
-- MediaMTX 路径：\`${mediaPath}\`
+- MediaMTX 路径：\`${endpoints.mediaPath}\`
 - 设备状态：\`${camera.status}\`
-- 浏览器直接观看：\`${webRtcViewUrl}\`
-- WebRTC：\`${camera.playback?.webrtcUrl ?? `http://10.208.236.131:8889/${mediaPath}/whep`}\`
-- HLS：\`${camera.playback?.hlsUrl ?? `http://10.208.236.131:8888/${mediaPath}/index.m3u8`}\`
-- RTSP：\`rtsp://10.208.236.131:8554/${mediaPath}\`
-- 回放索引：\`http://10.208.236.131:9996/list?path=${mediaPath}&start={开始时间}&end={结束时间}\`
+- 浏览器直接观看：\`${endpoints.webRtcViewUrl}\`
+- WebRTC：\`${endpoints.webRtcUrl}\`
+- HLS：\`${endpoints.hlsUrl}\`
+- RTSP：\`${endpoints.rtspUrl}\`
+- 回放索引：\`${endpoints.playbackApiBaseUrl}/list?path=${endpoints.mediaPath}&start={开始时间}&end={结束时间}\`
 
 ### 第三方直接播放函数
 

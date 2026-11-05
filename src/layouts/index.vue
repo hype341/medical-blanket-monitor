@@ -13,6 +13,7 @@ import { openPlatformAlarmStream } from "@/features/monitoring/stream-api";
 import { useLayout } from "./composables/useLayout";
 import { useLayoutDevice } from "./composables/useLayoutDevice";
 import { LayoutMode } from "@/enums/settings";
+import type { AlarmEnvelope } from "@/features/monitoring/recording";
 import LeftLayout from "./modes/LeftLayout.vue";
 import TopLayout from "./modes/TopLayout.vue";
 import MixLayout from "./modes/MixLayout.vue";
@@ -23,14 +24,40 @@ const route = useRoute();
 const { currentLayout, showSettings } = useLayout();
 const monitoringStore = useMonitoringStore();
 let alarmStream: ReturnType<typeof openPlatformAlarmStream> | null = null;
+let alarmEventRevision = 0;
+
+async function synchronizeAlarmSnapshot(capturedRevision: number): Promise<void> {
+  try {
+    const response = await fetch("/api/public/alarms", { cache: "no-store" });
+    if (!response.ok || capturedRevision !== alarmEventRevision) return;
+    const alarms = (await response.json()) as AlarmEnvelope[];
+    if (Array.isArray(alarms) && capturedRevision === alarmEventRevision) {
+      monitoringStore.replaceAlarms(alarms);
+    }
+  } catch {
+    // A later WebSocket reconnect or page refresh will retry the snapshot.
+  }
+}
 
 useLayoutDevice();
 
 onMounted(() => {
   if (import.meta.env.VITE_MOCK_ENABLED === "true") return;
   alarmStream = openPlatformAlarmStream({
-    onAlarm: (alarm) => monitoringStore.ingestAlarm(alarm),
-    onDeleted: (alarmId) => monitoringStore.removeAlarm(alarmId),
+    onAlarm: (alarm) => {
+      alarmEventRevision += 1;
+      monitoringStore.ingestAlarm(alarm);
+    },
+    onDeleted: (alarmId) => {
+      alarmEventRevision += 1;
+      monitoringStore.removeAlarm(alarmId);
+    },
+    onStatus: (status) => {
+      if (status === "connected") {
+        const capturedRevision = alarmEventRevision;
+        void synchronizeAlarmSnapshot(capturedRevision);
+      }
+    },
   });
 });
 

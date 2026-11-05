@@ -40,8 +40,11 @@
             <span>床旁视频</span>
             <h2>{{ selectedCamera?.name ?? "尚未绑定摄像头" }}</h2>
           </div>
-          <span class="video-panel__protocol">
-            {{ recordingAt ? "连续回放 · 双缓冲" : "WebRTC 优先" }}
+          <span
+            class="video-panel__protocol"
+            :data-status="selectedCamera?.status ?? 'OFFLINE'"
+          >
+            {{ recordingAt ? "连续回放 · 双缓冲" : cameraStatusLabel }}
           </span>
         </header>
 
@@ -57,6 +60,7 @@
           :camera-name="selectedCamera?.name ?? '床旁摄像头'"
           :camera-status="selectedCamera?.status ?? 'OFFLINE'"
           :playback="selectedCamera?.playback ?? null"
+          @status="syncPlaybackCameraStatus"
         />
         <button v-if="recordingAt" type="button" class="back-to-live" @click="returnToLive">
           返回实时画面
@@ -183,6 +187,8 @@ import {
 } from "../recording";
 import { useMonitoringStore } from "../store";
 import type { PatientUpdateInput } from "../types";
+import { getCameraMediaEndpoints } from "../media-endpoints";
+import { probeCameraHealth } from "../camera-health";
 
 const route = useRoute();
 const router = useRouter();
@@ -205,6 +211,15 @@ const sensorStatusLabel = computed(() => {
     ALARM: "毯子传感器异常",
   };
   return labels[summary.value?.sensor?.status ?? "OFFLINE"];
+});
+
+const cameraStatusLabel = computed(() => {
+  if (!selectedCamera.value) return "未绑定摄像头";
+  return {
+    ONLINE: "摄像头在线",
+    STALE: "画面延迟",
+    OFFLINE: "摄像头离线",
+  }[selectedCamera.value.status];
 });
 
 const patientStatusLabel = computed(() => {
@@ -233,7 +248,9 @@ const recordingAt = ref("");
 const playbackPositionAt = ref("");
 let recordingTimer: ReturnType<typeof setInterval> | null = null;
 let sensorTimer: ReturnType<typeof setInterval> | null = null;
+let cameraHealthTimer: ReturnType<typeof setInterval> | null = null;
 let sensorFetching = false;
+let cameraHealthController: AbortController | null = null;
 const alarms = computed(() => store.alarms.filter((alarm) => alarm.bedId === route.params.bedId));
 
 function openRecordingAt(targetAt: string): boolean {
@@ -249,6 +266,10 @@ function openRecordingAt(targetAt: string): boolean {
 function returnToLive(): void {
   recordingAt.value = "";
   playbackPositionAt.value = "";
+}
+
+function syncPlaybackCameraStatus(status: "ONLINE" | "OFFLINE" | "STALE"): void {
+  if (selectedCamera.value) store.syncCameraStatus(selectedCamera.value.id, status);
 }
 
 function seekRecording(targetAt: string): void {
@@ -273,6 +294,11 @@ async function resolveAlarmEverywhere(alarmId: string): Promise<void> {
   const response = await fetch(`/api/alarms/${encodeURIComponent(alarmId)}/resolve`, {
     method: "PATCH",
   });
+  if (response.status === 404) {
+    store.removeAlarm(alarmId);
+    ElMessage.info("该告警已在其他端删除，本地记录已同步");
+    return;
+  }
   if (!response.ok) {
     ElMessage.error("告警状态同步失败");
     return;
@@ -288,6 +314,11 @@ async function removeAlarmEverywhere(alarmId: string): Promise<void> {
   const response = await fetch(`/api/alarms/${encodeURIComponent(alarmId)}`, {
     method: "DELETE",
   });
+  if (response.status === 404) {
+    store.removeAlarm(alarmId);
+    ElMessage.info("该告警已不存在，本地记录已同步");
+    return;
+  }
   if (!response.ok) {
     ElMessage.error("告警删除同步失败");
     return;
@@ -315,10 +346,12 @@ function useDefaultAvatar(event: Event): void {
 }
 
 async function refreshRecordings(): Promise<void> {
+  if (document.visibilityState !== "visible") return;
   if (!selectedCamera.value) return;
   const start = new Date(Date.now() - store.monitoringPolicy.recordingRetentionMinutes * 60_000);
   const end = new Date(Date.now() + 60_000);
   const mediaPath = selectedCamera.value.mediaPath ?? selectedCamera.value.cameraKey;
+  const endpoints = getCameraMediaEndpoints(selectedCamera.value);
   const query = new URLSearchParams({
     path: mediaPath,
     start: start.toISOString(),
@@ -326,13 +359,13 @@ async function refreshRecordings(): Promise<void> {
   });
 
   try {
-    const response = await fetch(`http://10.208.236.131:9996/list?${query}`);
+    const response = await fetch(`${endpoints.playbackApiBaseUrl}/list?${query}`);
     if (!response.ok) return;
     const items = (await response.json()) as MediaMtxPlaybackItem[];
     recordingSegments.value = mapMediaMtxPlaybackItems(
       items,
       mediaPath,
-      "http://10.208.236.131:9996",
+      endpoints.playbackApiBaseUrl,
     );
   } catch {
     // Keep the latest successful recording index during temporary media-server outages.
@@ -340,6 +373,7 @@ async function refreshRecordings(): Promise<void> {
 }
 
 async function refreshSensorSnapshot(): Promise<void> {
+  if (document.visibilityState !== "visible") return;
   const bedId = summary.value?.bed.id;
   if (!bedId || sensorFetching) return;
   sensorFetching = true;
@@ -360,17 +394,45 @@ async function refreshSensorSnapshot(): Promise<void> {
   }
 }
 
+async function refreshCameraHealth(): Promise<void> {
+  if (document.visibilityState !== "visible" || !selectedCamera.value) return;
+  cameraHealthController?.abort();
+  cameraHealthController = new AbortController();
+  try {
+    const results = await probeCameraHealth(
+      [selectedCamera.value],
+      cameraHealthController.signal,
+    );
+    results.forEach((result) => store.syncCameraStatus(result.cameraId, result.status));
+  } catch {
+    // Keep the previous state until the status service is available again.
+  }
+}
+
 onMounted(() => {
+  document.addEventListener("visibilitychange", handleVisibility);
   void refreshRecordings();
   void refreshSensorSnapshot();
+  void refreshCameraHealth();
   recordingTimer = setInterval(() => void refreshRecordings(), 15_000);
   sensorTimer = setInterval(() => void refreshSensorSnapshot(), 1_000);
+  cameraHealthTimer = setInterval(() => void refreshCameraHealth(), 20_000);
 });
 
 onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", handleVisibility);
   if (recordingTimer) clearInterval(recordingTimer);
   if (sensorTimer) clearInterval(sensorTimer);
+  if (cameraHealthTimer) clearInterval(cameraHealthTimer);
+  cameraHealthController?.abort();
 });
+
+function handleVisibility(): void {
+  if (document.visibilityState !== "visible") return;
+  void refreshRecordings();
+  void refreshSensorSnapshot();
+  void refreshCameraHealth();
+}
 </script>
 
 <style scoped lang="scss">
@@ -385,7 +447,7 @@ onBeforeUnmount(() => {
 
 .detail-header__back {
   padding: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: #4f756b;
   cursor: pointer;
   background: transparent;
@@ -420,7 +482,7 @@ onBeforeUnmount(() => {
   small {
     display: block;
     margin-top: 6px;
-    font-size: 9px;
+    font-size: 10px;
     color: #81918c;
   }
 }
@@ -443,7 +505,7 @@ onBeforeUnmount(() => {
 
 .patient-status {
   padding: 5px 8px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: #2f6e60;
   background: #edf7f2;
@@ -522,10 +584,33 @@ onBeforeUnmount(() => {
   }
 }
 
+.sensor-panel {
+  container-name: sensor-panel;
+  container-type: inline-size;
+}
+
 .video-panel__protocol {
   padding: 4px 7px;
   background: #f7faf9;
   border: 1px solid #dce6e2;
+
+  &[data-status="ONLINE"] {
+    color: #24624f;
+    background: #edf7f2;
+    border-color: #bfd8d0;
+  }
+
+  &[data-status="STALE"] {
+    color: #8b611f;
+    background: #fbf5e7;
+    border-color: #e4cfaa;
+  }
+
+  &[data-status="OFFLINE"] {
+    color: #a43d34;
+    background: #fff3f1;
+    border-color: #e2b8b3;
+  }
 }
 
 .detail-player {
@@ -536,7 +621,7 @@ onBeforeUnmount(() => {
 .back-to-live {
   padding: 6px 9px;
   margin-top: 8px;
-  font-size: 10px;
+  font-size: 11px;
   color: #2f6b5e;
   cursor: pointer;
   background: #f3f8f6;
@@ -552,7 +637,7 @@ onBeforeUnmount(() => {
   border-left: 3px solid #4b8b7a;
 
   span {
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 650;
     color: #4c776d;
   }
@@ -565,7 +650,7 @@ onBeforeUnmount(() => {
   }
 
   small {
-    font-size: 9px;
+    font-size: 11px;
     color: #81918c;
   }
 
@@ -573,7 +658,7 @@ onBeforeUnmount(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     font-family: "SFMono-Regular", Consolas, monospace;
-    font-size: 9px;
+    font-size: 11px;
     color: #2f665a;
     white-space: nowrap;
   }
@@ -595,13 +680,13 @@ onBeforeUnmount(() => {
   }
 
   strong {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 650;
     color: #4b6c64;
   }
 
   small {
-    font-size: 9px;
+    font-size: 11px;
     color: #81918c;
   }
 }
@@ -615,7 +700,7 @@ onBeforeUnmount(() => {
   button {
     padding: 5px 7px;
     font-family: "Avenir Next", sans-serif;
-    font-size: 9px;
+    font-size: 11px;
     color: #657b75;
     cursor: pointer;
     background: #fff;
@@ -661,7 +746,7 @@ onBeforeUnmount(() => {
     width: 55px;
     padding: 4px 6px;
     font-family: "Avenir Next", sans-serif;
-    font-size: 10px;
+    font-size: 11px;
     color: #245d51;
     outline: none;
     background: transparent;
@@ -670,8 +755,19 @@ onBeforeUnmount(() => {
 
   span {
     padding-right: 7px;
-    font-size: 9px;
+    font-size: 11px;
     color: #71847d;
+  }
+}
+
+@container sensor-panel (width <= 640px) {
+  .sensor-refresh {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sensor-refresh__control {
+    justify-content: flex-start;
   }
 }
 

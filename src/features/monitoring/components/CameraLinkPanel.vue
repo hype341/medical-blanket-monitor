@@ -30,6 +30,7 @@ import { computed } from "vue";
 import { ElMessage } from "element-plus";
 import { copyText } from "@/utils/clipboard";
 import type { Camera } from "../types";
+import { getCameraMediaEndpoints } from "../media-endpoints";
 
 interface CameraLink {
   label: string;
@@ -48,20 +49,17 @@ const props = withDefaults(
   },
 );
 
-const mediaPath = computed(() => props.camera?.mediaPath ?? props.camera?.cameraKey ?? "");
-
-const webRtcViewUrl = computed(() => {
-  const whepUrl = props.camera?.playback?.webrtcUrl;
-  if (!whepUrl) return `http://10.208.236.131:8889/${mediaPath.value}`;
-  return whepUrl.replace(/\/whep\/?$/i, "");
-});
+const endpoints = computed(() =>
+  props.camera ? getCameraMediaEndpoints(props.camera) : null,
+);
 
 const links = computed<CameraLink[]>(() => {
   if (!props.camera) return [];
+  if (!endpoints.value) return [];
   const start = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
   const end = new Date(Date.now() + 60_000).toISOString();
   const playbackQuery = new URLSearchParams({
-    path: mediaPath.value,
+    path: endpoints.value.mediaPath,
     start,
     end,
   });
@@ -69,20 +67,18 @@ const links = computed<CameraLink[]>(() => {
   return [
     {
       label: "WebRTC 浏览器观看",
-      url: webRtcViewUrl.value,
+      url: endpoints.value.webRtcViewUrl,
       primary: true,
       openable: true,
     },
-    ...(props.camera.playback?.hlsUrl
-      ? [{ label: "HLS", url: props.camera.playback.hlsUrl, openable: true }]
-      : []),
+    { label: "HLS", url: endpoints.value.hlsUrl, openable: true },
     {
       label: "RTSP",
-      url: `rtsp://10.208.236.131:8554/${mediaPath.value}`,
+      url: endpoints.value.rtspUrl,
     },
     {
       label: "最近 2 小时回放索引",
-      url: `http://10.208.236.131:9996/list?${playbackQuery}`,
+      url: `${endpoints.value.playbackApiBaseUrl}/list?${playbackQuery}`,
       openable: true,
     },
   ];

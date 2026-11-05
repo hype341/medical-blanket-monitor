@@ -2,9 +2,13 @@
  * Copy text on secure and plain HTTP origins.
  */
 export async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+  } catch {
+    // Plain-HTTP LAN origins can expose Clipboard API but reject writes.
   }
 
   const textarea = document.createElement("textarea");

@@ -1,0 +1,55 @@
+import type { Camera, CameraStatus } from "./types";
+import { getCameraMediaEndpoints } from "./media-endpoints";
+
+export interface CameraHealthResult {
+  cameraId: string;
+  status: CameraStatus;
+  latencyMs: number;
+  detail: string;
+  checkedAt: string;
+}
+
+export async function probeCameraHealth(
+  cameras: Camera[],
+  signal?: AbortSignal,
+): Promise<CameraHealthResult[]> {
+  const unique = Array.from(new Map(cameras.map((camera) => [camera.id, camera])).values()).slice(
+    0,
+    100,
+  );
+  if (!unique.length) return [];
+
+  const requests = unique.map((camera) => {
+    const endpoints = getCameraMediaEndpoints(camera);
+    let baseUrl = camera.playback?.hlsUrl?.split("/").slice(0, 3).join("/");
+    if (!baseUrl) {
+      try {
+        baseUrl = new URL(endpoints.hlsUrl).origin;
+      } catch {
+        baseUrl = "";
+      }
+    }
+    return {
+      cameraId: camera.id,
+      baseUrl,
+      path: endpoints.mediaPath,
+    };
+  });
+
+  const response = await fetch("/api/public/camera-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requests),
+    signal,
+  });
+  if (!response.ok) throw new Error(`摄像头状态接口返回 HTTP ${response.status}`);
+  const results = (await response.json()) as CameraHealthResult[];
+  return Array.isArray(results)
+    ? results.filter(
+        (result) =>
+          result &&
+          typeof result.cameraId === "string" &&
+          ["ONLINE", "OFFLINE", "STALE"].includes(result.status),
+      )
+    : [];
+}

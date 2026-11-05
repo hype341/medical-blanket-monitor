@@ -5,6 +5,8 @@ After=network.target docker.service
 [Service]
 Type=simple
 EnvironmentFile=/etc/blanket/blanket-backend.env
+Environment=BLANKET_STATE_DIR=/var/lib/blanket
+StateDirectory=blanket
 ExecStart=/usr/bin/java -Xms128m -Xmx512m -jar /opt/blanket/blanket-backend.jar
 Restart=always
 RestartSec=3

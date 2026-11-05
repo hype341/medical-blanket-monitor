@@ -6,7 +6,9 @@
         <h1>设备绑定</h1>
         <p>每张床位将毯子传感器与唯一摄像头组成一个监护设备组。</p>
       </div>
-      <span class="bindings-header__summary">{{ rows.length }} 张床位</span>
+      <span class="bindings-header__summary">
+        {{ filteredRows.length }} / {{ rows.length }} 张床位
+      </span>
     </header>
 
     <section class="binding-note">
@@ -17,6 +19,19 @@
       <strong v-if="!store.canManageBindings">仅管理员或开发者可修改设备绑定</strong>
     </section>
 
+    <section class="binding-filters" aria-label="设备绑定筛选">
+      <el-input
+        v-model="query"
+        clearable
+        placeholder="搜索病区、病房、床位、患者或设备"
+      />
+      <el-select v-model="groupStatus" aria-label="设备组状态">
+        <el-option label="全部设备组" value="ALL" />
+        <el-option label="已成组" value="COMPLETE" />
+        <el-option label="待补全" value="INCOMPLETE" />
+      </el-select>
+    </section>
+
     <div class="binding-table">
       <div class="binding-table__head">
         <span>病房 / 床位</span>
@@ -25,7 +40,7 @@
         <span>设备组状态</span>
         <span>操作</span>
       </div>
-      <div v-for="row in rows" :key="row.bed.id" class="binding-row">
+      <div v-for="row in pagedRows" :key="row.bed.id" class="binding-row">
         <div class="binding-row__location">
           <span>{{ row.room?.name ?? "未分房" }}</span>
           <strong>{{ row.bed.bedNo }} 床</strong>
@@ -72,6 +87,18 @@
       </div>
     </div>
 
+    <footer v-if="filteredRows.length" class="binding-footer">
+      <span>设备较多时使用分页查看，避免一次加载全部绑定关系。</span>
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :page-sizes="[12, 24, 48, 96]"
+        :total="filteredRows.length"
+        layout="sizes, prev, pager, next"
+        background
+      />
+    </footer>
+
     <BindingEditor
       v-model="editorVisible"
       :bed-name="activeRow?.bed ? `${activeRow.bed.bedNo} 床` : ''"
@@ -85,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import BindingEditor from "../components/BindingEditor.vue";
 import { useMonitoringStore } from "../store";
@@ -93,16 +120,60 @@ import { useMonitoringStore } from "../store";
 const store = useMonitoringStore();
 const editorVisible = ref(false);
 const activeBedId = ref("");
+const query = ref("");
+const groupStatus = ref<"ALL" | "COMPLETE" | "INCOMPLETE">("ALL");
+const currentPage = ref(1);
+const pageSize = ref(12);
+
+const activeBindingsByBed = computed(() => {
+  const result = new Map<string, typeof store.bindings>();
+  for (const binding of store.bindings) {
+    if (binding.status !== "ACTIVE") continue;
+    const entries = result.get(binding.bedId) ?? [];
+    entries.push(binding);
+    result.set(binding.bedId, entries);
+  }
+  return result;
+});
 
 const rows = computed(() =>
   store.bedSummaries.map((summary) => ({
     ...summary,
     camera: summary.cameras[0] ?? null,
-    bindings: store.getBedBindings(summary.bed.id),
+    bindings: activeBindingsByBed.value.get(summary.bed.id) ?? [],
   })),
+);
+const filteredRows = computed(() => {
+  const keyword = query.value.trim().toLocaleLowerCase();
+  return rows.value.filter((row) => {
+    const complete = Boolean(row.sensor && row.camera);
+    if (groupStatus.value === "COMPLETE" && !complete) return false;
+    if (groupStatus.value === "INCOMPLETE" && complete) return false;
+    if (!keyword) return true;
+    return [
+      row.ward?.name,
+      row.room?.name,
+      row.bed.bedNo,
+      row.bed.patientName,
+      row.sensor?.name,
+      row.sensor?.deviceKey,
+      row.camera?.name,
+      row.camera?.cameraKey,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLocaleLowerCase().includes(keyword));
+  });
+});
+const pageStart = computed(() => (currentPage.value - 1) * pageSize.value);
+const pagedRows = computed(() =>
+  filteredRows.value.slice(pageStart.value, pageStart.value + pageSize.value),
 );
 
 const activeRow = computed(() => rows.value.find((row) => row.bed.id === activeBedId.value));
+
+watch([query, groupStatus, pageSize], () => {
+  currentPage.value = 1;
+});
 
 function openEditor(bedId: string): void {
   if (!store.canManageBindings) return;
@@ -199,6 +270,21 @@ function saveBinding(payload: { sensorDeviceId: string | null; cameraId: string 
   white-space: nowrap;
   background: #fff0ee;
   border: 1px solid #e4b2ac;
+}
+
+.binding-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+
+  .el-input {
+    max-width: 440px;
+  }
+
+  .el-select {
+    width: 150px;
+  }
 }
 
 .binding-table {
@@ -333,11 +419,36 @@ function saveBinding(payload: { sensorDeviceId: string | null; cameraId: string 
   border-color: #d9dfdd;
 }
 
+.binding-footer {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+
+  > span {
+    font-size: 11px;
+    color: #72847e;
+  }
+}
+
 @media (width <= 760px) {
   .bindings-header,
   .binding-note {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .binding-filters,
+  .binding-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .binding-filters .el-input,
+  .binding-filters .el-select {
+    width: 100%;
+    max-width: none;
   }
 }
 </style>

@@ -106,7 +106,10 @@ const displayName = computed(() => {
     ADMIN: "系统管理员",
     DEVELOPER: "系统开发者",
   };
-  return roleNames[monitoringStore.activeRole] ?? userStore.userInfo.nickname;
+  const member = monitoringStore.staff.find(
+    (item) => item.username === monitoringStore.activeUsername,
+  );
+  return member?.displayName ?? roleNames[monitoringStore.activeRole] ?? userStore.userInfo.nickname;
 });
 
 const showTenantSwitcher = computed(() => {

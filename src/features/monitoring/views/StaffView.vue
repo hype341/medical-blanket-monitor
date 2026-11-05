@@ -4,7 +4,7 @@
       <div>
         <span>{{ store.hospital.name }} · 管理中心</span>
         <h1>人员权限管理</h1>
-        <p>管理登录账号、角色、角色标签、授权病区和账号启停状态。</p>
+        <p>管理登录账号、角色、角色标签、授权病区和账号状态，仅可操作低于自身级别的账号。</p>
       </div>
       <el-button type="primary" @click="openEditor()">新增人员</el-button>
     </header>
@@ -12,7 +12,8 @@
     <div class="staff-summary">
       <span>共 {{ visibleStaff.length }} 个账号</span>
       <span>{{ activeCount }} 个启用</span>
-      <span>角色决定操作权限，病区授权决定可查看范围</span>
+      <span>可管理 {{ manageableStaffCount }} 个下级账号</span>
+      <span>只能授予自己拥有的模块和病区权限</span>
     </div>
 
     <section class="staff-tag-manager" aria-label="角色标签管理">
@@ -62,14 +63,19 @@
           {{ member.status === "ACTIVE" ? "启用" : "停用" }}
         </span>
         <div class="staff-row__actions">
-          <el-button text type="primary" @click="openEditor(member.id)">编辑</el-button>
-          <el-button
-            text
-            :type="member.status === 'ACTIVE' ? 'danger' : 'success'"
-            @click="toggleStatus(member.id)"
-          >
-            {{ member.status === "ACTIVE" ? "停用" : "启用" }}
-          </el-button>
+          <template v-if="store.canManageMember(member.id)">
+            <el-button text type="primary" @click="openEditor(member.id)">编辑</el-button>
+            <el-button
+              text
+              :type="member.status === 'ACTIVE' ? 'danger' : 'success'"
+              @click="toggleStatus(member.id)"
+            >
+              {{ member.status === "ACTIVE" ? "停用" : "启用" }}
+            </el-button>
+          </template>
+          <span v-else class="staff-row__locked" title="不能管理同级或更高级账号">
+            不可管理
+          </span>
         </div>
       </div>
     </div>
@@ -91,18 +97,20 @@
         </div>
         <el-form-item label="角色">
           <el-radio-group v-model="form.role" @change="applyRoleDefaults(form.role)">
-            <el-radio-button value="NURSE">护士</el-radio-button>
-            <el-radio-button value="HEAD_NURSE">护士长</el-radio-button>
-            <el-radio-button value="ADMIN">管理员</el-radio-button>
-            <el-radio-button v-if="store.activeRole === 'DEVELOPER'" value="DEVELOPER">
-              开发者
+            <el-radio-button
+              v-for="role in selectableRoles"
+              :key="role.value"
+              :value="role.value"
+            >
+              {{ role.label }}
             </el-radio-button>
           </el-radio-group>
+          <small class="permission-hint">同级和更高级角色不会出现在这里。</small>
         </el-form-item>
         <el-form-item label="授权病区">
           <el-select v-model="form.wardIds" multiple class="w-full">
             <el-option
-              v-for="ward in store.wards"
+              v-for="ward in store.currentWards"
               :key="ward.id"
               :label="ward.name"
               :value="ward.id"
@@ -123,7 +131,7 @@
             <el-option v-for="tag in store.staffTags" :key="tag" :label="tag" :value="tag" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="store.activeRole === 'DEVELOPER'" label="开放模块">
+        <el-form-item label="开放模块">
           <el-checkbox-group v-model="form.modulePermissions" class="module-grid">
             <el-checkbox
               v-for="module in selectableModules"
@@ -133,10 +141,10 @@
               {{ module.label }}
             </el-checkbox>
           </el-checkbox-group>
+          <small class="permission-hint">
+            仅显示当前账号已拥有的模块，保存时还会再次校验。
+          </small>
         </el-form-item>
-        <div v-else class="permission-readonly">
-          开放模块由开发者配置，医院管理员不能增加或移除模块权限。
-        </div>
         <el-form-item :label="editingStaffId ? '重置密码（可选）' : '登录密码'">
           <el-input
             v-model="form.initialPassword"
@@ -146,7 +154,9 @@
             :placeholder="editingStaffId ? '新密码（留空则不修改）' : '登录密码'"
             maxlength="64"
           />
-          <small class="password-hint">密码由后端使用 BCrypt 哈希保存，页面不会回显原密码。</small>
+          <small class="password-hint">
+            密码使用加盐摘要保存，页面不会回显原密码；正式联网部署应由后端再次校验并限制登录频率。
+          </small>
         </el-form-item>
         <el-form-item label="账号状态">
           <el-radio-group v-model="form.status">
@@ -196,9 +206,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { defaultModulesForRole, moduleOptions } from "../permissions";
+import { defaultModulesForRole, moduleOptions, roleRank } from "../permissions";
 import { useMonitoringStore } from "../store";
 import type { MonitoringRole, StaffInput, StaffStatus } from "../types";
+import { saveStaffPassword } from "../staff-credentials";
 
 const store = useMonitoringStore();
 const editorVisible = ref(false);
@@ -224,9 +235,21 @@ const visibleStaff = computed(() =>
     : store.staff.filter((member) => member.role !== "DEVELOPER"),
 );
 const selectableModules = computed(() =>
-  store.activeRole === "DEVELOPER"
-    ? moduleOptions
-    : moduleOptions.filter((module) => !["video", "mqtt", "developer"].includes(module.value)),
+  moduleOptions.filter((module) => store.activeModulePermissions.includes(module.value)),
+);
+const selectableRoles = computed(() => {
+  const labels: Record<MonitoringRole, string> = {
+    NURSE: "护士",
+    HEAD_NURSE: "护士长",
+    ADMIN: "管理员",
+    DEVELOPER: "开发者",
+  };
+  return (Object.keys(roleRank) as MonitoringRole[])
+    .filter((role) => roleRank[role] < roleRank[store.activeRole])
+    .map((role) => ({ value: role, label: labels[role] }));
+});
+const manageableStaffCount = computed(
+  () => visibleStaff.value.filter((member) => store.canManageMember(member.id)).length,
 );
 
 function openEditor(staffId?: string): void {
@@ -234,6 +257,10 @@ function openEditor(staffId?: string): void {
   if (staffId) {
     const member = visibleStaff.value.find((item) => item.id === staffId);
     if (!member) return;
+    if (!store.canManageMember(member.id)) {
+      ElMessage.warning("只能管理级别低于自己的账号");
+      return;
+    }
     Object.assign(form, {
       username: member.username,
       displayName: member.displayName,
@@ -261,10 +288,14 @@ function openEditor(staffId?: string): void {
 
 function save(): void {
   try {
+    let staffId = editingStaffId.value;
     if (editingStaffId.value) {
       store.updateStaff(editingStaffId.value, form);
     } else {
-      store.addStaff(form);
+      staffId = store.addStaff(form);
+    }
+    if (staffId && form.initialPassword) {
+      saveStaffPassword(staffId, form.initialPassword);
     }
     form.initialPassword = "";
     editorVisible.value = false;
@@ -277,17 +308,21 @@ function save(): void {
 function toggleStatus(staffId: string): void {
   const member = visibleStaff.value.find((item) => item.id === staffId);
   if (!member) return;
-  store.updateStaff(staffId, {
-    username: member.username,
-    displayName: member.displayName,
-    role: member.role,
-    wardIds: member.wardIds,
-    status: member.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
-    modulePermissions: [...(member.modulePermissions ?? [])],
-    tags: [...(member.tags ?? [])],
-    initialPassword: "",
-  });
-  ElMessage.success("账号状态已更新");
+  try {
+    store.updateStaff(staffId, {
+      username: member.username,
+      displayName: member.displayName,
+      role: member.role,
+      wardIds: member.wardIds,
+      status: member.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
+      modulePermissions: [...(member.modulePermissions ?? [])],
+      tags: [...(member.tags ?? [])],
+      initialPassword: "",
+    });
+    ElMessage.success("账号状态已更新");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "账号状态更新失败");
+  }
 }
 
 function addTag(): void {
@@ -318,7 +353,9 @@ function wardNames(wardIds: string[]): string {
 }
 
 function applyRoleDefaults(role: MonitoringRole): void {
-  form.modulePermissions = defaultModulesForRole(role);
+  form.modulePermissions = defaultModulesForRole(role).filter((module) =>
+    store.activeModulePermissions.includes(module),
+  );
 }
 </script>
 
@@ -362,7 +399,7 @@ function applyRoleDefaults(role: MonitoringRole): void {
   gap: 18px;
   padding: 12px 14px;
   margin-top: 16px;
-  font-size: 10px;
+  font-size: 12px;
   color: #647b74;
   background: #f4f9f7;
   border-left: 3px solid #2f806a;
@@ -383,13 +420,13 @@ function applyRoleDefaults(role: MonitoringRole): void {
     gap: 3px;
 
     span {
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 650;
       color: #315f55;
     }
 
     small {
-      font-size: 9px;
+      font-size: 11px;
       color: #7e8e89;
     }
   }
@@ -436,7 +473,7 @@ function applyRoleDefaults(role: MonitoringRole): void {
   :deep(.el-tag) {
     height: 18px;
     padding: 0 5px;
-    font-size: 8px;
+    font-size: 10px;
     color: #5d6f69;
     background: #f3f6f5;
     border-color: #dfe6e3;
@@ -462,7 +499,7 @@ function applyRoleDefaults(role: MonitoringRole): void {
   }
 
   small {
-    font-size: 9px;
+    font-size: 11px;
     color: #879590;
   }
 }
@@ -470,21 +507,21 @@ function applyRoleDefaults(role: MonitoringRole): void {
 .password-hint {
   display: block;
   margin-top: 5px;
-  font-size: 9px;
+  font-size: 11px;
   color: #81918c;
 }
 
 .staff-table__head {
   height: 42px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 650;
   color: #60766f;
   background: #edf4f1;
 }
 
 .staff-row {
-  min-height: 64px;
-  font-size: 11px;
+  min-height: 72px;
+  font-size: 12px;
   border-top: 1px solid #e5ece9;
 
   > span {
@@ -522,6 +559,12 @@ function applyRoleDefaults(role: MonitoringRole): void {
 
 .staff-row__actions {
   display: flex;
+  align-items: center;
+}
+
+.staff-row__locked {
+  font-size: 11px;
+  color: #8a9793;
 }
 
 .staff-editor__row {
@@ -543,10 +586,18 @@ function applyRoleDefaults(role: MonitoringRole): void {
 .permission-readonly {
   padding: 10px 12px;
   margin-bottom: 18px;
-  font-size: 10px;
+  font-size: 11px;
   color: #7a625d;
   background: #fff6f3;
   border-left: 3px solid #b96b5f;
+}
+
+.permission-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #788a84;
 }
 
 @media (width <= 620px) {

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +24,7 @@ public class PublicApiController {
     private final SensorStore sensorStore;
     private final AlarmStore alarmStore;
     private final MqttBridgeService mqttBridge;
+    private final Instant startedAt = Instant.now();
 
     public PublicApiController(SensorStore sensorStore, AlarmStore alarmStore, MqttBridgeService mqttBridge) {
         this.sensorStore = sensorStore;
@@ -36,7 +38,14 @@ public class PublicApiController {
                 "status", "UP",
                 "service", "blanket-backend",
                 "mqttConnected", mqttBridge.isConnected(),
-                "time", currentTime()
+                "time", currentTime(),
+                "startedAt", DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(
+                        startedAt.atZone(ZoneId.of("Asia/Shanghai"))
+                ),
+                "uptimeSeconds", Duration.between(startedAt, Instant.now()).toSeconds(),
+                "sensorCount", sensorStore.size(),
+                "alarmCount", alarmStore.size(),
+                "openAlarmCount", alarmStore.openCount()
         );
     }
 

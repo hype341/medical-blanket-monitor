@@ -86,10 +86,7 @@
                   </el-form-item>
                 </el-tooltip>
 
-                <div v-if="isDemoLoginEnabled" class="login-card__demo-captcha">
-                  演示环境已跳过验证码，直接登录即可
-                </div>
-                <el-form-item v-else prop="captchaCode">
+                <el-form-item prop="captchaCode">
                   <div class="flex w-full gap-12px">
                     <el-input
                       v-model.trim="loginFormData.captchaCode"
@@ -101,7 +98,17 @@
                         <span class="i-svg:security login-card__prefix-icon" />
                       </template>
                     </el-input>
-                    <div class="login-card__captcha" @click="getCaptcha">
+                    <button
+                      v-if="isDemoLoginEnabled"
+                      type="button"
+                      class="login-card__math-captcha"
+                      aria-label="验证码题目，点击刷新"
+                      @click="getCaptcha"
+                    >
+                      <strong>{{ captchaQuestion }}</strong>
+                      <small>点击刷新</small>
+                    </button>
+                    <div v-else class="login-card__captcha" @click="getCaptcha">
                       <el-icon v-if="codeLoading" class="is-loading" :size="16">
                         <Loading />
                       </el-icon>
@@ -182,7 +189,7 @@
 defineOptions({ name: "LoginPage", inheritAttrs: false });
 
 import { Clock, Lock, Loading, Refresh, User } from "@element-plus/icons-vue";
-import type { FormInstance } from "element-plus";
+import { ElMessage, type FormInstance } from "element-plus";
 import AuthAPI, { OIDC_AUTHORIZATION_URL } from "@/api/auth";
 import type { LoginRequest } from "@/api/auth";
 import router from "@/router";
@@ -194,6 +201,7 @@ import {
 import { useMonitoringStore } from "@/features/monitoring/store";
 import { useUserStore } from "@/stores";
 import { AuthStorage } from "@/utils/auth";
+import { verifyStaffPassword } from "@/features/monitoring/staff-credentials";
 import { appConfig } from "@/settings";
 import ResetPwd from "./components/ResetPwd.vue";
 import QrCodeLogin from "./components/QrCodeLogin.vue";
@@ -208,6 +216,9 @@ const loginFormRef = ref<FormInstance>();
 const loading = ref(false);
 const isCapsLock = ref(false);
 const captchaBase64 = ref<string>();
+const captchaQuestion = ref("");
+const captchaAnswer = ref("");
+const captchaIssuedAt = ref(0);
 const codeLoading = ref(false);
 const demoAccounts = DEMO_ACCOUNTS;
 
@@ -221,10 +232,6 @@ const loginFormData = ref<LoginRequest>({
   captchaCode: "",
   rememberMe: AuthStorage.getRememberMe(),
 });
-const activeDemoAccount = computed(() =>
-  findDemoAccount(loginFormData.value.username, loginFormData.value.password),
-);
-
 const loginRules = computed(() => ({
   username: [{ required: true, trigger: "blur", message: "请输入用户名" }],
   password: [
@@ -233,7 +240,7 @@ const loginRules = computed(() => ({
   ],
   captchaCode: [
     {
-      required: !activeDemoAccount.value,
+      required: true,
       trigger: "blur",
       message: "请输入验证码",
     },
@@ -254,7 +261,14 @@ function fillDemoAccount(username: string): void {
  */
 function getCaptcha() {
   if (isDemoLoginEnabled) {
-    loginFormData.value.captchaId = "demo";
+    const left = Math.floor(Math.random() * 8) + 2;
+    const right = Math.floor(Math.random() * 8) + 1;
+    const addition = Math.random() >= 0.35;
+    captchaQuestion.value = `${addition ? left : left + right} ${addition ? "+" : "-"} ${addition ? right : right} =`;
+    captchaAnswer.value = String(addition ? left + right : left);
+    captchaIssuedAt.value = Date.now();
+    loginFormData.value.captchaId = `local-${captchaIssuedAt.value}`;
+    loginFormData.value.captchaCode = "";
     return;
   }
   codeLoading.value = true;
@@ -275,6 +289,16 @@ async function handleLoginSubmit() {
     () => false,
   );
   if (!valid) return;
+  if (
+    isDemoLoginEnabled &&
+    (!captchaAnswer.value ||
+      Date.now() - captchaIssuedAt.value > 120_000 ||
+      (loginFormData.value.captchaCode ?? "").trim() !== captchaAnswer.value)
+  ) {
+    ElMessage.error("验证码错误或已过期，请重新输入");
+    getCaptcha();
+    return;
+  }
 
   loading.value = true;
   try {
@@ -286,6 +310,29 @@ async function handleLoginSubmit() {
         loginFormData.value.rememberMe ?? false,
       );
       await enterAccount(demoAccount.username, demoAccount.role, demoAccount.wardIds);
+      return;
+    }
+
+    const managedMember = monitoringStore.staff.find(
+      (member) => member.username === loginFormData.value.username.trim(),
+    );
+    if (managedMember) {
+      if (managedMember.status !== "ACTIVE") {
+        ElMessage.error("该账号已停用，请联系管理员");
+        getCaptcha();
+        return;
+      }
+      if (!verifyStaffPassword(managedMember.id, loginFormData.value.password)) {
+        ElMessage.error("用户名或密码错误");
+        getCaptcha();
+        return;
+      }
+      userStore.loginDemo(
+        managedMember.username,
+        managedMember.role,
+        loginFormData.value.rememberMe ?? false,
+      );
+      await enterAccount(managedMember.username, managedMember.role, managedMember.wardIds);
       return;
     }
 
@@ -304,7 +351,10 @@ async function handleLoginSubmit() {
           username === "nurse" || username === "head-nurse" ? ["ward-a"] : ["ward-a", "ward-b"];
         await enterAccount(username, role, wardIds);
       },
-      () => getCaptcha(),
+      () => {
+        ElMessage.error("登录失败，请检查账号、密码和验证码");
+        getCaptcha();
+      },
     );
   } finally {
     loading.value = false;
@@ -651,6 +701,42 @@ $input-h: 44px;
       width: 100%;
       height: 100%;
       object-fit: contain;
+    }
+  }
+
+  &__math-captcha {
+    display: grid;
+    flex-shrink: 0;
+    gap: 1px;
+    place-items: center;
+    width: 118px;
+    height: $input-h;
+    padding: 0 8px;
+    color: #1d4e46;
+    cursor: pointer;
+    background:
+      repeating-linear-gradient(-24deg, transparent 0 7px, rgb(47 128 106 / 7%) 7px 8px),
+      #edf7f2;
+    border: 1px solid #a9c9bd;
+    border-radius: var(--el-border-radius-base);
+
+    &:hover,
+    &:focus-visible {
+      outline: none;
+      border-color: var(--el-color-primary);
+    }
+
+    strong {
+      font-family: "Avenir Next", "Noto Sans SC", sans-serif;
+      font-size: 16px;
+      font-weight: 750;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.08em;
+    }
+
+    small {
+      font-size: 9px;
+      color: #66857c;
     }
   }
 

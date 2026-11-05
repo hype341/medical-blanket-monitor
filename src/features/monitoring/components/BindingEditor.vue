@@ -13,7 +13,12 @@
 
     <el-form label-position="top" class="binding-editor__form">
       <el-form-item label="选择毯子传感器">
-        <el-select v-model="sensorDeviceId" placeholder="选择毯子传感器" class="w-full">
+        <el-select
+          v-model="sensorDeviceId"
+          filterable
+          placeholder="搜索并选择毯子传感器"
+          class="w-full"
+        >
           <el-option
             v-for="sensor in sensors"
             :key="sensor.id"
@@ -24,7 +29,12 @@
       </el-form-item>
 
       <el-form-item label="选择摄像头">
-        <el-select v-model="cameraId" placeholder="选择摄像头" class="w-full">
+        <el-select
+          v-model="cameraId"
+          filterable
+          placeholder="搜索并选择摄像头"
+          class="w-full"
+        >
           <el-option
             v-for="camera in cameras"
             :key="camera.id"

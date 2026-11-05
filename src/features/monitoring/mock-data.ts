@@ -137,7 +137,7 @@ const cameras: Camera[] = [
     cameraKey: "camera-ward-a-301",
     mediaPath: "camera-01",
     name: "301 病房摄像头",
-    status: "ONLINE",
+    status: "OFFLINE",
     playback: {
       cameraId: "camera-01",
       preferredProtocol: "webrtc",
@@ -290,6 +290,7 @@ const staff: StaffMember[] = [
       "policy",
       "video",
       "mqtt",
+      "maintenance",
       "developer",
     ],
   },

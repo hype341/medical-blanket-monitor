@@ -12,6 +12,8 @@ describe("monitoring store", () => {
     localStorage.removeItem("monitoring-platform-name");
     localStorage.removeItem("monitoring-staff-tags");
     localStorage.removeItem("monitoring-module-schema");
+    localStorage.removeItem("monitoring-business-data");
+    localStorage.removeItem("monitoring-policy");
   });
 
   it("only exposes beds from assigned wards", () => {
@@ -19,6 +21,16 @@ describe("monitoring store", () => {
 
     expect(store.visibleBeds.length).toBeGreaterThan(0);
     expect(store.visibleBeds.every((bed) => store.currentWardIds.includes(bed.wardId))).toBe(true);
+  });
+
+  it("gives administrators every ward and automatically includes newly added wards", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+    store.setCurrentWardIds(["ward-a"]);
+    expect(store.currentWardIds).toEqual(store.wards.map((ward) => ward.id));
+
+    const wardId = store.addWard({ code: "WARD-C", name: "C 病区 · 内科" });
+    expect(store.currentWardIds).toContain(wardId);
   });
 
   it("can replace a bed camera binding without changing another bed", () => {
@@ -470,6 +482,67 @@ describe("monitoring store", () => {
     expect(restored.mqttSettings.username).toBe("blanket-device");
   });
 
+  it("exports a password-free maintenance backup and restores business data", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("DEVELOPER", "developer");
+    const backup = JSON.parse(
+      JSON.stringify(store.buildMonitoringBackup()),
+    ) as Record<string, unknown>;
+
+    expect(backup).toMatchObject({
+      schemaVersion: 1,
+      platformName: store.platformName,
+    });
+    expect(backup.mqttSettings).not.toHaveProperty("password");
+
+    const backupData = backup.data as {
+      beds: Array<{ id: string; patientName?: string }>;
+    };
+    const firstBed = backupData.beds[0];
+    firstBed.patientName = "备份恢复患者";
+    store.restoreMonitoringBackup(JSON.stringify(backup));
+
+    expect(store.beds.find((bed) => bed.id === firstBed.id)?.patientName).toBe(
+      "备份恢复患者",
+    );
+  });
+
+  it("replaces stale local alarms with the authoritative server snapshot", () => {
+    const store = useMonitoringStore();
+    store.ingestAlarm({
+      alarmId: "stale-alarm",
+      code: "SENSOR_STATE_CHANGED",
+      level: "WARNING",
+      status: "OPEN",
+      title: "旧告警",
+      detail: "浏览器本地残留",
+      bedId: "bed-a-01",
+      wardId: "ward-a",
+      roomId: "room-a-301",
+      sensorKey: "blanket-001",
+      cameraKey: "camera-01",
+      occurredAt: "2026-11-05T10:00:00+08:00",
+    });
+    store.replaceAlarms([
+      {
+        alarmId: "server-alarm",
+        code: "SENSOR_STATE_CHANGED",
+        level: "WARNING",
+        status: "OPEN",
+        title: "服务端告警",
+        detail: "服务端权威记录",
+        bedId: "bed-a-01",
+        wardId: "ward-a",
+        roomId: "room-a-301",
+        sensorKey: "blanket-001",
+        cameraKey: "camera-01",
+        occurredAt: "2026-11-05T10:01:00+08:00",
+      },
+    ]);
+
+    expect(store.alarms.map((alarm) => alarm.alarmId)).toEqual(["server-alarm"]);
+  });
+
   it("migrates the old alarm topic pattern that could not match a bed", () => {
     localStorage.setItem(
       "monitoring-mqtt-settings",
@@ -507,7 +580,7 @@ describe("monitoring store", () => {
         wardIds: ["ward-a"],
         status: "DISABLED",
       }),
-    ).toThrow("医院管理员不能管理系统开发者账号");
+    ).toThrow("只能管理级别低于自己的账号");
 
     expect(() =>
       store.addStaff({
@@ -518,7 +591,26 @@ describe("monitoring store", () => {
         status: "ACTIVE",
         initialPassword: "Developer@123",
       }),
-    ).toThrow("医院管理员不能创建系统开发者账号");
+    ).toThrow("只能创建级别低于自己的账号");
+  });
+
+  it("prevents administrators from creating or editing peer administrators", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+
+    expect(() =>
+      store.addStaff({
+        username: "admin-2",
+        displayName: "第二管理员",
+        role: "ADMIN",
+        wardIds: ["ward-a"],
+        status: "ACTIVE",
+        initialPassword: "Admin@123456",
+      }),
+    ).toThrow("只能创建级别低于自己的账号");
+
+    const peer = store.staff.find((item) => item.role === "ADMIN")!;
+    expect(store.canManageMember(peer.id)).toBe(false);
   });
 
   it("separates module permissions by role", () => {
@@ -532,10 +624,23 @@ describe("monitoring store", () => {
     expect(store.canAccessModule("video")).toBe(true);
   });
 
-  it("prevents hospital administrators from changing module grants", () => {
+  it("lets administrators grant only modules and wards they own", () => {
     const store = useMonitoringStore();
     const member = store.staff.find((item) => item.username === "nurse")!;
     store.setActiveRole("ADMIN");
+
+    store.updateStaff(member.id, {
+      username: member.username,
+      displayName: member.displayName,
+      role: member.role,
+      wardIds: member.wardIds,
+      status: member.status,
+      modulePermissions: ["overview", "beds"],
+    });
+    expect(store.staff.find((item) => item.id === member.id)?.modulePermissions).toEqual([
+      "overview",
+      "beds",
+    ]);
 
     expect(() =>
       store.updateStaff(member.id, {
@@ -544,8 +649,18 @@ describe("monitoring store", () => {
         role: member.role,
         wardIds: member.wardIds,
         status: member.status,
-        modulePermissions: ["overview", "beds"],
+        modulePermissions: ["overview", "mqtt"],
       }),
-    ).toThrow("仅开发者可以修改人员模块权限");
+    ).toThrow("只能授予自己拥有的模块权限");
+
+    expect(() =>
+      store.updateStaff(member.id, {
+        username: member.username,
+        displayName: member.displayName,
+        role: member.role,
+        wardIds: ["ward-not-owned"],
+        status: member.status,
+      }),
+    ).toThrow("只能授予自己已授权的病区");
   });
 });

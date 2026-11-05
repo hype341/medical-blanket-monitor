@@ -55,8 +55,25 @@
                     <span>{{ summary.bed.bedNo }}</span>
                     <small>{{ summary.bed.patientName ?? "空床" }}</small>
                   </button>
+                  <button
+                    v-if="room.hiddenBedCount"
+                    type="button"
+                    class="bed-chip bed-chip--more"
+                    @click="visibleBedLimit += 12"
+                  >
+                    <span>+{{ room.hiddenBedCount }}</span>
+                    <small>显示更多</small>
+                  </button>
                 </div>
               </div>
+              <button
+                v-if="ward.hiddenRoomCount"
+                type="button"
+                class="ward-column__more"
+                @click="visibleRoomLimit += 6"
+              >
+                再显示 6 间病房，仍有 {{ ward.hiddenRoomCount }} 间未展开
+              </button>
             </div>
           </article>
         </div>
@@ -116,25 +133,73 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useMonitoringStore } from "../store";
 import { navigateToBedDetail } from "../navigation";
+import { probeCameraHealth } from "../camera-health";
 
 const router = useRouter();
 const store = useMonitoringStore();
+const visibleRoomLimit = ref(6);
+const visibleBedLimit = ref(12);
 
-const now = new Date();
-const currentTime = new Intl.DateTimeFormat("zh-CN", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-}).format(now);
-const currentDate = new Intl.DateTimeFormat("zh-CN", {
-  month: "long",
-  day: "numeric",
-  weekday: "long",
-}).format(now);
+const now = ref(new Date());
+let clockTimer: ReturnType<typeof setInterval> | null = null;
+let cameraHealthTimer: ReturnType<typeof setInterval> | null = null;
+let cameraHealthController: AbortController | null = null;
+const currentTime = computed(() =>
+  new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now.value),
+);
+const currentDate = computed(() =>
+  new Intl.DateTimeFormat("zh-CN", {
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(now.value),
+);
+
+onMounted(() => {
+  clockTimer = setInterval(() => {
+    if (document.visibilityState === "visible") now.value = new Date();
+  }, 30_000);
+  void refreshOverviewCameraHealth();
+  cameraHealthTimer = setInterval(() => void refreshOverviewCameraHealth(), 30_000);
+});
+
+onBeforeUnmount(() => {
+  if (clockTimer) clearInterval(clockTimer);
+  if (cameraHealthTimer) clearInterval(cameraHealthTimer);
+  cameraHealthController?.abort();
+});
+
+async function refreshOverviewCameraHealth(): Promise<void> {
+  if (document.visibilityState !== "visible") return;
+  const visibleBedIds = new Set(store.bedSummaries.map((summary) => summary.bed.id));
+  const cameras = store.cameras
+    .filter((camera) =>
+      store.bindings.some(
+        (binding) =>
+          binding.cameraId === camera.id &&
+          binding.status === "ACTIVE" &&
+          visibleBedIds.has(binding.bedId),
+      ),
+    )
+    .slice(0, 100);
+  if (!cameras.length) return;
+  cameraHealthController?.abort();
+  cameraHealthController = new AbortController();
+  try {
+    const results = await probeCameraHealth(cameras, cameraHealthController.signal);
+    results.forEach((result) => store.syncCameraStatus(result.cameraId, result.status));
+  } catch {
+    // Keep the last known camera state until the probe endpoint recovers.
+  }
+}
 
 const summaries = computed(() => store.bedSummaries);
 
@@ -159,31 +224,49 @@ const stats = computed(() => {
   ];
 });
 
-const wardBoards = computed(() =>
-  store.currentWards.map((ward) => {
-    const wardSummaries = summaries.value.filter((item) => item.bed.wardId === ward.id);
-    const rooms = store.rooms
+const wardBoards = computed(() => {
+  const bedsByWard = new Map<string, typeof summaries.value>();
+  const bedsByRoom = new Map<string, typeof summaries.value>();
+  for (const summary of summaries.value) {
+    const wardBeds = bedsByWard.get(summary.bed.wardId) ?? [];
+    wardBeds.push(summary);
+    bedsByWard.set(summary.bed.wardId, wardBeds);
+    const roomBeds = bedsByRoom.get(summary.bed.roomId) ?? [];
+    roomBeds.push(summary);
+    bedsByRoom.set(summary.bed.roomId, roomBeds);
+  }
+
+  return store.currentWards.map((ward) => {
+    const wardSummaries = bedsByWard.get(ward.id) ?? [];
+    const allRooms = store.rooms
       .filter((room) => room.wardId === ward.id)
-      .map((room) => ({
-        ...room,
-        beds: wardSummaries.filter((item) => item.bed.roomId === room.id),
-      }))
+      .map((room) => {
+        const beds = bedsByRoom.get(room.id) ?? [];
+        return {
+          ...room,
+          beds: beds.slice(0, visibleBedLimit.value),
+          hiddenBedCount: Math.max(0, beds.length - visibleBedLimit.value),
+        };
+      })
       .filter((room) => room.beds.length);
+    const rooms = allRooms.slice(0, visibleRoomLimit.value);
 
     return {
       ...ward,
       bedCount: wardSummaries.length,
       onlineCount: wardSummaries.filter((item) => item.sensor?.status === "ONLINE").length,
       rooms,
+      hiddenRoomCount: Math.max(0, allRooms.length - rooms.length),
     };
-  }),
-);
+  });
+});
 
 const attentionItems = computed(() => {
+  const summariesByBed = new Map(summaries.value.map((item) => [item.bed.id, item]));
   const alarmItems = store.alarms
     .filter((alarm) => alarm.status !== "RESOLVED")
     .map((alarm) => {
-      const summary = summaries.value.find((item) => item.bed.id === alarm.bedId);
+      const summary = summariesByBed.get(alarm.bedId);
       return {
         id: alarm.alarmId,
         bedId: alarm.bedId,
@@ -280,6 +363,13 @@ const moduleLinks = computed(() => {
       description: "查看数据管线、服务状态和运行信息",
       visible: store.canAccessModule("developer"),
     },
+    {
+      path: "/admin/maintenance",
+      kind: "维护",
+      label: "维护中心",
+      description: "运行诊断、配置备份、恢复与上线检查",
+      visible: store.canAccessModule("maintenance"),
+    },
   ];
   return links.filter((link) => link.visible);
 });
@@ -337,7 +427,7 @@ const moduleLinks = computed(() => {
 
   span,
   small {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--monitor-muted);
   }
 
@@ -370,7 +460,7 @@ const moduleLinks = computed(() => {
 
   span,
   small {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--monitor-muted);
   }
 
@@ -433,7 +523,7 @@ const moduleLinks = computed(() => {
     background: #eef5f2;
 
     span {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 700;
       color: #4e736a;
       letter-spacing: 0.08em;
@@ -467,13 +557,29 @@ const moduleLinks = computed(() => {
 }
 
 .room-row__name {
-  font-size: 11px;
+  font-size: 12px;
   color: #72847f;
 }
 
 .room-row__beds {
   display: flex;
   gap: 7px;
+}
+
+.ward-column__more {
+  padding: 9px 10px;
+  font-size: 11px;
+  color: #326f61;
+  cursor: pointer;
+  background: #f7faf8;
+  border: 1px dashed #bed3cc;
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    background: #edf6f2;
+    border-color: #7ca999;
+  }
 }
 
 .bed-chip {
@@ -518,9 +624,24 @@ const moduleLinks = computed(() => {
   small {
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 10px;
+    font-size: 11px;
     color: #71837e;
     white-space: nowrap;
+  }
+}
+
+.bed-chip--more {
+  flex: 0 0 auto;
+  min-width: 74px;
+  color: #2f6e60;
+  background: #eef6f3;
+  border-style: dashed;
+
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    background: #e5f2ed;
+    border-color: #7aa998;
   }
 }
 
@@ -560,14 +681,14 @@ const moduleLinks = computed(() => {
 
   p {
     margin: 4px 0 0;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.5;
     color: #74847f;
   }
 
   > span:last-child {
     font-family: "Avenir Next", sans-serif;
-    font-size: 10px;
+    font-size: 11px;
     color: #899792;
   }
 }
@@ -616,7 +737,7 @@ const moduleLinks = computed(() => {
 
     > span {
       padding: 4px 6px;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: 700;
       color: #3d7568;
       background: #e4f1eb;
@@ -629,19 +750,19 @@ const moduleLinks = computed(() => {
     }
 
     strong {
-      font-size: 11px;
+      font-size: 13px;
     }
 
     small {
       overflow: hidden;
       text-overflow: ellipsis;
-      font-size: 9px;
+      font-size: 11px;
       color: #7a8b86;
       white-space: nowrap;
     }
 
     i {
-      font-size: 9px;
+      font-size: 10px;
       font-style: normal;
       color: #2f806a;
     }

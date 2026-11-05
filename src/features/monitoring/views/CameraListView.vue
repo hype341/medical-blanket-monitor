@@ -20,20 +20,35 @@
       <p>后端生成 MediaMTX 路径，前端按 WebRTC、HLS、HTTP-FLV 自动选择播放线路。</p>
     </section>
 
+    <section class="camera-filters" aria-label="摄像头筛选">
+      <el-input
+        v-model="query"
+        clearable
+        placeholder="搜索摄像头名称、设备标识、病房或床位"
+      />
+      <el-select v-model="statusFilter" aria-label="摄像头状态">
+        <el-option label="全部状态" value="ALL" />
+        <el-option label="在线" value="ONLINE" />
+        <el-option label="延迟" value="STALE" />
+        <el-option label="离线" value="OFFLINE" />
+      </el-select>
+      <span>已筛选 {{ filteredRows.length }} / {{ tableRows.length }} 台</span>
+    </section>
+
     <div v-if="isDeveloper" class="camera-link-grid">
-      <CameraLinkPanel v-for="camera in store.cameras" :key="camera.id" :camera="camera" />
+      <CameraLinkPanel v-for="camera in pagedCameras" :key="camera.id" :camera="camera" />
     </div>
 
-    <el-table :data="tableRows" class="camera-table">
+    <el-table :data="pagedRows" class="camera-table">
       <el-table-column prop="name" label="摄像头" min-width="180" />
       <el-table-column prop="linkedBeds" label="对应病区 / 病房 / 床位" min-width="280" />
       <el-table-column v-if="isDeveloper" prop="cameraKey" label="设备标识" min-width="170" />
       <el-table-column v-if="isDeveloper" prop="sourceProtocol" label="接入方式" width="130" />
       <el-table-column label="设备状态" width="110">
         <template #default="{ row }">
-          <el-tag :type="statusType(row.status)" effect="plain">
+          <span class="camera-status-tag" :data-status="row.status">
             {{ statusLabel(row.status) }}
-          </el-tag>
+          </span>
         </template>
       </el-table-column>
       <el-table-column v-if="isDeveloper" label="播放地址" width="120">
@@ -48,6 +63,18 @@
       </el-table-column>
     </el-table>
 
+    <footer v-if="filteredRows.length" class="camera-table-footer">
+      <span>视频列表采用按需加载，只有打开床位详情时才建立播放连接。</span>
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :page-sizes="[12, 24, 48, 96]"
+        :total="filteredRows.length"
+        layout="sizes, prev, pager, next"
+        background
+      />
+    </footer>
+
     <section v-if="isDeveloper" class="camera-document">
       <header>
         <div>
@@ -56,13 +83,17 @@
           <p>根据当前摄像头、病房和床位绑定关系实时生成。</p>
         </div>
         <div class="camera-document__actions">
-          <el-button @click="regenerateDocument">重新生成</el-button>
+          <el-button v-if="!showVideoDocument" @click="regenerateDocument">生成文档</el-button>
+          <el-button v-else @click="regenerateDocument">重新生成</el-button>
           <el-button @click="copyDocument">复制文档</el-button>
           <el-button @click="downloadDocument">下载 Markdown</el-button>
           <el-button type="primary" @click="exportVideoPdf">导出 PDF</el-button>
         </div>
       </header>
-      <DocumentPreview :content="videoDocument" />
+      <DocumentPreview v-if="showVideoDocument" :content="videoDocument" />
+      <div v-else class="camera-document__idle">
+        设备较多时文档按需生成，避免一次载入全部摄像头说明影响页面速度。
+      </div>
     </section>
 
     <section v-if="isDeveloper" class="protocol-notes">
@@ -99,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import CameraEditorDialog from "../components/CameraEditorDialog.vue";
 import CameraLinkPanel from "../components/CameraLinkPanel.vue";
@@ -110,11 +141,19 @@ import { useMonitoringStore } from "../store";
 import type { CameraInput, CameraStatus, ManagedCameraInput } from "../types";
 import { copyText } from "@/utils/clipboard";
 import { printMarkdownDocument } from "@/utils/document-export";
+import { probeCameraHealth } from "../camera-health";
 
 const store = useMonitoringStore();
 const isDeveloper = computed(() => store.activeRole === "DEVELOPER");
 const editorVisible = ref(false);
 const editingCameraId = ref("");
+const query = ref("");
+const statusFilter = ref<"ALL" | CameraStatus>("ALL");
+const currentPage = ref(1);
+const pageSize = ref(12);
+const showVideoDocument = ref(false);
+let healthTimer: ReturnType<typeof setInterval> | null = null;
+let healthController: AbortController | null = null;
 const generatedAt = ref(new Date().toLocaleString("zh-CN", { hour12: false }));
 const videoDocument = computed(() =>
   generateVideoDocumentation(
@@ -135,14 +174,22 @@ const editorCamera = computed(
   () => store.cameras.find((camera) => camera.id === editingCameraId.value) ?? null,
 );
 
+const linkedBedLocations = computed(() => {
+  const result = new Map<string, string[]>();
+  for (const summary of store.bedSummaries) {
+    const location = `${summary.ward?.name ?? "未分病区"} / ${summary.room?.name ?? "未分病房"} / ${summary.bed.bedNo} 床`;
+    for (const camera of summary.cameras) {
+      const locations = result.get(camera.id) ?? [];
+      locations.push(location);
+      result.set(camera.id, locations);
+    }
+  }
+  return result;
+});
+
 const tableRows = computed(() =>
   store.cameras.map((camera) => {
-    const linkedBeds = store.bedSummaries
-      .filter((summary) => summary.cameras.some((item) => item.id === camera.id))
-      .map(
-        (summary) =>
-          `${summary.ward?.name ?? "未分病区"} / ${summary.room?.name ?? "未分病房"} / ${summary.bed.bedNo} 床`,
-      );
+    const linkedBeds = linkedBedLocations.value.get(camera.id) ?? [];
     return {
       ...camera,
       sourceProtocol: "待配置",
@@ -150,6 +197,55 @@ const tableRows = computed(() =>
     };
   }),
 );
+const filteredRows = computed(() => {
+  const keyword = query.value.trim().toLocaleLowerCase();
+  return tableRows.value.filter((row) => {
+    if (statusFilter.value !== "ALL" && row.status !== statusFilter.value) return false;
+    if (!keyword) return true;
+    return [row.name, row.cameraKey, row.linkedBeds]
+      .filter(Boolean)
+      .some((value) => String(value).toLocaleLowerCase().includes(keyword));
+  });
+});
+const pageStart = computed(() => (currentPage.value - 1) * pageSize.value);
+const pagedRows = computed(() =>
+  filteredRows.value.slice(pageStart.value, pageStart.value + pageSize.value),
+);
+const pagedCameras = computed(() => {
+  const ids = new Set(pagedRows.value.map((camera) => camera.id));
+  return store.cameras.filter((camera) => ids.has(camera.id));
+});
+
+watch([query, statusFilter, pageSize], () => {
+  currentPage.value = 1;
+});
+
+async function refreshCameraHealth(): Promise<void> {
+  if (document.visibilityState !== "visible" || !pagedCameras.value.length) return;
+  healthController?.abort();
+  healthController = new AbortController();
+  try {
+    const results = await probeCameraHealth(pagedCameras.value, healthController.signal);
+    results.forEach((result) => store.syncCameraStatus(result.cameraId, result.status));
+  } catch {
+    // Keep the last known state when the status endpoint is temporarily unavailable.
+  }
+}
+
+watch(
+  () => pagedCameras.value.map((camera) => camera.id).join(","),
+  () => void refreshCameraHealth(),
+);
+
+onMounted(() => {
+  void refreshCameraHealth();
+  healthTimer = setInterval(() => void refreshCameraHealth(), 20_000);
+});
+
+onBeforeUnmount(() => {
+  healthController?.abort();
+  if (healthTimer) clearInterval(healthTimer);
+});
 
 function statusLabel(status: CameraStatus): string {
   return { ONLINE: "在线", STALE: "延迟", OFFLINE: "离线" }[status];
@@ -167,11 +263,6 @@ function saveManagedCamera(input: ManagedCameraInput, cameraId: string | null): 
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "摄像头保存失败");
   }
-}
-
-function statusType(status: CameraStatus): "success" | "warning" | "info" {
-  const types = { ONLINE: "success", STALE: "warning", OFFLINE: "info" } as const;
-  return types[status];
 }
 
 function openEditor(cameraId?: string): void {
@@ -195,6 +286,7 @@ function saveCamera(input: CameraInput, cameraId: string | null): void {
 
 function regenerateDocument(): void {
   generatedAt.value = new Date().toLocaleString("zh-CN", { hour12: false });
+  showVideoDocument.value = true;
 }
 
 async function copyDocument(): Promise<void> {
@@ -230,6 +322,11 @@ function exportVideoPdf(): void {
 <style scoped lang="scss">
 .camera-page {
   color: #173c3a;
+
+  :deep(small) {
+    font-size: 11px;
+    line-height: 1.55;
+  }
 }
 
 .camera-page__header {
@@ -288,10 +385,77 @@ function exportVideoPdf(): void {
   border: 1px solid #dbe6e2;
 }
 
+.camera-status-tag {
+  display: inline-flex;
+  align-items: center;
+  min-width: 48px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: #5d6d69;
+  background: #f3f6f5;
+  border: 1px solid #d7e0dc;
+
+  &[data-status="ONLINE"] {
+    color: #24624f;
+    background: #edf7f2;
+    border-color: #bfd8d0;
+  }
+
+  &[data-status="STALE"] {
+    color: #8b611f;
+    background: #fbf5e7;
+    border-color: #e4cfaa;
+  }
+
+  &[data-status="OFFLINE"] {
+    color: #66726f;
+    background: #f2f5f4;
+    border-color: #d6dfdc;
+  }
+}
+
+.camera-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+  margin-top: 14px;
+  background: #fff;
+  border: 1px solid #dbe6e2;
+
+  .el-input {
+    max-width: 460px;
+  }
+
+  .el-select {
+    width: 140px;
+  }
+
+  > span {
+    margin-left: auto;
+    font-size: 11px;
+    color: #71847e;
+  }
+}
+
 .camera-link-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
   gap: 14px;
+}
+
+.camera-table-footer {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+
+  > span {
+    font-size: 11px;
+    color: #71847e;
+  }
 }
 
 .camera-document {
@@ -348,6 +512,15 @@ function exportVideoPdf(): void {
   gap: 6px;
 }
 
+.camera-document__idle {
+  padding: 18px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: #6f827c;
+  background: #f6faf8;
+  border: 1px dashed #c6d9d2;
+}
+
 .protocol-notes {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -402,6 +575,22 @@ function exportVideoPdf(): void {
 
   .camera-link-grid {
     grid-template-columns: 1fr;
+  }
+
+  .camera-filters,
+  .camera-table-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .camera-filters .el-input,
+  .camera-filters .el-select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .camera-filters > span {
+    margin-left: 0;
   }
 }
 </style>

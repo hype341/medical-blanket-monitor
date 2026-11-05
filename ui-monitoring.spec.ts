@@ -1,21 +1,53 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 async function loginAsAdmin(page: Page): Promise<void> {
   await loginAs(page, "admin");
 }
 
+async function fillCaptcha(page: Page): Promise<void> {
+  const captchaInput = page.locator('input[placeholder="验证码"]');
+  const mathChallenge = page.locator(".login-card__math-captcha strong");
+  if (!(await mathChallenge.count())) {
+    await captchaInput.fill("1");
+    return;
+  }
+  const question = (await mathChallenge.textContent())?.trim() ?? "";
+  const match = question.match(/(\d+)\s*([+-])\s*(\d+)/);
+  if (!match) throw new Error(`无法识别验证码题目: ${question}`);
+  const answer =
+    match[2] === "+"
+      ? Number(match[1]) + Number(match[3])
+      : Number(match[1]) - Number(match[3]);
+  await captchaInput.fill(String(answer));
+}
+
 async function loginAs(
   page: Page,
-  username: "admin" | "nurse" | "head-nurse" | "developer",
+  username: string,
+  password = "123456",
 ): Promise<void> {
   await page.goto("/#/overview", { waitUntil: "networkidle" });
-  await expect(page.getByText("演示环境已跳过验证码，直接登录即可")).toBeVisible();
+  await expect(page.locator('input[placeholder="验证码"]')).toBeVisible();
   await page.locator('input[placeholder="用户名"]').fill(username);
-  await page.locator('input[placeholder="密码"]').fill("123456");
-  const captchaInput = page.locator('input[placeholder="验证码"]');
-  if (await captchaInput.count()) await captchaInput.fill("1");
+  await page.locator('input[placeholder="密码"]').fill(password);
+  await fillCaptcha(page);
   await page.locator(".login-card__submit").click();
-  await page.waitForURL("**/#/overview");
+  try {
+    await page.waitForURL("**/#/overview", { timeout: 10_000 });
+  } catch {
+    await page.locator('input[placeholder="用户名"]').fill(username);
+    await page.locator('input[placeholder="密码"]').fill(password);
+    await fillCaptcha(page);
+    await page.locator(".login-card__submit").click();
+    await page.waitForURL("**/#/overview", { timeout: 15_000 });
+  }
+}
+
+async function logoutFromUi(page: Page): Promise<void> {
+  await page.locator(".layout-user").click();
+  await page.getByText("退出登录", { exact: true }).click();
+  await page.getByRole("button", { name: "确定" }).click();
+  await page.waitForURL("**/#/login**");
 }
 
 async function openDevicePage(page: Page, label: string): Promise<void> {
@@ -23,6 +55,33 @@ async function openDevicePage(page: Page, label: string): Promise<void> {
   await group.locator(".el-sub-menu__title").click();
   await group.locator(".el-menu-item").filter({ hasText: label }).click();
 }
+
+async function clearLiveAlarms(
+  request: APIRequestContext,
+  liveOrigin: string,
+): Promise<void> {
+  const response = await request.get(`${liveOrigin}/api/public/alarms`);
+  if (!response.ok()) return;
+  const alarms = (await response.json()) as Array<{ alarmId?: string }>;
+  for (const alarm of alarms) {
+    if (alarm.alarmId) {
+      await request.delete(`${liveOrigin}/api/alarms/${encodeURIComponent(alarm.alarmId)}`);
+    }
+  }
+}
+
+test("login rejects an invalid captcha before account validation", async ({ page }) => {
+  await page.goto("/#/login", { waitUntil: "networkidle" });
+  await page.screenshot({ path: "test-results/monitoring-login-captcha.png", fullPage: true });
+  await page.locator('input[placeholder="用户名"]').fill("admin");
+  await page.locator('input[placeholder="密码"]').fill("123456");
+  await page.locator('input[placeholder="验证码"]').fill("99999");
+  await page.locator(".login-card__submit").click();
+
+  await expect(page.getByText("验证码错误或已过期，请重新输入")).toBeVisible();
+  await expect(page).toHaveURL(/\/#\/login/);
+  await expect(page.locator(".login-card__math-captcha")).toBeVisible();
+});
 
 test("nurse can open a bed monitor from the safety overview", async ({ page }) => {
   await loginAs(page, "nurse");
@@ -189,12 +248,15 @@ test("only administrators can manage wards and rooms", async ({ page }) => {
   await page.getByText("人员权限", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "人员权限管理" })).toBeVisible();
   await expect(page.getByText("系统开发者", { exact: true })).toHaveCount(0);
+  const ownAdminRow = page.locator(".staff-row").filter({ hasText: "系统管理员" }).first();
+  await expect(ownAdminRow.getByText("不可管理", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "新增角色标签" }).click();
   await page.getByLabel("角色标签名称").fill("责任护士");
   await page.getByRole("button", { name: "确认添加标签" }).click();
   await expect(page.getByText("责任护士", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "新增人员" }).click();
-  await expect(page.getByText("开放模块由开发者配置")).toBeVisible();
+  await expect(page.getByText("仅显示当前账号已拥有的模块")).toBeVisible();
+  await expect(page.locator(".el-radio-button").filter({ hasText: "管理员" })).toHaveCount(0);
   await page.locator('input[placeholder="登录账号"]').fill("nurse-li");
   await page.locator('input[placeholder="人员姓名"]').fill("李护士");
   await page.locator('input[placeholder="登录密码"]').fill("Nurse@123456");
@@ -203,12 +265,18 @@ test("only administrators can manage wards and rooms", async ({ page }) => {
   await page.getByRole("button", { name: "保存人员权限" }).click();
   await expect(page.getByText("李护士").first()).toBeVisible();
   await expect(page.locator(".staff-row").filter({ hasText: "李护士" })).toContainText("责任护士");
+  await page.waitForTimeout(600);
   await page.locator(".staff-page").screenshot({ path: "test-results/monitoring-staff-tags.png" });
   await page.screenshot({ path: "test-results/monitoring-navigation-groups.png" });
 
   await page.getByText("告警与录像策略", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "告警与录像策略" })).toBeVisible();
   await expect(page.getByText("系统连接", { exact: true })).toHaveCount(0);
+
+  await logoutFromUi(page);
+  await loginAs(page, "nurse-li", "Nurse@123456");
+  await expect(page.getByText("李护士", { exact: true })).toBeVisible();
+  await expect(page.getByText("值班护士", { exact: true })).toHaveCount(0);
 });
 
 test("developer can inspect MQTT credentials and runtime diagnostics", async ({ page }) => {
@@ -317,6 +385,7 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await page.locator(".camera-links").first().getByRole("button", { name: "复制" }).first().click();
   await expect(page.getByText("WebRTC 浏览器观看已复制")).toBeVisible();
   await expect(page.getByRole("heading", { name: "视频连接文档", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "生成文档", exact: true }).click();
   await expect(page.locator(".camera-document .document-preview")).toContainText(
     "http://10.208.236.131:8889/camera-01/whep",
   );
@@ -371,6 +440,29 @@ test("administrator can manage camera names and locations without stream links",
   await expect(page.getByText(/A 病区 · 外科 \/ 302 病房 \/ 01 床/).first()).toBeVisible();
 });
 
+test("camera status matches the real media health probe", async ({ page, request }) => {
+  const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
+  test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+
+  const probe = await request.post(`${liveOrigin}/api/public/camera-status`, {
+    data: [
+      {
+        cameraId: "camera-01",
+        baseUrl: "http://10.208.236.131:8888",
+        path: "camera-01",
+      },
+    ],
+  });
+  expect(probe.ok()).toBe(true);
+  const [result] = (await probe.json()) as Array<{ status: "ONLINE" | "OFFLINE" }>;
+
+  await loginAsAdmin(page);
+  await openDevicePage(page, "摄像头管理");
+  const cameraRow = page.locator(".el-table__row").filter({ hasText: "301 病房摄像头" }).first();
+  await expect(cameraRow).toContainText(result.status === "ONLINE" ? "在线" : "离线");
+  await page.screenshot({ path: "test-results/monitoring-camera-status.png", fullPage: true });
+});
+
 test("developer can still see technical MQTT and camera links in bed detail", async ({ page }) => {
   await loginAs(page, "developer");
   await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
@@ -393,6 +485,37 @@ test("developer can rename the platform brand", async ({ page }) => {
   await page.getByRole("button", { name: "保存平台名称" }).click();
   await expect(page.getByText("平台名称已保存")).toBeVisible();
   await expect(page.locator(".layout-logo__title")).toHaveText("康复毯监测中心");
+});
+
+test("refreshing and switching monitored pages does not raise Vue DOM errors", async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      /insertBefore|parentNode|_leaveCb|nextSibling/.test(message.text())
+    ) {
+      pageErrors.push(message.text());
+    }
+  });
+
+  await loginAs(page, "developer");
+  const routes = [
+    "/#/overview",
+    "/#/beds/bed-a-01",
+    "/#/admin/developer",
+    "/#/devices/blankets",
+    "/#/admin/staff",
+    "/#/admin/policy",
+  ];
+  for (let index = 0; index < 24; index += 1) {
+    await page.goto(routes[index % routes.length], { waitUntil: "networkidle" });
+    await page.waitForTimeout(400);
+  }
+
+  expect(pageErrors).toEqual([]);
 });
 
 test("developer can send a bed notification through the MQTT service", async ({ page }) => {
@@ -429,6 +552,7 @@ test("live MQTT warning is displayed as the same red bed alarm", async ({ page, 
   const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
   test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
 
+  await clearLiveAlarms(request, liveOrigin!);
   await loginAs(page, "developer");
   await page.waitForTimeout(1_000);
   const alarmId = `live-warning-${Date.now()}`;
@@ -453,12 +577,14 @@ test("live MQTT warning is displayed as the same red bed alarm", async ({ page, 
     "data-status",
     "OPEN",
   );
+  await request.delete(`${liveOrigin}/api/alarms/${encodeURIComponent(alarmId)}`);
 });
 
 test("resolved MQTT alarm synchronizes across open platform pages", async ({ browser, request }) => {
   const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
   test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
 
+  await clearLiveAlarms(request, liveOrigin!);
   const watcherContext = await browser.newContext();
   const operatorContext = await browser.newContext();
   const watcher = await watcherContext.newPage();
@@ -492,6 +618,7 @@ test("resolved MQTT alarm synchronizes across open platform pages", async ({ bro
     await expect(
       operator.locator(".alarm-card").filter({ hasText: "跨页面同步告警" }),
     ).toHaveAttribute("data-status", "RESOLVED");
+    await request.delete(`${liveOrigin}/api/alarms/${encodeURIComponent(alarmId)}`);
   } finally {
     await watcherContext.close();
     await operatorContext.close();
@@ -509,6 +636,20 @@ test("head nurse only receives the assigned ward", async ({ page }) => {
 });
 
 test("warning turns red and requires nurse actions to resolve and delete", async ({ page }) => {
+  const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
+  if (liveOrigin?.startsWith("http://192.168.")) {
+    const response = await page.request.get(`${liveOrigin}/api/public/alarms`);
+    if (response.ok()) {
+      const alarms = (await response.json()) as Array<{ alarmId?: string }>;
+      for (const alarm of alarms) {
+        if (alarm.alarmId) {
+          await page.request.delete(
+            `${liveOrigin}/api/alarms/${encodeURIComponent(alarm.alarmId)}`,
+          );
+        }
+      }
+    }
+  }
   await loginAs(page, "developer");
   await expect(page.locator(".navbar-unbound-badge")).toBeVisible();
   await expect(page.locator(".navbar-alert-badge")).toHaveCount(0);
@@ -547,4 +688,149 @@ test("warning turns red and requires nurse actions to resolve and delete", async
   await expect(alarmCard).toHaveAttribute("data-status", "RESOLVED");
   await page.getByRole("button", { name: "删除记录" }).click();
   await expect(page.getByText("床位状态平稳").first()).toBeVisible();
+});
+
+test("nurse can filter urgent beds, copy a handoff summary, and reopen recent beds", async ({
+  page,
+}) => {
+  await loginAs(page, "nurse");
+  await page.goto("/#/beds", { waitUntil: "networkidle" });
+
+  await expect(page.getByRole("button", { name: /待处理告警/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /设备待绑定/ })).toBeVisible();
+  await page.getByRole("button", { name: "复制交班摘要" }).click();
+  await expect(page.getByText("交班摘要已复制")).toBeVisible();
+
+  const firstBed = page.locator('[data-testid="bed-card"]').first();
+  await firstBed.click();
+  await expect(page).toHaveURL(/#\/beds\/bed-/);
+  await page.goto("/#/beds", { waitUntil: "networkidle" });
+  await expect(page.getByText("最近查看", { exact: true })).toBeVisible();
+  await expect(page.locator(".recent-beds")).toContainText("床");
+});
+
+test("developer maintenance center checks services and exports diagnostics", async ({ page }) => {
+  await loginAs(page, "developer");
+  await page.goto("/#/admin/maintenance", { waitUntil: "networkidle" });
+
+  await expect(page.getByRole("heading", { name: "维护中心" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "系统健康" })).toBeVisible();
+  await expect(page.locator(".diagnostic-row")).toHaveCount(5);
+  await expect(page.getByText("视频流媒体节点", { exact: true })).toBeVisible();
+  await expect(page.getByText("浏览器自动保存", { exact: true })).toBeVisible();
+  await expect(page.getByText("不含 MQTT 密码", { exact: true })).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "下载维护报告" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^medical-blanket-diagnostics-.*\.json$/);
+
+  const backupPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /导出配置备份/ }).click();
+  const backup = await backupPromise;
+  expect(backup.suggestedFilename()).toMatch(/^medical-blanket-backup-.*\.json$/);
+  await page.screenshot({ path: "test-results/monitoring-maintenance.png", fullPage: true });
+});
+
+test("large device inventory stays paginated and does not render every bed", async ({ page }) => {
+  test.setTimeout(45_000);
+  await loginAs(page, "developer");
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const raw = localStorage.getItem("monitoring-business-data");
+          if (!raw) return 0;
+          return (JSON.parse(raw) as { data: { beds: unknown[] } }).data.beds.length;
+        }),
+      { timeout: 5_000 },
+    )
+    .toBeGreaterThan(0);
+
+  const scaledInventory = await page.evaluate(() => {
+    const stored = JSON.parse(localStorage.getItem("monitoring-business-data")!) as {
+      schemaVersion: number;
+      data: {
+        beds: Array<Record<string, unknown>>;
+        sensors: Array<Record<string, unknown>>;
+        cameras: Array<Record<string, unknown>>;
+        bindings: Array<Record<string, unknown>>;
+      };
+    };
+    const baseBed = stored.data.beds[0];
+    const baseSensor = stored.data.sensors[0];
+    const baseCamera = stored.data.cameras[0];
+    stored.data.beds = Array.from({ length: 1_000 }, (_, index) => ({
+      ...structuredClone(baseBed),
+      id: `bed-scale-${index}`,
+      bedNo: String((index % 99) + 1).padStart(2, "0"),
+      patientName: `容量测试患者 ${index + 1}`,
+    }));
+    stored.data.sensors = Array.from({ length: 1_000 }, (_, index) => ({
+      ...structuredClone(baseSensor),
+      id: `sensor-bed-scale-${index}`,
+      deviceKey: `blanket-scale-${index}`,
+      name: `容量测试毯子 ${index + 1}`,
+      status: "ONLINE",
+    }));
+    stored.data.cameras = Array.from({ length: 1_000 }, (_, index) => ({
+      ...structuredClone(baseCamera),
+      id: `camera-scale-${index}`,
+      cameraKey: `camera-scale-${index}`,
+      mediaPath: `camera-scale-${index}`,
+      name: `容量测试摄像头 ${index + 1}`,
+      status: "OFFLINE",
+    }));
+    stored.data.bindings = Array.from({ length: 1_000 }, (_, index) => [
+      {
+        id: `binding-scale-sensor-${index}`,
+        bedId: `bed-scale-${index}`,
+        sensorDeviceId: `sensor-bed-scale-${index}`,
+        cameraId: null,
+        role: "PRIMARY_SENSOR",
+        status: "ACTIVE",
+      },
+      {
+        id: `binding-scale-camera-${index}`,
+        bedId: `bed-scale-${index}`,
+        sensorDeviceId: null,
+        cameraId: `camera-scale-${index}`,
+        role: "PRIMARY_CAMERA",
+        status: "ACTIVE",
+      },
+    ]).flat();
+    return JSON.stringify(stored);
+  });
+  await page.evaluate((serialized) => {
+    localStorage.setItem("monitoring-business-data", serialized);
+  }, scaledInventory);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.goto("/#/beds", { waitUntil: "networkidle" });
+  await expect(page.locator(".bed-list-header__count strong")).toHaveText("1000");
+  expect(await page.locator('[data-testid="bed-card"]').count()).toBeLessThanOrEqual(12);
+  await expect(page.locator(".el-pagination")).toBeVisible();
+
+  const renderStartedAt = performance.now();
+  await page.goto("/#/overview", { waitUntil: "networkidle" });
+  const overviewDuration = performance.now() - renderStartedAt;
+  expect(overviewDuration).toBeLessThan(5_000);
+  expect(await page.locator(".bed-chip").count()).toBeLessThanOrEqual(400);
+
+  await page.goto("/#/devices/cameras", { waitUntil: "networkidle" });
+  await expect(page.locator(".camera-filters > span")).toContainText("1000");
+  expect(await page.locator(".camera-table .el-table__row").count()).toBeLessThanOrEqual(12);
+  await expect(page.locator(".camera-table-footer .el-pagination")).toBeVisible();
+});
+
+test("maintenance, camera, and staff pages do not overflow a phone viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, "developer");
+
+  for (const route of ["/#/admin/maintenance", "/#/devices/cameras", "/#/admin/staff"]) {
+    await page.goto(route, { waitUntil: "networkidle" });
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+  }
 });

@@ -221,6 +221,17 @@ export const constantRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: "admin/maintenance",
+        name: "DeveloperMaintenance",
+        component: () => import("@/features/monitoring/views/MaintenanceView.vue"),
+        meta: {
+          title: "维护中心",
+          icon: "setting",
+          roles: ["DEVELOPER"],
+          module: "maintenance",
+        },
+      },
+      {
         path: "dashboard",
         component: () => import("@/views/dashboard/index.vue"),
         // 用于 keep-alive 功能，需要与 SFC 中自动推导或显式声明的组件名称一致

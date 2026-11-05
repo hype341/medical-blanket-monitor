@@ -14,6 +14,7 @@ export type PermissionModule =
   | "policy"
   | "video"
   | "mqtt"
+  | "maintenance"
   | "developer";
 export type BindingRole = "PRIMARY_SENSOR" | "PRIMARY_CAMERA";
 export type BindingStatus = "ACTIVE" | "INACTIVE";

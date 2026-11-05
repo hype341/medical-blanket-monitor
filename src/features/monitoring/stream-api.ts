@@ -43,7 +43,7 @@ export function openMqttSensorStream(
   try {
     handlers.onStatus?.("connecting");
     client = mqtt.connect(settings.websocketUrl, {
-      clientId: settings.clientId,
+      clientId: `${settings.clientId}-${randomClientSuffix()}`,
       username: settings.username,
       password: settings.password,
       reconnectPeriod: 3_000,
@@ -66,7 +66,7 @@ export function openMqttSensorStream(
     client.on("error", (error) => handlers.onError?.(error));
     client.on("message", (topic, payload) => {
       const text = payload.toString("utf8");
-      if (topic.includes("/alarm/")) {
+      if (topic.endsWith("/alarm")) {
         const alarm = parseAlarmMessage(text);
         if (alarm) handlers.onAlarm?.(alarm);
         return;
@@ -105,7 +105,7 @@ export function openSensorDataStream(
   try {
     handlers.onStatus?.("connecting");
     client = mqtt.connect(settings.websocketUrl, {
-      clientId: `${settings.clientId}-${dataTopic.split("/").at(-2) ?? "sensor"}`,
+      clientId: `${settings.clientId}-${dataTopic.split("/").at(-2) ?? "sensor"}-${randomClientSuffix()}`,
       username: settings.username,
       password: settings.password,
       reconnectPeriod: 3_000,
@@ -253,30 +253,44 @@ async function connectWebRtc(
   video: HTMLVideoElement,
 ): Promise<{ stream: MediaStream; cleanup: () => void }> {
   const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 6_000);
   const peer = new RTCPeerConnection();
   peer.addTransceiver("video", { direction: "recvonly" });
   peer.addTransceiver("audio", { direction: "recvonly" });
   peer.ontrack = (event) => {
     video.srcObject = event.streams[0] ?? new MediaStream([event.track]);
   };
-  const offer = await peer.createOffer();
-  await peer.setLocalDescription(offer);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/sdp" },
-    body: offer.sdp,
-    signal: controller.signal,
-  });
-  if (!response.ok) throw new Error(`WHEP failed: ${response.status}`);
-  await peer.setRemoteDescription({ type: "answer", sdp: await response.text() });
-  await video.play();
+  try {
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: offer.sdp,
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`WHEP failed: ${response.status}`);
+    await peer.setRemoteDescription({ type: "answer", sdp: await response.text() });
+    await video.play();
+  } catch (error) {
+    controller.abort();
+    peer.close();
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
   return {
     stream: video.srcObject as MediaStream,
     cleanup() {
+      window.clearTimeout(timeout);
       controller.abort();
       peer.close();
     },
   };
+}
+
+function randomClientSuffix(): string {
+  return globalThis.crypto?.randomUUID?.().slice(0, 8) ?? Math.random().toString(36).slice(2, 10);
 }
 
 async function connectHls(url: string, video: HTMLVideoElement): Promise<() => void> {

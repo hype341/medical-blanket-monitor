@@ -52,6 +52,9 @@ const props = defineProps<{
   cameraStatus: CameraStatus;
   playback: CameraPlayback | null;
 }>();
+const emit = defineEmits<{
+  status: [status: CameraStatus];
+}>();
 
 const videoRef = ref<HTMLVideoElement>();
 const state = ref<PlayerState>("empty");
@@ -108,6 +111,7 @@ async function playWebRtc(url: string, isCurrent: () => boolean): Promise<void> 
 
   const peer = new RTCPeerConnection();
   const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 6_000);
   peer.addTransceiver("video", { direction: "recvonly" });
   peer.addTransceiver("audio", { direction: "recvonly" });
   peer.ontrack = (event) => {
@@ -115,22 +119,27 @@ async function playWebRtc(url: string, isCurrent: () => boolean): Promise<void> 
   };
 
   stopActiveMedia = () => {
+    window.clearTimeout(timeout);
     controller.abort();
     peer.close();
   };
 
-  const offer = await peer.createOffer();
-  await peer.setLocalDescription(offer);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/sdp" },
-    body: offer.sdp,
-    signal: controller.signal,
-  });
-  if (!response.ok) throw new Error(`WHEP failed: ${response.status}`);
-  await peer.setRemoteDescription({ type: "answer", sdp: await response.text() });
-  if (!isCurrent()) return;
-  await video.play();
+  try {
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: offer.sdp,
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`WHEP failed: ${response.status}`);
+    await peer.setRemoteDescription({ type: "answer", sdp: await response.text() });
+    if (!isCurrent()) return;
+    await video.play();
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 async function playHls(url: string, isCurrent: () => boolean): Promise<void> {
@@ -209,9 +218,15 @@ async function tryCandidate(token: number): Promise<void> {
     if (candidate.protocol === "webrtc") await playWebRtc(candidate.url, isCurrent);
     if (candidate.protocol === "hls") await playHls(candidate.url, isCurrent);
     if (candidate.protocol === "flv") await playFlv(candidate.url, isCurrent);
-    if (isCurrent()) state.value = "playing";
+    if (isCurrent()) {
+      state.value = "playing";
+      emit("status", "ONLINE");
+    }
   } catch {
-    if (isCurrent()) scheduleNextCandidate();
+    if (isCurrent()) {
+      emit("status", "OFFLINE");
+      scheduleNextCandidate();
+    }
   }
 }
 
@@ -219,6 +234,11 @@ async function preparePlayback(): Promise<void> {
   const token = ++generation;
   releaseMedia();
   activeProtocol.value = null;
+
+  if (props.cameraStatus === "OFFLINE") {
+    state.value = "error";
+    return;
+  }
 
   if (!props.playback) {
     state.value = "empty";
@@ -240,7 +260,7 @@ onMounted(() => {
 });
 
 watch(
-  () => props.playback,
+  [() => props.playback, () => props.cameraStatus],
   () => {
     void preparePlayback();
   },

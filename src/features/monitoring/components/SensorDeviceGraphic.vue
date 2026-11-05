@@ -59,7 +59,7 @@ const statusLabel = computed(() => {
 <style scoped lang="scss">
 .sensor-graphic {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(170px, 1.2fr) auto;
   gap: 18px;
   align-items: center;
   padding: 18px;
@@ -109,6 +109,7 @@ const statusLabel = computed(() => {
 .sensor-graphic__identity {
   display: grid;
   gap: 5px;
+  min-width: 0;
 
   span {
     font-size: 10px;
@@ -117,15 +118,19 @@ const statusLabel = computed(() => {
   }
 
   strong {
+    min-width: 0;
     font-size: 16px;
     font-weight: 650;
+    line-height: 1.35;
     color: #173c3a;
+    overflow-wrap: normal;
   }
 
   small {
     font-family: "Avenir Next", sans-serif;
     font-size: 10px;
     color: #7d8e89;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -195,17 +200,38 @@ const statusLabel = computed(() => {
   border-color: #e4b2ac;
 }
 
+@container sensor-panel (width <= 640px) {
+  .sensor-graphic {
+    grid-template-columns: minmax(135px, 0.75fr) minmax(0, 1.25fr);
+    gap: 14px;
+  }
+
+  .sensor-graphic__meta {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 1 / -1;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    justify-items: stretch;
+  }
+
+  .sensor-graphic__state {
+    justify-self: auto;
+  }
+}
+
 @media (width <= 620px) {
   .sensor-graphic {
     grid-template-columns: 1fr;
   }
 
-  .sensor-graphic__state {
-    justify-self: start;
-  }
-
   .sensor-graphic__meta {
     justify-items: start;
+  }
+
+  .sensor-graphic__state {
+    justify-self: start;
   }
 }
 </style>

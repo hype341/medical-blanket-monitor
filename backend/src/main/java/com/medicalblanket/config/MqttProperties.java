@@ -9,6 +9,7 @@ public class MqttProperties {
     private String observerClientId = "blanket-spring-observer";
     private String observerUsername = "blanket-device";
     private String observerPassword = "";
+    private String alarmObserverClientId = "blanket-spring-alarm-observer";
     private String publisherClientId = "blanket-spring-publisher";
     private String publisherUsername = "blanket-publisher";
     private String publisherPassword = "";
@@ -25,6 +26,8 @@ public class MqttProperties {
     public void setObserverUsername(String observerUsername) { this.observerUsername = observerUsername; }
     public String getObserverPassword() { return observerPassword; }
     public void setObserverPassword(String observerPassword) { this.observerPassword = observerPassword; }
+    public String getAlarmObserverClientId() { return alarmObserverClientId; }
+    public void setAlarmObserverClientId(String alarmObserverClientId) { this.alarmObserverClientId = alarmObserverClientId; }
     public String getPublisherClientId() { return publisherClientId; }
     public void setPublisherClientId(String publisherClientId) { this.publisherClientId = publisherClientId; }
     public String getPublisherUsername() { return publisherUsername; }

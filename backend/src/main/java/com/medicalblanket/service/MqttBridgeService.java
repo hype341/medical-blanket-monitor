@@ -24,6 +24,7 @@ public class MqttBridgeService {
     private final SensorStore sensorStore;
     private final AlarmStore alarmStore;
     private MqttClient observer;
+    private MqttClient alarmObserver;
     private MqttClient publisher;
     private volatile boolean connected;
 
@@ -46,7 +47,8 @@ public class MqttBridgeService {
             observer = connect(
                     properties.getObserverClientId(),
                     properties.getObserverUsername(),
-                    properties.getObserverPassword()
+                    properties.getObserverPassword(),
+                    false
             );
             observer.setCallback(new MqttCallback() {
                 @Override
@@ -60,8 +62,7 @@ public class MqttBridgeService {
                     try {
                         JsonNode parsed = objectMapper.readTree(message.getPayload());
                         if (!(parsed instanceof ObjectNode payload)) return;
-                        if (topic.endsWith("/alarm")) alarmStore.accept(payload);
-                        else sensorStore.accept(topic, payload);
+                        sensorStore.accept(topic, payload);
                     } catch (Exception error) {
                         log.debug("Ignoring invalid MQTT payload on {}", topic, error);
                     }
@@ -71,11 +72,38 @@ public class MqttBridgeService {
                 public void deliveryComplete(IMqttDeliveryToken token) {}
             });
             observer.subscribe(properties.getDataTopic(), 1);
-            observer.subscribe(properties.getAlarmTopic(), 1);
+            alarmObserver = connect(
+                    properties.getAlarmObserverClientId(),
+                    properties.getObserverUsername(),
+                    properties.getObserverPassword(),
+                    true
+            );
+            alarmObserver.setCallback(new MqttCallback() {
+                @Override
+                public void connectionLost(Throwable cause) {
+                    connected = false;
+                    log.warn("MQTT alarm observer connection lost", cause);
+                }
+
+                @Override
+                public void messageArrived(String topic, MqttMessage message) {
+                    try {
+                        JsonNode parsed = objectMapper.readTree(message.getPayload());
+                        if (parsed instanceof ObjectNode payload) alarmStore.accept(payload);
+                    } catch (Exception error) {
+                        log.debug("Ignoring invalid MQTT alarm payload on {}", topic, error);
+                    }
+                }
+
+                @Override
+                public void deliveryComplete(IMqttDeliveryToken token) {}
+            });
+            alarmObserver.subscribe(properties.getAlarmTopic(), 1);
             publisher = connect(
                     properties.getPublisherClientId(),
                     properties.getPublisherUsername(),
-                    properties.getPublisherPassword()
+                    properties.getPublisherPassword(),
+                    false
             );
             connected = true;
             log.info("Spring MQTT bridge connected to {}", properties.getUrl());
@@ -85,7 +113,10 @@ public class MqttBridgeService {
     }
 
     public boolean isConnected() {
-        return connected && observer != null && observer.isConnected() && publisher != null && publisher.isConnected();
+        return connected
+                && observer != null && observer.isConnected()
+                && alarmObserver != null && alarmObserver.isConnected()
+                && publisher != null && publisher.isConnected();
     }
 
     public void publishAlarm(String topic, ObjectNode notification) throws Exception {
@@ -102,16 +133,23 @@ public class MqttBridgeService {
     public void stop() {
         connected = false;
         close(observer);
+        close(alarmObserver);
         close(publisher);
     }
 
-    private MqttClient connect(String clientId, String username, String password) throws Exception {
+    private MqttClient connect(
+            String clientId,
+            String username,
+            String password,
+            boolean persistentSession
+    ) throws Exception {
         MqttClient client = new MqttClient(properties.getUrl(), clientId, new MemoryPersistence());
         MqttConnectOptions options = new MqttConnectOptions();
         options.setAutomaticReconnect(true);
-        options.setCleanSession(true);
+        options.setCleanSession(!persistentSession);
         options.setConnectionTimeout(10);
         options.setKeepAliveInterval(30);
+        if (persistentSession) options.setMaxInflight(1_000);
         if (username != null && !username.isBlank()) options.setUserName(username);
         if (password != null && !password.isBlank()) options.setPassword(password.toCharArray());
         client.connect(options);

@@ -628,6 +628,12 @@ function downloadText(fileName: string, content: string): void {
 <style scoped lang="scss">
 .connection-page {
   color: #173c3a;
+
+  :deep(small),
+  :deep(dt) {
+    font-size: 11px;
+    line-height: 1.55;
+  }
 }
 
 .admin-page-header {

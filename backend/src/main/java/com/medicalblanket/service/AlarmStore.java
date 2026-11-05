@@ -2,8 +2,10 @@ package com.medicalblanket.service;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.medicalblanket.websocket.AlarmWebSocketHandler;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
@@ -22,10 +24,31 @@ public class AlarmStore {
     private final CopyOnWriteArrayList<String> order = new CopyOnWriteArrayList<>();
     private final ObjectMapper objectMapper;
     private final AlarmWebSocketHandler socketHandler;
+    private final StateFileRepository stateRepository;
 
-    public AlarmStore(ObjectMapper objectMapper, AlarmWebSocketHandler socketHandler) {
+    public AlarmStore(
+            ObjectMapper objectMapper,
+            AlarmWebSocketHandler socketHandler,
+            StateFileRepository stateRepository
+    ) {
         this.objectMapper = objectMapper;
         this.socketHandler = socketHandler;
+        this.stateRepository = stateRepository;
+    }
+
+    @PostConstruct
+    public synchronized void restore() {
+        stateRepository.read("alarms.json").ifPresent(root -> {
+            if (!root.isArray()) return;
+            for (JsonNode item : root) {
+                if (!(item instanceof ObjectNode alarm)) continue;
+                String alarmId = alarm.path("alarmId").asText("");
+                if (alarmId.isBlank() || alarms.containsKey(alarmId)) continue;
+                alarms.put(alarmId, alarm.deepCopy());
+                order.add(alarmId);
+            }
+            while (order.size() > 250) alarms.remove(order.remove(0));
+        });
     }
 
     public synchronized void accept(JsonNode input) {
@@ -43,6 +66,7 @@ public class AlarmStore {
             socketHandler.broadcast(event("alarm.created", payload));
         }
         while (order.size() > 250) alarms.remove(order.remove(0));
+        persist();
     }
 
     public synchronized Optional<ObjectNode> resolve(String alarmId) {
@@ -51,6 +75,7 @@ public class AlarmStore {
         alarm.put("status", "RESOLVED");
         alarm.put("resolvedAt", OffsetDateTime.now(ZONE).format(FORMAT));
         socketHandler.broadcast(event("alarm.updated", alarm));
+        persist();
         return Optional.of(alarm.deepCopy());
     }
 
@@ -62,6 +87,7 @@ public class AlarmStore {
         event.put("event", "alarm.deleted");
         event.put("alarmId", alarmId);
         socketHandler.broadcast(event);
+        persist();
         return true;
     }
 
@@ -77,6 +103,25 @@ public class AlarmStore {
 
     public ObjectNode envelope(ObjectNode alarm) {
         return alarm;
+    }
+
+    public int size() {
+        return alarms.size();
+    }
+
+    public long openCount() {
+        return alarms.values().stream()
+                .filter(alarm -> "OPEN".equals(alarm.path("status").asText("OPEN")))
+                .count();
+    }
+
+    private void persist() {
+        ArrayNode root = objectMapper.createArrayNode();
+        for (String alarmId : order) {
+            ObjectNode alarm = alarms.get(alarmId);
+            if (alarm != null) root.add(alarm.deepCopy());
+        }
+        stateRepository.write("alarms.json", root);
     }
 
     private ObjectNode event(String name, ObjectNode alarm) {

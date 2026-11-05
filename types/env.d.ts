@@ -11,6 +11,10 @@ interface ImportMetaEnv {
   readonly VITE_OIDC_ENABLED?: string;
   readonly VITE_MOCK_ENABLED?: string;
   readonly VITE_DYNAMIC_ROUTES_ENABLED?: string;
+  readonly VITE_MEDIA_WEBRTC_BASE_URL?: string;
+  readonly VITE_MEDIA_HLS_BASE_URL?: string;
+  readonly VITE_MEDIA_RTSP_BASE_URL?: string;
+  readonly VITE_MEDIA_PLAYBACK_API_BASE_URL?: string;
 }
 
 interface ImportMeta {

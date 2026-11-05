@@ -33,8 +33,24 @@
         <small>名称修改后，MQTT 页面同步显示新名称</small>
       </header>
 
-      <div v-if="rows.length" class="blanket-list">
-        <article v-for="row in rows" :key="row.sensor.id" class="blanket-row">
+      <div class="blanket-filters">
+        <el-input
+          v-model="query"
+          clearable
+          placeholder="搜索毯子名称、设备标识、病房、床位或患者"
+        />
+        <el-select v-model="statusFilter" aria-label="毯子状态">
+          <el-option label="全部状态" value="ALL" />
+          <el-option label="在线" value="ONLINE" />
+          <el-option label="数据延迟" value="STALE" />
+          <el-option label="离线" value="OFFLINE" />
+          <el-option label="告警" value="ALARM" />
+        </el-select>
+        <span>已筛选 {{ filteredRows.length }} / {{ rows.length }} 条</span>
+      </div>
+
+      <div v-if="filteredRows.length" class="blanket-list">
+        <article v-for="row in pagedRows" :key="row.sensor.id" class="blanket-row">
           <div class="blanket-row__name">
             <span :data-status="row.sensor.status" />
             <div>
@@ -53,9 +69,22 @@
         </article>
       </div>
       <el-empty v-else description="还没有毯子，先新建一条">
-        <el-button type="primary" @click="openCreate">新建毯子</el-button>
+        <el-button v-if="!rows.length" type="primary" @click="openCreate">新建毯子</el-button>
+        <el-button v-else @click="resetFilters">清除筛选</el-button>
       </el-empty>
     </section>
+
+    <footer v-if="filteredRows.length" class="blanket-footer">
+      <span>设备档案按页加载，搜索会匹配名称、设备标识和床位信息。</span>
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :page-sizes="[12, 24, 48, 96]"
+        :total="filteredRows.length"
+        layout="sizes, prev, pager, next"
+        background
+      />
+    </footer>
 
     <aside v-if="lastSyncedName" class="blanket-sync-note" aria-live="polite">
       <span>已同步</span>
@@ -81,6 +110,7 @@
         <el-form-item label="对应床位">
           <el-select
             v-model="form.bedId"
+            filterable
             aria-label="对应床位"
             class="w-full"
             placeholder="选择病区、病房和床位"
@@ -106,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useMonitoringStore } from "../store";
 import type { SensorStatus } from "../types";
@@ -115,6 +145,10 @@ const store = useMonitoringStore();
 const dialogVisible = ref(false);
 const editingId = ref<string | null>(null);
 const lastSyncedName = ref("");
+const query = ref("");
+const statusFilter = ref<"ALL" | SensorStatus>("ALL");
+const currentPage = ref(1);
+const pageSize = ref(12);
 const form = reactive({
   name: "",
   bedId: "",
@@ -127,40 +161,82 @@ const statusLabel: Record<SensorStatus, string> = {
   ALARM: "告警",
 };
 
-const bedOptions = computed(() =>
-  store.beds
+const bedOptions = computed(() => {
+  const wardsById = new Map(store.wards.map((ward) => [ward.id, ward]));
+  const roomsById = new Map(store.rooms.map((room) => [room.id, room]));
+  return store.beds
     .map((bed) => {
-      const ward = store.wards.find((item) => item.id === bed.wardId);
-      const room = store.rooms.find((item) => item.id === bed.roomId);
+      const ward = wardsById.get(bed.wardId);
+      const room = roomsById.get(bed.roomId);
       return {
         id: bed.id,
         label: `${ward?.name ?? "未分病区"} / ${room?.name ?? "未分病房"} / ${bed.bedNo} 床`,
       };
     })
-    .sort((left, right) => left.label.localeCompare(right.label)),
-);
+    .sort((left, right) => left.label.localeCompare(right.label));
+});
 
-const rows = computed(() =>
-  store.sensors
+const rows = computed(() => {
+  const bedsById = new Map(store.beds.map((bed) => [bed.id, bed]));
+  const roomsById = new Map(store.rooms.map((room) => [room.id, room]));
+  const wardsById = new Map(store.wards.map((ward) => [ward.id, ward]));
+  const sensorBindingBySensor = new Map<string, (typeof store.bindings)[number]>();
+  for (const binding of store.bindings) {
+    if (
+      binding.status === "ACTIVE" &&
+      binding.role === "PRIMARY_SENSOR" &&
+      binding.sensorDeviceId
+    ) {
+      sensorBindingBySensor.set(binding.sensorDeviceId, binding);
+    }
+  }
+
+  return store.sensors
     .map((sensor) => {
-      const binding = store.bindings.find(
-        (item) =>
-          item.sensorDeviceId === sensor.id &&
-          item.role === "PRIMARY_SENSOR" &&
-          item.status === "ACTIVE",
-      );
-      const bed = binding ? store.beds.find((item) => item.id === binding.bedId) : undefined;
-      const room = bed ? store.rooms.find((item) => item.id === bed.roomId) : undefined;
-      const ward = bed ? store.wards.find((item) => item.id === bed.wardId) : undefined;
+      const binding = sensorBindingBySensor.get(sensor.id);
+      const bed = binding ? bedsById.get(binding.bedId) : undefined;
+      const room = bed ? roomsById.get(bed.roomId) : undefined;
+      const ward = bed ? wardsById.get(bed.wardId) : undefined;
       return { sensor, bed, room, ward };
     })
     .sort((left, right) => {
       if (Boolean(left.bed) !== Boolean(right.bed)) return left.bed ? -1 : 1;
       return left.sensor.name.localeCompare(right.sensor.name);
-    }),
-);
+    });
+});
 
 const assignedCount = computed(() => rows.value.filter((row) => Boolean(row.bed)).length);
+const filteredRows = computed(() => {
+  const keyword = query.value.trim().toLocaleLowerCase();
+  return rows.value.filter((row) => {
+    if (statusFilter.value !== "ALL" && row.sensor.status !== statusFilter.value) return false;
+    if (!keyword) return true;
+    return [
+      row.sensor.name,
+      row.sensor.deviceKey,
+      row.ward?.name,
+      row.room?.name,
+      row.bed?.bedNo,
+      row.bed?.patientName,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLocaleLowerCase().includes(keyword));
+  });
+});
+const pageStart = computed(() => (currentPage.value - 1) * pageSize.value);
+const pagedRows = computed(() =>
+  filteredRows.value.slice(pageStart.value, pageStart.value + pageSize.value),
+);
+
+watch([query, statusFilter, pageSize], () => {
+  currentPage.value = 1;
+});
+
+function resetFilters(): void {
+  query.value = "";
+  statusFilter.value = "ALL";
+  currentPage.value = 1;
+}
 
 function openCreate(): void {
   editingId.value = null;
@@ -291,6 +367,28 @@ function save(): void {
   display: grid;
 }
 
+.blanket-filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid #e8eeeb;
+
+  .el-input {
+    max-width: 460px;
+  }
+
+  .el-select {
+    width: 130px;
+  }
+
+  > span {
+    margin-left: auto;
+    font-size: 11px;
+    color: #71847e;
+  }
+}
+
 .blanket-row {
   display: grid;
   grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.4fr) auto;
@@ -387,6 +485,19 @@ function save(): void {
   }
 }
 
+.blanket-footer {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+
+  > span {
+    font-size: 11px;
+    color: #71847e;
+  }
+}
+
 .blanket-form-note {
   margin: 0;
   font-size: 10px;
@@ -415,6 +526,22 @@ function save(): void {
 
   .blanket-row__location {
     grid-column: 1 / -1;
+  }
+
+  .blanket-filters,
+  .blanket-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .blanket-filters .el-input,
+  .blanket-filters .el-select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .blanket-filters > span {
+    margin-left: 0;
   }
 }
 </style>

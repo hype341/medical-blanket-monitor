@@ -401,6 +401,12 @@ async function sendMqttAlarm(): Promise<void> {
 <style scoped lang="scss">
 .developer-page {
   color: #173c3a;
+
+  :deep(small),
+  :deep(dt) {
+    font-size: 11px;
+    line-height: 1.55;
+  }
 }
 
 .admin-page-header {

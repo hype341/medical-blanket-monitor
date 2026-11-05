@@ -2,9 +2,9 @@ import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
 import { ElNotification } from "element-plus";
 import { createMonitoringFixture } from "./mock-data";
-import { defaultModulesForRole } from "./permissions";
+import { canManageRole, defaultModulesForRole } from "./permissions";
 import type { AlarmEnvelope } from "./recording";
-import { getBedMonitorSummary } from "./selectors";
+import { buildBedMonitorSummaries, getBedMonitorSummary } from "./selectors";
 import { normalizeHexData } from "./processing";
 import type {
   AddBedInput,
@@ -28,6 +28,11 @@ import type {
   UpdateRoomInput,
   UpdateWardInput,
 } from "./types";
+import {
+  exportStaffCredentials,
+  restoreStaffCredentials,
+  type StoredCredential,
+} from "./staff-credentials";
 
 function loadStoredAlarms(): AlarmEnvelope[] {
   try {
@@ -42,6 +47,9 @@ const MQTT_SETTINGS_KEY = "monitoring-mqtt-settings";
 const PLATFORM_NAME_KEY = "monitoring-platform-name";
 const STAFF_TAGS_KEY = "monitoring-staff-tags";
 const MODULE_MIGRATION_KEY = "monitoring-module-schema";
+const MONITORING_DATA_KEY = "monitoring-business-data";
+const MONITORING_POLICY_KEY = "monitoring-policy";
+const DATA_SCHEMA_VERSION = 1;
 const DEFAULT_PLATFORM_NAME = "医用智能毯安全监护平台";
 const DEFAULT_STAFF_TAGS = ["责任护士", "夜班", "实习"];
 const DEFAULT_MQTT_SETTINGS: MqttSettings = {
@@ -55,6 +63,74 @@ const DEFAULT_MQTT_SETTINGS: MqttSettings = {
   alarmDetailTemplate: "{{bedName}} 在 {{occurredAt}} 上报 {{alarmCode}}",
   qos: 1,
 };
+const DEFAULT_MONITORING_POLICY: MonitoringPolicy = {
+  clipBeforeSeconds: 30,
+  clipAfterSeconds: 60,
+  recordingRetentionMinutes: 1_440,
+};
+
+interface StoredMonitoringData {
+  schemaVersion: number;
+  data: MonitoringData;
+}
+
+export interface MonitoringBackup {
+  schemaVersion: number;
+  exportedAt: string;
+  platformName: string;
+  data: MonitoringData;
+  monitoringPolicy: MonitoringPolicy;
+  mqttSettings: Omit<MqttSettings, "password">;
+  staffTags: string[];
+  staffCredentials?: Record<string, StoredCredential>;
+}
+
+function isMonitoringData(value: unknown): value is MonitoringData {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<MonitoringData>;
+  return Boolean(
+    candidate.hospital &&
+      Array.isArray(candidate.wards) &&
+      Array.isArray(candidate.rooms) &&
+      Array.isArray(candidate.beds) &&
+      Array.isArray(candidate.sensors) &&
+      Array.isArray(candidate.cameras) &&
+      Array.isArray(candidate.bindings) &&
+      Array.isArray(candidate.staff),
+  );
+}
+
+function loadMonitoringData(): MonitoringData | null {
+  try {
+    const stored = JSON.parse(localStorage.getItem(MONITORING_DATA_KEY) ?? "null") as unknown;
+    if (!stored || typeof stored !== "object") return null;
+    const payload = stored as Partial<StoredMonitoringData>;
+    return payload.schemaVersion === DATA_SCHEMA_VERSION && isMonitoringData(payload.data)
+      ? structuredClone(payload.data)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadMonitoringPolicy(): MonitoringPolicy {
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(MONITORING_POLICY_KEY) ?? "null",
+    ) as Partial<MonitoringPolicy> | null;
+    if (!stored) return { ...DEFAULT_MONITORING_POLICY };
+    return {
+      clipBeforeSeconds: Math.max(1, Number(stored.clipBeforeSeconds) || 30),
+      clipAfterSeconds: Math.max(1, Number(stored.clipAfterSeconds) || 60),
+      recordingRetentionMinutes: Math.max(
+        1,
+        Number(stored.recordingRetentionMinutes) || 1_440,
+      ),
+    };
+  } catch {
+    return { ...DEFAULT_MONITORING_POLICY };
+  }
+}
 
 function loadMqttSettings(): MqttSettings {
   try {
@@ -82,7 +158,7 @@ function loadStaffTags(): string[] {
 }
 
 export const useMonitoringStore = defineStore("monitoring", () => {
-  const fixture = ref<MonitoringData>(createMonitoringFixture());
+  const fixture = ref<MonitoringData>(loadMonitoringData() ?? createMonitoringFixture());
   const platformName = ref(localStorage.getItem(PLATFORM_NAME_KEY) || DEFAULT_PLATFORM_NAME);
   if (typeof document !== "undefined") document.title = platformName.value;
   const storedHospitalName = localStorage.getItem("monitoring-hospital-name");
@@ -115,11 +191,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     },
     { deep: true },
   );
-  const monitoringPolicy = ref<MonitoringPolicy>({
-    clipBeforeSeconds: 30,
-    clipAfterSeconds: 60,
-    recordingRetentionMinutes: 1_440,
-  });
+  const monitoringPolicy = ref<MonitoringPolicy>(loadMonitoringPolicy());
   const mqttSettings = ref<MqttSettings>(loadMqttSettings());
   let bindingSequence = 100;
   let bedSequence = 100;
@@ -129,8 +201,102 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   let staffSequence = 100;
   let cameraSequence = 100;
   const alarmNotificationTimes = new Map<string, number>();
-
+  let dataPersistTimer: ReturnType<typeof setTimeout> | null = null;
+  let dataPersistIdle: number | null = null;
   const { hospital, wards, rooms, beds, sensors, cameras, bindings, staff } = fixture.value;
+  if (activeRole.value === "ADMIN" || activeRole.value === "DEVELOPER") {
+    currentWardIds.value = wards.map((ward) => ward.id);
+    sessionStorage.setItem("monitoring-wards", JSON.stringify(currentWardIds.value));
+  }
+
+  function nextSequence(values: string[], pattern: RegExp, minimum = 100): number {
+    const highest = values.reduce((current, value) => {
+      const match = value.match(pattern);
+      return match ? Math.max(current, Number(match[1]) || 0) : current;
+    }, 0);
+    return Math.max(minimum, highest + 1);
+  }
+
+  function refreshSequences(): void {
+    wardSequence = nextSequence(
+      wards.map((ward) => ward.id),
+      /^ward-(\d+)$/,
+    );
+    roomSequence = nextSequence(
+      rooms.map((room) => room.id),
+      /^room-(\d+)$/,
+    );
+    bedSequence = nextSequence(
+      beds.map((bed) => bed.id),
+      /(\d+)$/,
+    );
+    bindingSequence = nextSequence(
+      bindings.map((binding) => binding.id),
+      /(\d+)$/,
+    );
+    blanketSequence = nextSequence(
+      sensors.filter((sensor) => sensor.id.startsWith("sensor-blanket-")).map((sensor) => sensor.id),
+      /(\d+)$/,
+    );
+    staffSequence = nextSequence(
+      staff.map((member) => member.id),
+      /(\d+)$/,
+    );
+    cameraSequence = nextSequence(
+      cameras.map((camera) => camera.id),
+      /(\d+)$/,
+    );
+  }
+
+  refreshSequences();
+
+  watch(
+    fixture,
+    (value) => {
+      if (dataPersistTimer) clearTimeout(dataPersistTimer);
+      if (dataPersistIdle !== null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(dataPersistIdle);
+      }
+      const persist = () => {
+        try {
+          const serialized = JSON.stringify({
+            schemaVersion: DATA_SCHEMA_VERSION,
+            data: value,
+          } satisfies StoredMonitoringData);
+          localStorage.setItem(MONITORING_DATA_KEY, serialized);
+        } catch {
+          // Keep the live platform usable if browser storage quota is unavailable.
+        } finally {
+          dataPersistTimer = null;
+          dataPersistIdle = null;
+        }
+      };
+      if ("requestIdleCallback" in window) {
+        dataPersistIdle = window.requestIdleCallback(persist, { timeout: 1_500 });
+      } else {
+        dataPersistTimer = setTimeout(persist, 600);
+      }
+    },
+    { deep: true },
+  );
+  watch(
+    monitoringPolicy,
+    (value) => {
+      localStorage.setItem(MONITORING_POLICY_KEY, JSON.stringify(value));
+    },
+    { deep: true },
+  );
+  if (!localStorage.getItem(MONITORING_DATA_KEY)) {
+    try {
+      localStorage.setItem(
+        MONITORING_DATA_KEY,
+        JSON.stringify({ schemaVersion: DATA_SCHEMA_VERSION, data: fixture.value }),
+      );
+    } catch {
+      // The platform remains usable when private browsing disables persistent storage.
+    }
+  }
+
   const activeUsername = ref(sessionStorage.getItem("monitoring-username") ?? "");
   const storedModules = sessionStorage.getItem("monitoring-modules");
   const activeModulePermissions = ref<PermissionModule[]>(
@@ -140,13 +306,22 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   );
   if (
     (activeRole.value === "ADMIN" || activeRole.value === "DEVELOPER") &&
-    localStorage.getItem(MODULE_MIGRATION_KEY) !== "2"
+    localStorage.getItem(MODULE_MIGRATION_KEY) !== "3"
   ) {
     activeModulePermissions.value = Array.from(
       new Set([...activeModulePermissions.value, "blankets", "video"]),
     );
+    if (activeRole.value === "DEVELOPER") {
+      activeModulePermissions.value = Array.from(
+        new Set([...activeModulePermissions.value, "mqtt", "maintenance", "developer"]),
+      );
+    }
+    const developer = staff.find((member) => member.role === "DEVELOPER");
+    if (developer?.modulePermissions && !developer.modulePermissions.includes("maintenance")) {
+      developer.modulePermissions.push("maintenance");
+    }
     sessionStorage.setItem("monitoring-modules", JSON.stringify(activeModulePermissions.value));
-    localStorage.setItem(MODULE_MIGRATION_KEY, "2");
+    localStorage.setItem(MODULE_MIGRATION_KEY, "3");
   }
 
   const currentWards = computed(() =>
@@ -164,9 +339,15 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   );
 
   const bedSummaries = computed(() =>
-    visibleBeds.value
-      .map((bed) => getBedMonitorSummary(bed.id, fixture.value))
-      .filter((summary) => summary !== null),
+    buildBedMonitorSummaries(fixture.value)
+      .filter((summary) => currentWardIds.value.includes(summary.bed.wardId))
+      .sort((left, right) => {
+        if (left.bed.wardId !== right.bed.wardId)
+          return left.bed.wardId.localeCompare(right.bed.wardId);
+        if (left.bed.roomId !== right.bed.roomId)
+          return left.bed.roomId.localeCompare(right.bed.roomId);
+        return left.bed.bedNo.localeCompare(right.bed.bedNo);
+      }),
   );
   const openAlarmCount = computed(() => {
     const visibleBedIds = new Set(visibleBeds.value.map((bed) => bed.id));
@@ -235,8 +416,12 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   }
 
   function setCurrentWardIds(wardIds: string[]): void {
-    currentWardIds.value = wardIds;
-    sessionStorage.setItem("monitoring-wards", JSON.stringify(wardIds));
+    const resolvedWardIds =
+      activeRole.value === "ADMIN" || activeRole.value === "DEVELOPER"
+        ? wards.map((ward) => ward.id)
+        : wardIds;
+    currentWardIds.value = [...resolvedWardIds];
+    sessionStorage.setItem("monitoring-wards", JSON.stringify(currentWardIds.value));
   }
 
   function updateHospitalName(name: string): void {
@@ -294,6 +479,9 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       code: input.code.trim(),
       name: input.name.trim(),
     });
+    if (activeRole.value === "ADMIN" || activeRole.value === "DEVELOPER") {
+      setCurrentWardIds([...currentWardIds.value, wardId]);
+    }
     return wardId;
   }
 
@@ -333,15 +521,15 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     if (!canManageStaff.value) {
       throw new Error("仅管理员可以管理人员权限");
     }
-    if (input.role === "DEVELOPER" && activeRole.value !== "DEVELOPER") {
-      throw new Error("医院管理员不能创建系统开发者账号");
+    if (!canManageRole(activeRole.value, input.role)) {
+      throw new Error("只能创建级别低于自己的账号");
     }
     const requestedModules = input.modulePermissions ?? defaultModulesForRole(input.role);
-    if (
-      activeRole.value !== "DEVELOPER" &&
-      !sameModules(requestedModules, defaultModulesForRole(input.role))
-    ) {
-      throw new Error("仅开发者可以修改人员模块权限");
+    if (!requestedModules.every((module) => activeModulePermissions.value.includes(module))) {
+      throw new Error("只能授予自己拥有的模块权限");
+    }
+    if (!input.wardIds.every((wardId) => currentWardIds.value.includes(wardId))) {
+      throw new Error("只能授予自己已授权的病区");
     }
     if (staff.some((item) => item.username === input.username.trim())) {
       throw new Error("登录账号已存在");
@@ -371,20 +559,20 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     }
     const member = staff.find((item) => item.id === staffId);
     if (!member) throw new Error("人员不存在");
-    if (
-      activeRole.value !== "DEVELOPER" &&
-      (member.role === "DEVELOPER" || input.role === "DEVELOPER")
-    ) {
-      throw new Error("医院管理员不能管理系统开发者账号");
+    if (!canManageRole(activeRole.value, member.role)) {
+      throw new Error("只能管理级别低于自己的账号");
+    }
+    if (!canManageRole(activeRole.value, input.role)) {
+      throw new Error("不能把账号提升到与当前账号同级或更高");
     }
     const requestedModules = input.modulePermissions ?? [
       ...(member.modulePermissions ?? defaultModulesForRole(member.role)),
     ];
-    if (
-      activeRole.value !== "DEVELOPER" &&
-      !sameModules(requestedModules, member.modulePermissions ?? defaultModulesForRole(member.role))
-    ) {
-      throw new Error("仅开发者可以修改人员模块权限");
+    if (!requestedModules.every((module) => activeModulePermissions.value.includes(module))) {
+      throw new Error("只能授予自己拥有的模块权限");
+    }
+    if (!input.wardIds.every((wardId) => currentWardIds.value.includes(wardId))) {
+      throw new Error("只能授予自己已授权的病区");
     }
     member.username = input.username.trim();
     member.displayName = input.displayName.trim();
@@ -521,8 +709,9 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     camera.model = input.model?.trim() || undefined;
   }
 
-  function sameModules(left: PermissionModule[], right: PermissionModule[]): boolean {
-    return left.length === right.length && left.every((module) => right.includes(module));
+  function canManageMember(memberId: string): boolean {
+    const member = staff.find((item) => item.id === memberId);
+    return Boolean(member && canManageStaff.value && canManageRole(activeRole.value, member.role));
   }
 
   function updateMonitoringPolicy(policy: MonitoringPolicy): void {
@@ -550,6 +739,96 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       alarmTopic: settings.alarmTopic.trim(),
     };
     localStorage.setItem(MQTT_SETTINGS_KEY, JSON.stringify(mqttSettings.value));
+  }
+
+  function buildMonitoringBackup(): MonitoringBackup {
+    if (activeRole.value !== "DEVELOPER") {
+      throw new Error("仅开发者可以导出维护备份");
+    }
+    return {
+      schemaVersion: DATA_SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      platformName: platformName.value,
+      data: JSON.parse(JSON.stringify(fixture.value)) as MonitoringData,
+      monitoringPolicy: { ...monitoringPolicy.value },
+      mqttSettings: {
+        brokerUrl: mqttSettings.value.brokerUrl,
+        websocketUrl: mqttSettings.value.websocketUrl,
+        clientId: mqttSettings.value.clientId,
+        username: mqttSettings.value.username,
+        alarmTopic: mqttSettings.value.alarmTopic,
+        alarmTitleTemplate: mqttSettings.value.alarmTitleTemplate,
+        alarmDetailTemplate: mqttSettings.value.alarmDetailTemplate,
+        qos: mqttSettings.value.qos,
+      },
+      staffTags: [...staffTags.value],
+      staffCredentials: exportStaffCredentials(),
+    };
+  }
+
+  function restoreMonitoringBackup(serialized: string): void {
+    if (activeRole.value !== "DEVELOPER") {
+      throw new Error("仅开发者可以恢复维护备份");
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(serialized);
+    } catch {
+      throw new Error("备份文件不是有效的 JSON");
+    }
+    if (!parsed || typeof parsed !== "object") throw new Error("备份文件格式不正确");
+    const backup = parsed as Partial<MonitoringBackup>;
+    if (backup.schemaVersion !== DATA_SCHEMA_VERSION || !isMonitoringData(backup.data)) {
+      throw new Error("备份版本不兼容或业务数据不完整");
+    }
+
+    const nextData = structuredClone(backup.data);
+    Object.assign(hospital, nextData.hospital);
+    wards.splice(0, wards.length, ...nextData.wards);
+    rooms.splice(0, rooms.length, ...nextData.rooms);
+    beds.splice(0, beds.length, ...nextData.beds);
+    sensors.splice(0, sensors.length, ...nextData.sensors);
+    cameras.splice(0, cameras.length, ...nextData.cameras);
+    bindings.splice(0, bindings.length, ...nextData.bindings);
+    staff.splice(0, staff.length, ...nextData.staff);
+
+    if (typeof backup.platformName === "string" && backup.platformName.trim()) {
+      platformName.value = backup.platformName.trim();
+      localStorage.setItem(PLATFORM_NAME_KEY, platformName.value);
+      document.title = platformName.value;
+    }
+    if (backup.monitoringPolicy) {
+      monitoringPolicy.value = {
+        clipBeforeSeconds: Math.max(1, Number(backup.monitoringPolicy.clipBeforeSeconds) || 30),
+        clipAfterSeconds: Math.max(1, Number(backup.monitoringPolicy.clipAfterSeconds) || 60),
+        recordingRetentionMinutes: Math.max(
+          1,
+          Number(backup.monitoringPolicy.recordingRetentionMinutes) || 1_440,
+        ),
+      };
+    }
+    if (backup.mqttSettings) {
+      mqttSettings.value = {
+        ...mqttSettings.value,
+        ...backup.mqttSettings,
+        password: mqttSettings.value.password,
+      };
+      localStorage.setItem(MQTT_SETTINGS_KEY, JSON.stringify(mqttSettings.value));
+    }
+    if (Array.isArray(backup.staffTags)) {
+      staffTags.value = Array.from(
+        new Set(backup.staffTags.filter((tag) => typeof tag === "string" && tag.trim())),
+      );
+      localStorage.setItem(STAFF_TAGS_KEY, JSON.stringify(staffTags.value));
+    }
+    restoreStaffCredentials(backup.staffCredentials);
+
+    refreshSequences();
+    localStorage.setItem(
+      MONITORING_DATA_KEY,
+      JSON.stringify({ schemaVersion: DATA_SCHEMA_VERSION, data: fixture.value }),
+    );
+    localStorage.setItem("monitoring-hospital-name", hospital.name);
   }
 
   function addBed(input: AddBedInput): string {
@@ -725,6 +1004,16 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     if (index >= 0) alarms.value.splice(index, 1);
   }
 
+  function replaceAlarms(nextAlarms: AlarmEnvelope[]): void {
+    const unique = new Map<string, AlarmEnvelope>();
+    for (const alarm of nextAlarms) {
+      if (!alarm || typeof alarm.alarmId !== "string" || !alarm.alarmId) continue;
+      if (!beds.some((bed) => bed.id === alarm.bedId)) continue;
+      unique.set(alarm.alarmId, structuredClone(alarm));
+    }
+    alarms.value = [...unique.values()];
+  }
+
   function setSensorDevices(nextSensors: SensorDevice[]): void {
     sensors.splice(0, sensors.length, ...nextSensors);
   }
@@ -749,6 +1038,11 @@ export const useMonitoringStore = defineStore("monitoring", () => {
 
   function setCameras(nextCameras: Camera[]): void {
     cameras.splice(0, cameras.length, ...nextCameras);
+  }
+
+  function syncCameraStatus(cameraId: string, status: Camera["status"]): void {
+    const camera = cameras.find((item) => item.id === cameraId);
+    if (camera) camera.status = status;
   }
 
   return {
@@ -795,12 +1089,15 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     addStaff,
     addStaffTag,
     updateStaff,
+    canManageMember,
     addCamera,
     addManagedCamera,
     updateManagedCamera,
     updateCamera,
     updateMonitoringPolicy,
     updateMqttSettings,
+    buildMonitoringBackup,
+    restoreMonitoringBackup,
     addBed,
     addBlanket,
     updateBlanket,
@@ -808,8 +1105,10 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     ingestAlarm,
     resolveAlarm,
     removeAlarm,
+    replaceAlarms,
     setSensorDevices,
     syncSensorSnapshot,
     setCameras,
+    syncCameraStatus,
   };
 });
