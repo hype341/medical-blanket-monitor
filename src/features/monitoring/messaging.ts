@@ -1,5 +1,6 @@
 export const SENSOR_DATA_TOPIC = "medical-blanket/v1/+/+/+/sensor/+/data";
 export const LEGACY_SENSOR_EVENT_TOPIC = "medical-blanket/v1/+/+/+/sensor/+/telemetry";
+export const SYSTEM_TIME_TOPIC = "medical-blanket/v1/system/time";
 
 export interface BedMqttTopicInput {
   hospitalCode: string;

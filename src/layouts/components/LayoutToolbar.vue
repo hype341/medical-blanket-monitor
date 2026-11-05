@@ -77,19 +77,13 @@ const isDesktop = computed(() => appStore.device === DeviceEnum.DESKTOP);
 const canSwitchTenant = computed(() => userStore.userInfo?.canSwitchTenant === true);
 
 const displayName = computed(() => {
-  if (
-    import.meta.env.VITE_MOCK_ENABLED === "true" ||
-    userStore.userInfo.nickname === "系统管理员"
-  ) {
-    const roleNames = {
-      NURSE: "值班护士",
-      HEAD_NURSE: "A 病区护士长",
-      ADMIN: "系统管理员",
-      DEVELOPER: "系统开发者",
-    };
-    return roleNames[monitoringStore.activeRole];
-  }
-  return userStore.userInfo.nickname;
+  const roleNames = {
+    NURSE: "值班护士",
+    HEAD_NURSE: "A 病区护士长",
+    ADMIN: "系统管理员",
+    DEVELOPER: "系统开发者",
+  };
+  return roleNames[monitoringStore.activeRole] ?? userStore.userInfo.nickname;
 });
 
 const showTenantSwitcher = computed(() => {

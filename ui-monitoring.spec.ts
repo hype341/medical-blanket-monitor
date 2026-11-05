@@ -115,6 +115,14 @@ test("nurse can add and update a patient but cannot manage bindings", async ({ p
   await page.locator('input[placeholder="患者姓名（可选）"]').fill("待入院患者");
   await page.getByRole("button", { name: "保存床位" }).click();
   await expect(page.getByText("03 床").first()).toBeVisible();
+  await expect(page.getByText("已自动生成毯子传感器")).toBeVisible();
+  await expect(page.locator(".generated-sensor-panel")).toContainText("blanket-a-100");
+  await expect(page.locator(".generated-sensor-panel")).toContainText(
+    "medical-blanket/v1/H001/WARD-A/301-03/sensor/blanket-a-100/data",
+  );
+  await page
+    .locator(".generated-sensor-panel")
+    .screenshot({ path: "test-results/monitoring-auto-sensor-panel.png" });
 
   await page.locator('[data-testid="bed-card"]').first().click();
   await page.getByRole("button", { name: "编辑患者信息" }).click();
@@ -191,12 +199,32 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
   await expect(page.getByText("EMQX 接入")).toBeVisible();
   await expect(page.getByRole("heading", { name: "床位数据与告警", exact: true })).toBeVisible();
+  const deviceGuide = page.locator(".device-onboarding");
+  await expect(deviceGuide.getByRole("heading", { name: "设备接入四步" })).toBeVisible();
+  await expect(deviceGuide.getByText("mqtt://10.208.236.217:1883", { exact: true })).toBeVisible();
+  await expect(deviceGuide.getByText("blanket-service", { exact: true })).toBeVisible();
+  await expect(deviceGuide).toContainText(
+    "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data",
+  );
+  await expect(deviceGuide).toContainText("发送后不返回消息");
+  await deviceGuide.getByRole("button", { name: "复制接入参数" }).click();
+  await expect(page.getByText("设备接入参数已复制")).toBeVisible();
+  await deviceGuide.screenshot({ path: "test-results/monitoring-mqtt-device-guide.png" });
   await page.getByLabel("Client ID").fill("persisted-client-test");
   await page.getByRole("button", { name: "保存连接配置" }).click();
   await expect(page.getByText("MQTT 配置已保存")).toBeVisible();
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.getByLabel("Client ID")).toHaveValue("persisted-client-test");
   await expect(page.getByText("9 个数据主题")).toBeVisible();
+  await expect(page.getByText("观测时间可以省略")).toBeVisible();
+  await expect(page.getByText("http://10.208.236.217/api/public/time")).toBeVisible();
+  await expect(page.getByText("medical-blanket/v1/system/time").first()).toBeVisible();
+  await page
+    .locator(".server-time-contract__links article")
+    .filter({ hasText: "MQTT 保留时间主题" })
+    .getByRole("button", { name: "复制" })
+    .click();
+  await expect(page.getByText("MQTT 时间主题已复制")).toBeVisible();
   await page
     .locator(".topic-panel--data")
     .getByRole("button", { name: "复制链接" })
@@ -263,11 +291,14 @@ test("head nurse only receives the assigned ward", async ({ page }) => {
 
 test("warning turns red and requires nurse actions to resolve and delete", async ({ page }) => {
   await loginAs(page, "developer");
+  await expect(page.locator(".navbar-unbound-badge")).toBeVisible();
+  await expect(page.locator(".navbar-alert-badge")).toHaveCount(0);
   await page.getByText("开发者概览", { exact: true }).first().click();
   await page.getByRole("button", { name: "发送测试告警并查看" }).click();
 
   await expect(page).toHaveURL(/\/beds\/bed-a-01/);
   await expect(page.locator(".el-notification")).toContainText("01 床告警");
+  await expect(page.locator(".navbar-alert-badge")).toHaveText("1");
   const alarmCard = page.locator(".alarm-card").first();
   await expect(alarmCard).toHaveAttribute("data-status", "OPEN");
   await expect(alarmCard).toHaveAttribute("data-level", "WARNING");
@@ -287,6 +318,7 @@ test("warning turns red and requires nurse actions to resolve and delete", async
 
   await page.getByRole("button", { name: "标记已解决" }).click();
   await expect(alarmCard).toHaveAttribute("data-status", "RESOLVED");
+  await expect(page.locator(".navbar-alert-badge")).toHaveCount(0);
   await alarmCard.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/monitoring-alarm-resolved.png", fullPage: true });
   await page.waitForTimeout(3_300);

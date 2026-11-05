@@ -35,6 +35,109 @@
       </article>
     </section>
 
+    <section class="device-onboarding" aria-label="设备接入向导">
+      <header class="device-onboarding__header">
+        <div>
+          <span>设备端照着填写</span>
+          <h2>设备接入四步</h2>
+          <p>先选择床位，再把同一组参数填写到毯子设备。新床位会自动生成设备标识和主题。</p>
+        </div>
+        <div class="device-onboarding__actions">
+          <el-select
+            v-model="selectedAccessBedId"
+            aria-label="选择接入床位"
+            placeholder="选择床位"
+            class="device-bed-select"
+          >
+            <el-option
+              v-for="row in accessBedRows"
+              :key="row.bedId"
+              :label="`${row.wardName} / ${row.roomName} / ${row.bedNo} 床`"
+              :value="row.bedId"
+            />
+          </el-select>
+          <el-button type="primary" :disabled="!selectedAccessRow" @click="copyDeviceAccess">
+            复制接入参数
+          </el-button>
+        </div>
+      </header>
+
+      <div v-if="selectedAccessRow" class="device-onboarding__context">
+        <div>
+          <span>当前床位</span>
+          <strong>
+            {{ selectedAccessRow.wardName }} / {{ selectedAccessRow.roomName }} /
+            {{ selectedAccessRow.bedNo }} 床
+          </strong>
+        </div>
+        <div>
+          <span>毯子设备</span>
+          <strong>{{ selectedAccessRow.sensorName }} · {{ selectedAccessRow.sensorKey }}</strong>
+        </div>
+        <small>设备未发送数据前显示离线，收到首条数据后自动上线。</small>
+      </div>
+
+      <ol v-if="selectedAccessRow" class="device-steps">
+        <li>
+          <header><b>1</b><strong>连接 Broker</strong></header>
+          <dl>
+            <div>
+              <dt>服务器</dt>
+              <dd><code>{{ form.brokerUrl }}</code></dd>
+            </div>
+            <div>
+              <dt>用户名</dt>
+              <dd><code>{{ form.username }}</code></dd>
+            </div>
+            <div>
+              <dt>密码</dt>
+              <dd><code>{{ form.password }}</code></dd>
+            </div>
+          </dl>
+        </li>
+        <li>
+          <header><b>2</b><strong>设置发布目标</strong></header>
+          <dl>
+            <div>
+              <dt>Client ID 建议</dt>
+              <dd><code>{{ accessClientId }}</code></dd>
+            </div>
+            <div>
+              <dt>发布主题</dt>
+              <dd><code>{{ selectedAccessRow.dataTopic }}</code></dd>
+            </div>
+            <div>
+              <dt>设备动作</dt>
+              <dd>只发布，不需要订阅数据主题</dd>
+            </div>
+          </dl>
+        </li>
+        <li>
+          <header><b>3</b><strong>发送这条 JSON</strong></header>
+          <pre>{{ accessPayload }}</pre>
+          <small>observedAt 可以省略，服务器自动补充中国标准时间 +08:00。</small>
+        </li>
+        <li>
+          <header><b>4</b><strong>确认返回与告警</strong></header>
+          <dl>
+            <div>
+              <dt>QoS 0</dt>
+              <dd>发送后不返回消息，适合高频数据</dd>
+            </div>
+            <div>
+              <dt>QoS 1</dt>
+              <dd>仅返回标准空 PUBACK，不返回业务 JSON</dd>
+            </div>
+            <div>
+              <dt>告警主题</dt>
+              <dd><code>{{ selectedAccessRow.alarmTopic }}</code></dd>
+            </div>
+          </dl>
+        </li>
+      </ol>
+      <el-empty v-else description="请先为床位绑定毯子传感器" />
+    </section>
+
     <div class="connection-grid">
       <section class="connection-card">
         <header class="connection-card__header">
@@ -118,6 +221,40 @@
             </div>
             <code>{{ SENSOR_DATA_TOPIC }}</code>
             <small>传感器状态、时间和识别扩展数据进入此数据通道。</small>
+          </div>
+          <div class="server-time-contract">
+            <header>
+              <div>
+                <span>设备时间规则</span>
+                <strong>观测时间可以省略</strong>
+              </div>
+              <small>服务器自动补充 +08:00</small>
+            </header>
+            <p>设备只报状态即可。需要主动取时，可使用下面两个接口。</p>
+            <div class="server-time-contract__links">
+              <article>
+                <div>
+                  <span>HTTP 时间接口</span>
+                  <code>{{ deviceTimeUrl }}</code>
+                </div>
+                <el-button text type="primary" @click="copyTopic(deviceTimeUrl, '服务器时间接口')">
+                  复制
+                </el-button>
+              </article>
+              <article>
+                <div>
+                  <span>MQTT 保留时间主题</span>
+                  <code>{{ SYSTEM_TIME_TOPIC }}</code>
+                </div>
+                <el-button
+                  text
+                  type="primary"
+                  @click="copyTopic(SYSTEM_TIME_TOPIC, 'MQTT 时间主题')"
+                >
+                  复制
+                </el-button>
+              </article>
+            </div>
           </div>
           <div class="room-topic-panel topic-panel--data">
             <header>
@@ -263,6 +400,7 @@
       </header>
       <div class="raw-topic-list raw-topic-list--diagnostics">
         <code>SUB {{ SENSOR_DATA_TOPIC }}</code>
+        <code>SUB {{ SYSTEM_TIME_TOPIC }}</code>
         <code>SUB {{ form.alarmTopic }}</code>
       </div>
     </section>
@@ -294,13 +432,25 @@ import { generateMqttDocumentation } from "../documentation";
 import { useMonitoringStore } from "../store";
 import type { MqttSettings } from "../types";
 import { copyText } from "@/utils/clipboard";
-import { buildMqttTopicUrl, buildSensorDataApiPath, SENSOR_DATA_TOPIC } from "../messaging";
+import {
+  buildMqttTopicUrl,
+  buildSensorDataApiPath,
+  SENSOR_DATA_TOPIC,
+  SYSTEM_TIME_TOPIC,
+} from "../messaging";
 import { printMarkdownDocument } from "@/utils/document-export";
 
 const store = useMonitoringStore();
 const form = reactive<MqttSettings>({ ...store.mqttSettings });
 const showPassword = ref(false);
 const activeTopicMode = ref<"data" | "alarm">("data");
+const deviceTimeUrl = computed(() => {
+  try {
+    return `http://${new URL(form.brokerUrl).hostname}/api/public/time`;
+  } catch {
+    return "/api/public/time";
+  }
+});
 const generatedAt = ref(new Date().toLocaleString("zh-CN", { hour12: false }));
 const mqttDocument = computed(() =>
   generateMqttDocumentation(
@@ -352,6 +502,7 @@ const bedTopicRows = computed(() =>
     roomName: summary.room?.name ?? "未分病房",
     bedNo: summary.bed.bedNo,
     sensorName: summary.sensor?.name ?? "未绑定传感器",
+    sensorKey: summary.sensor?.deviceKey ?? "",
   })),
 );
 const dataTopicCount = computed(
@@ -359,6 +510,30 @@ const dataTopicCount = computed(
 );
 const alarmTopicCount = computed(
   () => bedTopicRows.value.filter((row) => Boolean(row.alarmTopic)).length,
+);
+const accessBedRows = computed(() => bedTopicRows.value.filter((row) => row.dataTopic));
+const selectedAccessBedId = ref(accessBedRows.value[0]?.bedId ?? "");
+const selectedAccessRow = computed(
+  () =>
+    accessBedRows.value.find((row) => row.bedId === selectedAccessBedId.value) ??
+    accessBedRows.value[0] ??
+    null,
+);
+const accessClientId = computed(() =>
+  selectedAccessRow.value?.sensorKey ? `esp32-${selectedAccessRow.value.sensorKey}` : "",
+);
+const accessPayload = computed(() =>
+  JSON.stringify(
+    {
+      messageId: "message-01",
+      deviceKey: selectedAccessRow.value?.sensorKey ?? "",
+      bedId: selectedAccessRow.value?.bedId ?? "",
+      status: "ONLINE",
+      metrics: {},
+    },
+    null,
+    2,
+  ),
 );
 
 function save(): void {
@@ -387,6 +562,28 @@ async function copySensorLink(path: string): Promise<void> {
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "链接复制失败");
   }
+}
+
+async function copyDeviceAccess(): Promise<void> {
+  const row = selectedAccessRow.value;
+  if (!row) return;
+  const content = [
+    "医用智能毯设备 MQTT 接入参数",
+    `床位：${row.wardName} / ${row.roomName} / ${row.bedNo} 床`,
+    `设备：${row.sensorName} (${row.sensorKey})`,
+    `Broker：${form.brokerUrl}`,
+    `用户名：${form.username}`,
+    `密码：${form.password}`,
+    `Client ID：${accessClientId.value}`,
+    `发布主题：${row.dataTopic}`,
+    `告警主题：${row.alarmTopic}`,
+    "设备动作：只发布数据，不需要订阅",
+    "QoS 0：不返回消息；QoS 1：只返回标准空 PUBACK",
+    "时间：observedAt 可省略，服务器自动补充 +08:00",
+    "报文：",
+    accessPayload.value,
+  ].join("\n");
+  await copyTopic(content, "设备接入参数");
 }
 
 function regenerateMqttDocument(): void {
@@ -509,6 +706,193 @@ function downloadText(fileName: string, content: string): void {
     font-weight: 650;
     color: #275f53;
     white-space: nowrap;
+  }
+}
+
+.device-onboarding {
+  padding: 18px;
+  margin-top: 14px;
+  background:
+    linear-gradient(120deg, rgb(232 247 241 / 78%), transparent 48%),
+    #fff;
+  border: 1px solid #cddfd9;
+  border-top: 3px solid #2f806a;
+}
+
+.device-onboarding__header {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #dfe9e5;
+
+  span {
+    font-size: 9px;
+    font-weight: 700;
+    color: #4f796f;
+    letter-spacing: 0.08em;
+  }
+
+  h2 {
+    margin: 3px 0 4px;
+    font-size: 20px;
+    font-weight: 680;
+    letter-spacing: -0.025em;
+  }
+
+  p {
+    max-width: 620px;
+    margin: 0;
+    font-size: 10px;
+    line-height: 1.6;
+    color: #71847e;
+  }
+}
+
+.device-onboarding__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  align-items: center;
+}
+
+.device-bed-select {
+  width: 260px;
+}
+
+.device-onboarding__context {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 11px 12px;
+  margin-top: 12px;
+  background: #f7fbf9;
+  border-left: 2px solid #82ac9f;
+
+  div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  span {
+    font-size: 8px;
+    color: #80928c;
+  }
+
+  strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;
+    font-weight: 650;
+    color: #2c6357;
+    white-space: nowrap;
+  }
+
+  small {
+    font-size: 8px;
+    line-height: 1.5;
+    color: #8a795e;
+    text-align: right;
+  }
+}
+
+.device-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+
+  > li {
+    min-width: 0;
+    padding: 12px;
+    background: rgb(255 255 255 / 82%);
+    border: 1px solid #e0e9e6;
+  }
+
+  header {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #eef2f0;
+
+    b {
+      display: grid;
+      flex-shrink: 0;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      font-family: "Avenir Next", sans-serif;
+      font-size: 9px;
+      color: #fff;
+      background: #367e6d;
+      border-radius: 50%;
+    }
+
+    strong {
+      font-size: 11px;
+      font-weight: 680;
+      color: #295e53;
+    }
+  }
+
+  dl {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+
+    div {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 8px;
+      align-items: baseline;
+    }
+
+    dt {
+      font-size: 8px;
+      color: #7e908a;
+    }
+
+    dd {
+      min-width: 0;
+      margin: 0;
+      font-size: 9px;
+      line-height: 1.5;
+      color: #526a63;
+      overflow-wrap: anywhere;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 9px;
+      color: #235e51;
+    }
+  }
+
+  pre {
+    max-height: 156px;
+    padding: 9px 10px;
+    margin: 0;
+    overflow: auto;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 9px;
+    line-height: 1.55;
+    color: #d9ece6;
+    background: #0b332f;
+  }
+
+  > li > small {
+    display: block;
+    margin-top: 7px;
+    font-size: 8px;
+    line-height: 1.55;
+    color: #88704c;
   }
 }
 
@@ -668,6 +1052,81 @@ function downloadText(fileName: string, content: string): void {
   &--warning {
     background: #fff6f3;
     border-left-color: #c3594b;
+  }
+}
+
+.server-time-contract {
+  padding: 12px;
+  margin-top: 10px;
+  background: #fffaef;
+  border: 1px solid #e8d9b8;
+  border-left: 3px solid #c18a36;
+
+  > header {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    div {
+      display: grid;
+      gap: 3px;
+    }
+
+    span,
+    small {
+      font-size: 9px;
+      color: #8c7958;
+    }
+
+    strong {
+      font-size: 11px;
+      color: #6f5124;
+    }
+  }
+
+  > p {
+    margin: 7px 0 9px;
+    font-size: 9px;
+    line-height: 1.55;
+    color: #7f6e52;
+  }
+}
+
+.server-time-contract__links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+
+  article {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+    align-items: center;
+    padding: 8px 9px;
+    background: rgb(255 255 255 / 74%);
+    border: 1px solid #eadfc8;
+  }
+
+  article div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  span {
+    font-size: 8px;
+    font-weight: 650;
+    color: #806b48;
+  }
+
+  code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 8px;
+    color: #79592d;
+    white-space: nowrap;
   }
 }
 
@@ -1035,6 +1494,29 @@ function downloadText(fileName: string, content: string): void {
     }
   }
 
+  .device-onboarding__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .device-onboarding__actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .device-bed-select {
+    flex: 1;
+    width: auto;
+  }
+
+  .device-onboarding__context {
+    grid-template-columns: 1fr;
+
+    small {
+      text-align: left;
+    }
+  }
+
   .connection-grid {
     grid-template-columns: 1fr;
   }
@@ -1053,6 +1535,28 @@ function downloadText(fileName: string, content: string): void {
 }
 
 @media (width <= 520px) {
+  .device-onboarding {
+    padding: 14px;
+  }
+
+  .device-onboarding__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .device-bed-select {
+    width: 100%;
+  }
+
+  .device-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .device-steps dl div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
   .connection-card__header {
     flex-direction: column;
 
@@ -1072,6 +1576,14 @@ function downloadText(fileName: string, content: string): void {
     small {
       grid-column: auto;
     }
+  }
+
+  .server-time-contract > header {
+    flex-direction: column;
+  }
+
+  .server-time-contract__links {
+    grid-template-columns: 1fr;
   }
 
   .room-topic-cards article {

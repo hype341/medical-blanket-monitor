@@ -1,6 +1,6 @@
 import type { MonitoringData, MqttSettings } from "./types";
 import { getBedMonitorSummary } from "./selectors";
-import { buildSensorDataApiPath, SENSOR_DATA_TOPIC } from "./messaging";
+import { buildSensorDataApiPath, SENSOR_DATA_TOPIC, SYSTEM_TIME_TOPIC } from "./messaging";
 
 export function generateMqttDocumentation(
   data: MonitoringData,
@@ -24,7 +24,17 @@ export function generateMqttDocumentation(
     })
     .join("\n");
 
-  const sampleBed = rows[0]?.bed;
+  const sampleRow = rows.find(({ summary }) => Boolean(summary?.dataTopic)) ?? rows[0];
+  const sampleBed = sampleRow?.bed;
+  const sampleSensor = sampleRow?.summary?.sensor;
+  const sampleDataTopic =
+    sampleRow?.summary?.dataTopic ??
+    "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data";
+  const sampleAlarmTopic =
+    sampleRow?.summary?.alarmTopic ?? "medical-blanket/v1/H001/WARD-A/301-01/alarm";
+  const sampleDeviceKey = sampleSensor?.deviceKey ?? "blanket-001";
+  const sampleBedId = sampleBed?.id ?? "bed-a-01";
+  const sampleClientId = `esp32-${sampleDeviceKey}`;
 
   return `# 医用智能毯平台 MQTT 连接文档
 
@@ -42,7 +52,57 @@ export function generateMqttDocumentation(
 | QoS | \`${settings.qos}\` |
 | 传感器数据订阅 | \`${SENSOR_DATA_TOPIC}\` |
 | 告警订阅 | \`${settings.alarmTopic}\` |
-| 服务器时间 Topic | \`medical-blanket/v1/system/time\` |
+| 服务器时间 Topic | \`${SYSTEM_TIME_TOPIC}\` |
+
+## 设备最短接入（先看这里）
+
+平台每新增一张床位，会自动创建一条毯子传感器、一条数据主题和一条告警主题。设备端按下面四步接入，不需要手工拼接主题。
+
+### 1. 连接 Broker
+
+| 设备端填写项 | 当前值 |
+| --- | --- |
+| 服务器地址 | \`${settings.brokerUrl}\` |
+| 用户名 | \`${settings.username}\` |
+| 密码 | \`${settings.password}\` |
+| Client ID 建议 | \`${sampleClientId}\` |
+
+设备只使用 TCP MQTT 端口 \`1883\` 发布数据，不需要连接 WebSocket，也不需要订阅自己的数据主题。
+
+### 2. 发布到当前床位主题
+
+\`\`\`text
+${sampleDataTopic}
+\`\`\`
+
+设备动作选择“发布”。当前主题对应床位：\`${sampleBedId}\`，传感器：\`${sampleSensor?.name ?? sampleDeviceKey}\`。
+
+### 3. 发送最小数据报文
+
+\`\`\`json
+{
+  "messageId": "message-01",
+  "deviceKey": "${sampleDeviceKey}",
+  "bedId": "${sampleBedId}",
+  "status": "ONLINE",
+  "metrics": {}
+}
+\`\`\`
+
+不需要在设备上获取时间。\`observedAt\` 可以省略，平台收到消息后会补充 \`+08:00\` 服务器时间；设备已经有时钟时也可以主动上报。
+
+### 4. 确认发送结果
+
+| QoS | 设备会收到什么 | 建议 |
+| --- | --- | --- |
+| \`0\` | 不返回任何消息 | 高频连续上报，延迟最低 |
+| \`1\` | 仅一个标准空 \`PUBACK\` | 需要确认 Broker 已接收时使用 |
+
+不会返回业务 JSON，也不会附加时间字段，不需要另建返回主题。告警直接发布到当前床位告警主题：
+
+\`\`\`text
+${sampleAlarmTopic}
+\`\`\`
 
 ## 第三方直接订阅函数
 
@@ -74,7 +134,7 @@ import { openSensorDataStream } from "@/features/monitoring/stream-api";
 
 const sensorStream = openSensorDataStream(
   settings,
-  "${rows[0]?.summary?.dataTopic ?? "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data"}",
+  "${sampleDataTopic}",
   {
     onData(reading) {
       console.log("单床位传感器数据", reading);
@@ -101,13 +161,13 @@ ${topicRows}
 
 传感器图形只依赖设备身份、上报时间和状态。\`metrics\` 保留给后续识别处理器，当前允许为空对象；毯子不要求温度、压力或电量字段。
 
-\`observedAt\` 可以省略，平台收到消息后会使用服务器时间补充。服务器时间也可以通过 MQTT 保留主题 \`medical-blanket/v1/system/time\` 或 HTTP 接口 \`/api/public/time\` 获取。
+\`observedAt\` 可以省略，平台收到消息后会使用服务器时间补充。服务器时间也可以通过 MQTT 保留主题 \`${SYSTEM_TIME_TOPIC}\` 或 HTTP 接口 \`/api/public/time\` 获取。
 
 \`\`\`json
 {
   "messageId": "message-01",
-  "deviceKey": "${rows[0]?.summary?.sensor?.deviceKey ?? "blanket-001"}",
-  "bedId": "${sampleBed?.id ?? "bed-a-01"}",
+  "deviceKey": "${sampleDeviceKey}",
+  "bedId": "${sampleBedId}",
   "observedAt": "${generatedAt}",
   "status": "ONLINE",
   "metrics": {}
@@ -119,7 +179,7 @@ ${topicRows}
 | \`messageId\` | string | 消息唯一标识，用于去重和追踪 |
 | \`deviceKey\` | string | 毯子传感器设备标识，必须与设备绑定一致 |
 | \`bedId\` | string | 床位标识，用于校验传感器与床位关系 |
-| \`observedAt\` | ISO 8601 string | 设备采集时间，包含时区 |
+| \`observedAt\` | ISO 8601 string（可选） | 设备采集时间；省略时由服务器补充 \`+08:00\` 时间 |
 | \`status\` | string | \`ONLINE\`、\`STALE\`、\`OFFLINE\` 或 \`ALARM\`，驱动传感器图形状态 |
 | \`metrics\` | object | 识别扩展字段；没有业务指标时传空对象 |
 

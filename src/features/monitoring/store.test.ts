@@ -59,6 +59,39 @@ describe("monitoring store", () => {
     expect(store.canManageBindings).toBe(false);
   });
 
+  it("automatically creates a bound blanket sensor and MQTT topics with a new bed", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("NURSE");
+
+    const bedId = store.addBed({
+      wardId: "ward-a",
+      roomId: "room-a-303",
+      bedNo: "03",
+      patientName: "新入院患者",
+    });
+    const summary = store.bedSummaries.find((item) => item.bed.id === bedId);
+
+    expect(summary?.sensor).toMatchObject({
+      id: "sensor-bed-a-100",
+      deviceKey: "blanket-a-100",
+      name: "303 病房 03 床毯子传感器",
+      status: "OFFLINE",
+    });
+    expect(store.sensors.filter((sensor) => sensor.id === "sensor-bed-a-100")).toHaveLength(1);
+    expect(summary?.dataTopic).toBe(
+      "medical-blanket/v1/H001/WARD-A/303-03/sensor/blanket-a-100/data",
+    );
+    expect(summary?.alarmTopic).toBe("medical-blanket/v1/H001/WARD-A/303-03/alarm");
+    expect(store.getBedBindings(bedId)).toEqual([
+      expect.objectContaining({
+        sensorDeviceId: "sensor-bed-a-100",
+        cameraId: null,
+        role: "PRIMARY_SENSOR",
+        status: "ACTIVE",
+      }),
+    ]);
+  });
+
   it("prevents a nurse from changing device bindings", () => {
     const store = useMonitoringStore();
     store.setActiveRole("NURSE");
@@ -98,6 +131,32 @@ describe("monitoring store", () => {
     store.removeAlarm("alarm-01");
     expect(store.alarms).toHaveLength(0);
     vi.useRealTimers();
+  });
+
+  it("tracks open alarms and incompletely bound beds for the sidebar", () => {
+    const store = useMonitoringStore();
+
+    expect(store.openAlarmCount).toBe(0);
+    expect(store.unboundBedCount).toBeGreaterThan(0);
+
+    store.ingestAlarm({
+      alarmId: "alarm-sidebar-01",
+      code: "BLANKET_ALERT",
+      level: "WARNING",
+      status: "OPEN",
+      title: "毯子状态异常",
+      detail: "设备上报状态变化",
+      sensorKey: "blanket-001",
+      cameraKey: "camera-01",
+      wardId: "ward-a",
+      roomId: "room-a-301",
+      bedId: "bed-a-01",
+      occurredAt: "2026-11-05T20:00:00+08:00",
+    });
+
+    expect(store.openAlarmCount).toBe(1);
+    store.resolveAlarm("alarm-sidebar-01");
+    expect(store.openAlarmCount).toBe(0);
   });
 
   it("lets an administrator overwrite patient content edited by a nurse", () => {

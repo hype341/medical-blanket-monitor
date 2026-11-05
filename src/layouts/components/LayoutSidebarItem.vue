@@ -25,6 +25,22 @@
             <span v-if="getBadge(leafMenu.meta)" class="menu-badge">
               {{ getBadge(leafMenu.meta) }}
             </span>
+            <template v-if="isBedMonitoring(leafMenu.meta)">
+              <span
+                v-if="monitoringStore.openAlarmCount"
+                class="menu-badge menu-badge--alarm"
+                :title="`${monitoringStore.openAlarmCount} 条未处理告警`"
+              >
+                {{ monitoringStore.openAlarmCount }}
+              </span>
+              <span
+                v-if="monitoringStore.unboundBedCount"
+                class="menu-badge menu-badge--unbound"
+                :title="`${monitoringStore.unboundBedCount} 张床位待补设备绑定`"
+              >
+                {{ monitoringStore.unboundBedCount }}
+              </span>
+            </template>
           </template>
         </el-menu-item>
       </AppLink>
@@ -50,6 +66,22 @@
           <span v-if="getBadge(item.meta)" class="menu-badge">
             {{ getBadge(item.meta) }}
           </span>
+          <template v-if="isBedMonitoring(item.meta)">
+            <span
+              v-if="monitoringStore.openAlarmCount"
+              class="menu-badge menu-badge--alarm"
+              :title="`${monitoringStore.openAlarmCount} 条未处理告警`"
+            >
+              {{ monitoringStore.openAlarmCount }}
+            </span>
+            <span
+              v-if="monitoringStore.unboundBedCount"
+              class="menu-badge menu-badge--unbound"
+              :title="`${monitoringStore.unboundBedCount} 张床位待补设备绑定`"
+            >
+              {{ monitoringStore.unboundBedCount }}
+            </span>
+          </template>
         </template>
       </template>
 
@@ -69,6 +101,7 @@ import path from "path-browserify";
 import type { RouteMeta, RouteRecordRaw } from "vue-router";
 import { isExternal } from "@/utils";
 import { translateRouteTitle } from "@/lang/utils";
+import { useMonitoringStore } from "@/features/monitoring/store";
 import LayoutMenuIcon from "./LayoutMenuIcon.vue";
 
 defineOptions({
@@ -98,6 +131,7 @@ const props = defineProps({
     default: false,
   },
 });
+const monitoringStore = useMonitoringStore();
 
 const showingChildren = computed(() =>
   (props.item.children ?? []).filter((route) => !route.meta?.hidden),
@@ -132,6 +166,10 @@ function getBadge(meta: RouteMeta | undefined): string {
   const params = meta?.params as Record<string, unknown> | undefined;
   return params?.badge ? String(params.badge) : "";
 }
+
+function isBedMonitoring(meta: RouteMeta | undefined): boolean {
+  return meta?.module === "beds";
+}
 </script>
 
 <style lang="scss" scoped>
@@ -145,5 +183,11 @@ function getBadge(meta: RouteMeta | undefined): string {
   color: #fff;
   background-color: var(--el-color-danger);
   border-radius: 8px;
+}
+
+.menu-badge--unbound {
+  color: #76571d;
+  background-color: #fff1cf;
+  border: 1px solid #e5c068;
 }
 </style>

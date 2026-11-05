@@ -120,6 +120,18 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       .map((bed) => getBedMonitorSummary(bed.id, fixture.value))
       .filter((summary) => summary !== null),
   );
+  const openAlarmCount = computed(() => {
+    const visibleBedIds = new Set(visibleBeds.value.map((bed) => bed.id));
+    return alarms.value.filter(
+      (alarm) => alarm.status === "OPEN" && visibleBedIds.has(alarm.bedId),
+    ).length;
+  });
+  const unboundBedCount = computed(
+    () =>
+      bedSummaries.value.filter(
+        (summary) => !summary.sensor || summary.cameras.length === 0,
+      ).length,
+  );
   const isPlatformManager = computed(
     () => activeRole.value === "ADMIN" || activeRole.value === "DEVELOPER",
   );
@@ -397,18 +409,39 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       (bed) => bed.roomId === input.roomId && bed.bedNo.trim() === input.bedNo.trim(),
     );
     if (duplicate) throw new Error("该病房已存在相同床位号");
+    const room = rooms.find((item) => item.id === input.roomId);
+    if (!room) throw new Error("所属病房不存在");
 
     const bedId = `bed-${input.wardId.replace("ward-", "")}-${bedSequence++}`;
+    const bedNo = input.bedNo.trim();
+    const now = new Date().toISOString();
     beds.push({
       id: bedId,
       wardId: input.wardId,
       roomId: input.roomId,
-      bedNo: input.bedNo.trim(),
+      bedNo,
       patientName: input.patientName?.trim() || undefined,
       status: input.patientName ? "OCCUPIED" : "AVAILABLE",
       lastEditedBy: activeRole.value,
-      lastEditedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      lastEditedAt: now,
+      updatedAt: now,
+    });
+    const sensorId = `sensor-${bedId}`;
+    sensors.push({
+      id: sensorId,
+      deviceKey: `blanket-${bedId.replace(/^bed-/, "")}`,
+      name: `${room.name} ${bedNo} 床毯子传感器`,
+      status: "OFFLINE",
+      latestMetrics: {},
+    });
+    bindings.push({
+      id: `binding-${bindingSequence++}`,
+      bedId,
+      sensorDeviceId: sensorId,
+      cameraId: null,
+      role: "PRIMARY_SENSOR",
+      status: "ACTIVE",
+      activeFrom: now,
     });
     return bedId;
   }
@@ -500,6 +533,8 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     currentWards,
     visibleBeds,
     bedSummaries,
+    openAlarmCount,
+    unboundBedCount,
     canManageBindings,
     canManageOrganization,
     canManageStaff,

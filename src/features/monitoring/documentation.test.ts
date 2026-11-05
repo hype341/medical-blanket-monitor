@@ -23,6 +23,11 @@ describe("online documentation", () => {
     expect(document).toContain("medical-blanket/v1/H001/WARD-A/301-01/alarm");
     expect(document).toContain("medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data");
     expect(document).toContain("medical-blanket/v1/+/+/+/sensor/+/data");
+    expect(document).toContain("## 设备最短接入（先看这里）");
+    expect(document).toContain("设备只使用 TCP MQTT 端口 `1883`");
+    expect(document).toContain("设备动作选择“发布”");
+    expect(document).toContain('"status": "ONLINE"');
+    expect(document).toContain("不会返回业务 JSON");
     expect(document).not.toContain("遥测主题");
     expect(document).not.toContain('"sensorKey"');
     expect(document).toContain("## 传感器数据报文");

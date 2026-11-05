@@ -41,6 +41,21 @@
       />
     </section>
 
+    <section v-if="generatedBedSetup" class="generated-sensor-panel" aria-live="polite">
+      <div class="generated-sensor-panel__identity">
+        <span>已自动生成毯子传感器</span>
+        <strong>{{ generatedBedSetup.sensor?.name }}</strong>
+        <small>
+          {{ generatedBedSetup.sensor?.deviceKey }} · 离线，收到首条 MQTT 数据后自动上线
+        </small>
+      </div>
+      <div class="generated-sensor-panel__topic">
+        <span>MQTT 数据主题</span>
+        <code>{{ generatedBedSetup.dataTopic }}</code>
+      </div>
+      <el-button text @click="generatedBedSetup = null">关闭</el-button>
+    </section>
+
     <div class="room-groups">
       <section v-for="room in roomGroups" :key="room.id" class="room-group">
         <header class="room-group__header">
@@ -83,7 +98,7 @@ import AddBedDialog from "../components/AddBedDialog.vue";
 import BedStatusCard from "../components/BedStatusCard.vue";
 import { filterBedSummaries } from "../selectors";
 import { useMonitoringStore } from "../store";
-import type { AddBedInput, BedStatus } from "../types";
+import type { AddBedInput, BedMonitorSummary, BedStatus } from "../types";
 
 const router = useRouter();
 const store = useMonitoringStore();
@@ -92,6 +107,7 @@ const selectedWard = ref(store.currentWards[0]?.id ?? "");
 const selectedStatus = ref<BedStatus | "ALL">("ALL");
 const query = ref("");
 const addBedVisible = ref(false);
+const generatedBedSetup = ref<BedMonitorSummary | null>(null);
 
 const filteredSummaries = computed(() =>
   filterBedSummaries(store.bedSummaries, {
@@ -123,9 +139,10 @@ function resetFilters(): void {
 
 function saveBed(input: AddBedInput): void {
   try {
-    store.addBed(input);
+    const bedId = store.addBed(input);
+    generatedBedSetup.value = store.bedSummaries.find((item) => item.bed.id === bedId) ?? null;
     addBedVisible.value = false;
-    ElMessage.success("床位已添加");
+    ElMessage.success("床位已添加，毯子传感器与 MQTT 主题已生成");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "床位添加失败");
   }
@@ -185,6 +202,59 @@ function saveBed(input: AddBedInput): void {
   display: flex;
   gap: 16px;
   align-items: center;
+}
+
+.generated-sensor-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.15fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 13px 15px;
+  margin-top: 4px;
+  background: linear-gradient(100deg, #edf8f3, #fbfdfc 72%);
+  border: 1px solid #cfe3dc;
+  border-left: 3px solid #2f806a;
+}
+
+.generated-sensor-panel__identity,
+.generated-sensor-panel__topic {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+
+  span {
+    font-size: 9px;
+    font-weight: 650;
+    color: #58796f;
+  }
+
+  strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 650;
+    color: #235d50;
+    white-space: nowrap;
+  }
+
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 9px;
+    color: #789087;
+    white-space: nowrap;
+  }
+}
+
+.generated-sensor-panel__topic {
+  code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 10px;
+    color: #2c6c5e;
+    white-space: nowrap;
+  }
 }
 
 .filter-bar {
@@ -264,6 +334,15 @@ function saveBed(input: AddBedInput): void {
 }
 
 @media (width <= 900px) {
+  .generated-sensor-panel {
+    grid-template-columns: 1fr auto;
+
+    .generated-sensor-panel__topic {
+      grid-row: 2;
+      grid-column: 1 / -1;
+    }
+  }
+
   .filter-bar {
     flex-wrap: wrap;
     align-items: stretch;
@@ -290,6 +369,17 @@ function saveBed(input: AddBedInput): void {
   .bed-list-header__actions {
     justify-content: space-between;
     width: 100%;
+  }
+
+  .generated-sensor-panel {
+    grid-template-columns: 1fr auto;
+
+    strong,
+    small,
+    code {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
   }
 
   .filter-bar__select,

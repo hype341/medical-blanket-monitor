@@ -6,6 +6,7 @@ import {
   buildSensorDataApiPath,
   LEGACY_SENSOR_EVENT_TOPIC,
   SENSOR_DATA_TOPIC,
+  SYSTEM_TIME_TOPIC,
 } from "./messaging";
 
 describe("room MQTT topics", () => {
@@ -28,6 +29,7 @@ describe("room MQTT topics", () => {
       }),
     ).toBe("medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data");
     expect(SENSOR_DATA_TOPIC).toBe("medical-blanket/v1/+/+/+/sensor/+/data");
+    expect(SYSTEM_TIME_TOPIC).toBe("medical-blanket/v1/system/time");
     expect(LEGACY_SENSOR_EVENT_TOPIC).toBe("medical-blanket/v1/+/+/+/sensor/+/telemetry");
     expect(buildSensorDataApiPath("bed-a-01")).toBe("/api/public/sensors/bed-a-01");
     expect(

@@ -12,17 +12,19 @@ forwarding rules need to be recreated.
 
 ## Accounts and ACLs
 
-Passwords are provisioned directly in EMQX and must not be committed to this
-repository.
+The demo password is shown in the developer page for field testing. Production
+deployments must provision independent credentials directly in EMQX and keep
+those secrets outside this repository.
 
 | Account | Permission |
 | --- | --- |
-| `blanket-service` | Publish only to the assigned bed data topic |
+| `blanket-service` | Publish to the assigned bed data topic; subscribe to server time only |
 | `blanket-device` | Internal collector; subscribe to all bed data topics |
 | `blanket-publisher` | Test publisher; publish only to bed data topics |
 
-`blanket-service` cannot subscribe to any topic. A device publishes one message
-and finishes; EMQX does not send application data back to the publisher.
+`blanket-service` cannot subscribe to bed data or alarm topics. A device
+publishes one message and the platform assigns a unique bed data topic and alarm
+topic whenever a bed is created.
 
 ## Data flow
 
