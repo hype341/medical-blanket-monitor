@@ -10,8 +10,10 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 OUTPUT_DIR = Path(os.environ.get("SENSOR_DATA_DIR", "/var/www/blanket-sensor-data"))
@@ -27,6 +29,7 @@ WRITE_INTERVAL_SECONDS = max(
     0.01,
     float(os.environ.get("SENSOR_WRITE_INTERVAL_MS", "100")) / 1000,
 )
+SENSOR_TIMEZONE = ZoneInfo(os.environ.get("SENSOR_TIMEZONE", "Asia/Shanghai"))
 
 running = True
 subscriber: subprocess.Popen[str] | None = None
@@ -72,6 +75,10 @@ def process_message(topic: str, payload_text: str) -> None:
     bed_id = safe_key(str(payload.get("bedId", "")))
     if not bed_id:
         return
+
+    observed_at = payload.get("observedAt")
+    if not isinstance(observed_at, str) or not observed_at:
+        payload["observedAt"] = datetime.now(SENSOR_TIMEZONE).isoformat(timespec="seconds")
 
     # Keep only the newest payload per bed; disk writes are rate-limited below.
     with pending_lock:

@@ -35,6 +35,8 @@ describe("online documentation", () => {
     expect(document).toContain("runSensorProcessors");
     expect(document).toContain("SensorDataProcessor");
     expect(document).toContain("PUBACK");
+    expect(document).toContain("medical-blanket/v1/system/time");
+    expect(document).toContain("/api/public/time");
     expect(document).toContain("/api/public/sensors/bed-a-01");
   });
 

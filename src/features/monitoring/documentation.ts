@@ -42,6 +42,7 @@ export function generateMqttDocumentation(
 | QoS | \`${settings.qos}\` |
 | 传感器数据订阅 | \`${SENSOR_DATA_TOPIC}\` |
 | 告警订阅 | \`${settings.alarmTopic}\` |
+| 服务器时间 Topic | \`medical-blanket/v1/system/time\` |
 
 ## 第三方直接订阅函数
 
@@ -99,6 +100,8 @@ ${topicRows}
 ## 传感器数据报文
 
 传感器图形只依赖设备身份、上报时间和状态。\`metrics\` 保留给后续识别处理器，当前允许为空对象；毯子不要求温度、压力或电量字段。
+
+\`observedAt\` 可以省略，平台收到消息后会使用服务器时间补充。服务器时间也可以通过 MQTT 保留主题 \`medical-blanket/v1/system/time\` 或 HTTP 接口 \`/api/public/time\` 获取。
 
 \`\`\`json
 {

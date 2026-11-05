@@ -39,6 +39,24 @@ http://10.208.236.217/api/public/sensors/{bedId}
 File writes are coalesced every 100 ms so high-rate publishing does not block
 MQTT intake.
 
+## Server time
+
+Devices may omit `observedAt`. The collector inserts the server receive time
+before saving the latest payload.
+
+Server time is also available from:
+
+```text
+HTTP: http://10.208.236.217/api/public/time
+MQTT: medical-blanket/v1/system/time
+```
+
+The MQTT time topic is retained and refreshed every 5 seconds:
+
+```json
+{"unix":1762363200,"iso":"2026-11-05T20:00:00+08:00"}
+```
+
 ## Publish acknowledgement
 
 - `QoS 0`: no return; best throughput and lowest latency.
