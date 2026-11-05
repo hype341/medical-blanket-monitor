@@ -112,12 +112,22 @@ const beds: Bed[] = [
   },
 ];
 
+const patientAvatarPaths = [
+  "/images/avatars/patient-01.svg",
+  "/images/avatars/patient-02.svg",
+  "/images/avatars/patient-03.svg",
+];
+beds.forEach((bed, index) => {
+  if (bed.patientName) bed.patientAvatar = patientAvatarPaths[index % patientAvatarPaths.length];
+});
+
 const sensors: SensorDevice[] = beds.map((bed, index) => ({
   id: `sensor-${bed.id}`,
   deviceKey: `blanket-${String(index + 1).padStart(3, "0")}`,
   name: `${bed.id.replace("bed-", "").toUpperCase()} 毯子传感器`,
   model: "MB-S1",
   status: "OFFLINE",
+  latestData: index === 0 ? "ff,aa" : undefined,
   latestMetrics: {},
 }));
 
@@ -231,7 +241,16 @@ const staff: StaffMember[] = [
     wardIds: ["ward-a", "ward-b"],
     status: "ACTIVE",
     passwordUpdatedAt: "2026-11-01T09:00:00+08:00",
-    modulePermissions: ["overview", "beds", "bindings", "organization", "staff", "policy"],
+    modulePermissions: [
+      "overview",
+      "beds",
+      "blankets",
+      "bindings",
+      "organization",
+      "staff",
+      "policy",
+      "video",
+    ],
   },
   {
     id: "staff-nurse",
@@ -264,6 +283,7 @@ const staff: StaffMember[] = [
     modulePermissions: [
       "overview",
       "beds",
+      "blankets",
       "bindings",
       "organization",
       "staff",

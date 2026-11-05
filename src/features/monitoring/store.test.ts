@@ -7,6 +7,7 @@ describe("monitoring store", () => {
     setActivePinia(createPinia());
     sessionStorage.removeItem("monitoring-alarms");
     localStorage.removeItem("monitoring-mqtt-settings");
+    localStorage.removeItem("monitoring-platform-name");
   });
 
   it("only exposes beds from assigned wards", () => {
@@ -159,6 +160,82 @@ describe("monitoring store", () => {
     expect(store.openAlarmCount).toBe(0);
   });
 
+  it("creates and renames a blanket while keeping its MQTT device name in sync", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("DEVELOPER");
+
+    const sensorId = store.addBlanket({
+      name: "01 床保暖毯",
+      bedId: "bed-a-01",
+    });
+
+    expect(store.bedSummaries.find((item) => item.bed.id === "bed-a-01")?.sensor?.name).toBe(
+      "01 床保暖毯",
+    );
+
+    store.updateBlanket(sensorId, {
+      name: "01 床智能毯",
+      bedId: "bed-a-02",
+    });
+
+    expect(store.bedSummaries.find((item) => item.bed.id === "bed-a-01")?.sensor).toBeNull();
+    expect(store.bedSummaries.find((item) => item.bed.id === "bed-a-02")?.sensor).toMatchObject({
+      id: sensorId,
+      name: "01 床智能毯",
+    });
+  });
+
+  it("prevents nurses from creating or renaming blankets", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("NURSE");
+
+    expect(() =>
+      store.addBlanket({
+        name: "护士创建的毯子",
+        bedId: "bed-a-01",
+      }),
+    ).toThrow("仅管理员或开发者可以管理毯子");
+    expect(() =>
+      store.updateBlanket("sensor-bed-a-01", {
+        name: "护士修改的毯子",
+        bedId: "bed-a-01",
+      }),
+    ).toThrow("仅管理员或开发者可以管理毯子");
+  });
+
+  it("lets administrators manage camera names and linked bed locations", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+
+    const cameraId = store.addManagedCamera({
+      name: "302 病房摄像头",
+      bedId: "bed-a-03",
+    });
+    store.updateManagedCamera(cameraId, {
+      name: "302 病房北侧摄像头",
+      bedId: "bed-a-04",
+    });
+
+    expect(store.cameras.find((camera) => camera.id === cameraId)?.name).toBe(
+      "302 病房北侧摄像头",
+    );
+    expect(
+      store.bedSummaries.find((summary) => summary.bed.id === "bed-a-04")?.cameras,
+    ).toEqual([expect.objectContaining({ id: cameraId })]);
+  });
+
+  it("lets only developers rename the platform brand", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+    expect(() => store.updatePlatformName("康复毯监测中心")).toThrow(
+      "仅开发者可以修改平台名称",
+    );
+
+    store.setActiveRole("DEVELOPER");
+    store.updatePlatformName("康复毯监测中心");
+    expect(store.platformName).toBe("康复毯监测中心");
+  });
+
   it("lets an administrator overwrite patient content edited by a nurse", () => {
     const store = useMonitoringStore();
     store.setActiveRole("NURSE");
@@ -239,6 +316,28 @@ describe("monitoring store", () => {
     expect(store.staff.find((item) => item.id === staffId)?.role).toBe("HEAD_NURSE");
     expect(store.staff.find((item) => item.id === staffId)?.wardIds).toEqual(["ward-a", "ward-b"]);
     expect(store.staff.find((item) => item.id === staffId)?.passwordUpdatedAt).toBeTruthy();
+  });
+
+  it("lets administrators create role tags and assign them to staff", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+    store.addStaffTag("责任护士");
+
+    const staffId = store.addStaff({
+      username: "nurse-tag",
+      displayName: "标签护士",
+      role: "NURSE",
+      wardIds: ["ward-a"],
+      status: "ACTIVE",
+      initialPassword: "Nurse@123456",
+      tags: ["责任护士", "夜班"],
+    });
+
+    expect(store.staffTags).toContain("责任护士");
+    expect(store.staff.find((item) => item.id === staffId)?.tags).toEqual([
+      "责任护士",
+      "夜班",
+    ]);
   });
 
   it("prevents a nurse from managing staff permissions", () => {

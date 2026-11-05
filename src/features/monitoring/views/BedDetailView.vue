@@ -5,6 +5,13 @@
         返回床位监护
       </button>
       <div class="detail-header__identity">
+        <img
+          v-if="summary.bed.patientName"
+          :src="summary.bed.patientAvatar || '/images/avatars/default.svg'"
+          alt=""
+          class="detail-header__avatar"
+          @error="useDefaultAvatar"
+        />
         <div>
           <span>{{ summary.ward?.name }} · {{ summary.room?.name }}</span>
           <h1>{{ summary.bed.bedNo }} 床 · {{ summary.bed.patientName ?? "空床" }}</h1>
@@ -258,6 +265,13 @@ function normalizeRefreshRate(): void {
   sensorRefreshRate.value = Number.isFinite(value) ? Math.min(10, Math.max(0.1, value)) : 1;
 }
 
+function useDefaultAvatar(event: Event): void {
+  const image = event.target as HTMLImageElement;
+  if (image.dataset.fallbackApplied === "true") return;
+  image.dataset.fallbackApplied = "true";
+  image.src = "/images/avatars/default.svg";
+}
+
 async function refreshRecordings(): Promise<void> {
   if (!selectedCamera.value) return;
   const start = new Date(Date.now() - store.monitoringPolicy.recordingRetentionMinutes * 60_000);
@@ -343,6 +357,16 @@ onBeforeUnmount(() => {
     font-size: 9px;
     color: #81918c;
   }
+}
+
+.detail-header__avatar {
+  flex-shrink: 0;
+  width: 54px;
+  height: 54px;
+  object-fit: cover;
+  background: #fff;
+  border: 1px solid #dbe6e2;
+  border-radius: 50%;
 }
 
 .detail-header__actions {

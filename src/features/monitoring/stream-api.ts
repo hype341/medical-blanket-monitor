@@ -1,6 +1,6 @@
 import mqtt, { type MqttClient } from "mqtt";
 import type { CameraPlayback, MqttSettings } from "./types";
-import type { SensorTelemetryEnvelope } from "./processing";
+import { parseSensorPayload, type SensorTelemetryEnvelope } from "./processing";
 import { parseAlarmMessage, type AlarmEnvelope } from "./recording";
 import { LEGACY_SENSOR_EVENT_TOPIC, SENSOR_DATA_TOPIC } from "./messaging";
 import { getPlaybackCandidates } from "@/components/UniversalVideoPlayer/usePlayback";
@@ -71,10 +71,10 @@ export function openMqttSensorStream(
         if (alarm) handlers.onAlarm?.(alarm);
         return;
       }
-      try {
-        const reading = JSON.parse(text) as SensorTelemetryEnvelope;
+      const reading = parseSensorPayload(text);
+      if (reading) {
         handlers.onTelemetry?.(reading);
-      } catch {
+      } else {
         handlers.onError?.(new Error(`Invalid sensor payload on ${topic}`));
       }
     });
@@ -122,9 +122,10 @@ export function openSensorDataStream(
     client.on("reconnect", () => handlers.onStatus?.("reconnecting"));
     client.on("error", (error) => handlers.onError?.(error));
     client.on("message", (_topic, payload) => {
-      try {
-        handlers.onData?.(JSON.parse(payload.toString("utf8")) as SensorTelemetryEnvelope);
-      } catch {
+      const reading = parseSensorPayload(payload.toString("utf8"));
+      if (reading) {
+        handlers.onData?.(reading);
+      } else {
         handlers.onError?.(new Error(`Invalid sensor payload on ${dataTopic}`));
       }
     });

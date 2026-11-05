@@ -7,6 +7,7 @@ import type { AlarmEnvelope } from "./recording";
 import { getBedMonitorSummary } from "./selectors";
 import type {
   AddBedInput,
+  BlanketInput,
   AddRoomInput,
   AddWardInput,
   BindingInput,
@@ -17,6 +18,7 @@ import type {
   MonitoringPolicy,
   MonitoringRole,
   MqttSettings,
+  ManagedCameraInput,
   PermissionModule,
   PatientUpdateInput,
   SensorDevice,
@@ -35,6 +37,10 @@ function loadStoredAlarms(): AlarmEnvelope[] {
 }
 
 const MQTT_SETTINGS_KEY = "monitoring-mqtt-settings";
+const PLATFORM_NAME_KEY = "monitoring-platform-name";
+const STAFF_TAGS_KEY = "monitoring-staff-tags";
+const DEFAULT_PLATFORM_NAME = "医用智能毯安全监护平台";
+const DEFAULT_STAFF_TAGS = ["责任护士", "夜班", "实习"];
 const DEFAULT_MQTT_SETTINGS: MqttSettings = {
   brokerUrl: "mqtt://10.208.236.217:1883",
   websocketUrl: "ws://10.208.236.217:8083/mqtt",
@@ -58,8 +64,21 @@ function loadMqttSettings(): MqttSettings {
   }
 }
 
+function loadStaffTags(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(STAFF_TAGS_KEY) ?? "null") as unknown;
+    return Array.isArray(value)
+      ? value.filter((tag): tag is string => typeof tag === "string" && Boolean(tag.trim()))
+      : [...DEFAULT_STAFF_TAGS];
+  } catch {
+    return [...DEFAULT_STAFF_TAGS];
+  }
+}
+
 export const useMonitoringStore = defineStore("monitoring", () => {
   const fixture = ref<MonitoringData>(createMonitoringFixture());
+  const platformName = ref(localStorage.getItem(PLATFORM_NAME_KEY) || DEFAULT_PLATFORM_NAME);
+  if (typeof document !== "undefined") document.title = platformName.value;
   const storedHospitalName = localStorage.getItem("monitoring-hospital-name");
   if (storedHospitalName) fixture.value.hospital.name = storedHospitalName;
   const storedWardIds = sessionStorage.getItem("monitoring-wards");
@@ -76,6 +95,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       : "ADMIN",
   );
   const alarms = ref<AlarmEnvelope[]>(loadStoredAlarms());
+  const staffTags = ref<string[]>(loadStaffTags());
   watch(alarms, (value) => sessionStorage.setItem("monitoring-alarms", JSON.stringify(value)), {
     deep: true,
   });
@@ -87,6 +107,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   const mqttSettings = ref<MqttSettings>(loadMqttSettings());
   let bindingSequence = 100;
   let bedSequence = 100;
+  let blanketSequence = 100;
   let wardSequence = 100;
   let roomSequence = 100;
   let staffSequence = 100;
@@ -201,6 +222,17 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     localStorage.setItem("monitoring-hospital-name", normalizedName);
   }
 
+  function updatePlatformName(name: string): void {
+    if (activeRole.value !== "DEVELOPER") {
+      throw new Error("仅开发者可以修改平台名称");
+    }
+    const normalizedName = name.trim();
+    if (!normalizedName) throw new Error("平台名称不能为空");
+    platformName.value = normalizedName;
+    localStorage.setItem(PLATFORM_NAME_KEY, normalizedName);
+    document.title = normalizedName;
+  }
+
   function setActiveRole(role: MonitoringRole, username?: string): void {
     activeRole.value = role;
     activeUsername.value = username ?? "";
@@ -291,6 +323,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       throw new Error("初始密码不能少于 6 位");
     }
     const staffId = `staff-${staffSequence++}`;
+    const tags = normalizeStaffTags(input.tags);
     staff.push({
       id: staffId,
       username: input.username.trim(),
@@ -300,6 +333,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       status: input.status,
       passwordUpdatedAt: new Date().toISOString(),
       modulePermissions: [...requestedModules],
+      tags,
     });
     return staffId;
   }
@@ -331,12 +365,34 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     member.wardIds = [...input.wardIds];
     member.status = input.status;
     member.modulePermissions = [...requestedModules];
+    member.tags = normalizeStaffTags(input.tags);
     if (input.initialPassword) {
       if (input.initialPassword.length < 6) {
         throw new Error("新密码不能少于 6 位");
       }
       member.passwordUpdatedAt = new Date().toISOString();
     }
+  }
+
+  function addStaffTag(name: string): void {
+    if (!canManageStaff.value) throw new Error("仅管理员或开发者可以管理角色标签");
+    const normalized = name.trim().replace(/\s+/g, " ");
+    if (!normalized) throw new Error("角色标签不能为空");
+    if (!staffTags.value.includes(normalized)) {
+      staffTags.value.push(normalized);
+      localStorage.setItem(STAFF_TAGS_KEY, JSON.stringify(staffTags.value));
+    }
+  }
+
+  function normalizeStaffTags(values: string[] | undefined): string[] {
+    const tags = Array.from(
+      new Set((values ?? []).map((value) => value.trim()).filter(Boolean)),
+    );
+    for (const tag of tags) {
+      if (!staffTags.value.includes(tag)) staffTags.value.push(tag);
+    }
+    if (tags.length) localStorage.setItem(STAFF_TAGS_KEY, JSON.stringify(staffTags.value));
+    return tags;
   }
 
   function addCamera(input: CameraInput): string {
@@ -358,6 +414,71 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       playback: null,
     });
     return cameraId;
+  }
+
+  function addManagedCamera(input: ManagedCameraInput): string {
+    assertCameraMetadataManager();
+    const bed = beds.find((item) => item.id === input.bedId);
+    if (!bed) throw new Error("关联床位不存在");
+    const name = input.name.trim();
+    if (!name) throw new Error("摄像头名称不能为空");
+    const sequence = cameraSequence++;
+    const cameraId = `camera-${sequence}`;
+    const key = `camera-directory-${sequence}`;
+    cameras.push({
+      id: cameraId,
+      cameraKey: key,
+      mediaPath: key,
+      name,
+      status: "OFFLINE",
+      playback: null,
+    });
+    bindCameraToBed(cameraId, bed.id);
+    return cameraId;
+  }
+
+  function updateManagedCamera(cameraId: string, input: ManagedCameraInput): void {
+    assertCameraMetadataManager();
+    const camera = cameras.find((item) => item.id === cameraId);
+    if (!camera) throw new Error("摄像头不存在");
+    const bed = beds.find((item) => item.id === input.bedId);
+    if (!bed) throw new Error("关联床位不存在");
+    const name = input.name.trim();
+    if (!name) throw new Error("摄像头名称不能为空");
+    camera.name = name;
+    const currentBinding = bindings.find(
+      (item) =>
+        item.cameraId === cameraId &&
+        item.role === "PRIMARY_CAMERA" &&
+        item.status === "ACTIVE",
+    );
+    if (!currentBinding || currentBinding.bedId !== bed.id) {
+      bindCameraToBed(cameraId, bed.id);
+    }
+  }
+
+  function assertCameraMetadataManager(): void {
+    if (!isPlatformManager.value) throw new Error("仅管理员或开发者可以管理摄像头");
+  }
+
+  function bindCameraToBed(cameraId: string, bedId: string): void {
+    const now = new Date().toISOString();
+    for (const binding of bindings) {
+      if (binding.status !== "ACTIVE" || binding.role !== "PRIMARY_CAMERA") continue;
+      if (binding.bedId === bedId || binding.cameraId === cameraId) {
+        binding.status = "INACTIVE";
+        binding.activeTo = now;
+      }
+    }
+    bindings.push({
+      id: `binding-${bindingSequence++}`,
+      bedId,
+      sensorDeviceId: null,
+      cameraId,
+      role: "PRIMARY_CAMERA",
+      status: "ACTIVE",
+      activeFrom: now,
+    });
   }
 
   function updateCamera(cameraId: string, input: CameraInput): void {
@@ -446,6 +567,73 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     return bedId;
   }
 
+  function addBlanket(input: BlanketInput): string {
+    assertBlanketManager();
+    const bed = beds.find((item) => item.id === input.bedId);
+    if (!bed) throw new Error("关联床位不存在");
+    const name = input.name.trim();
+    if (!name) throw new Error("毯子名称不能为空");
+
+    const sequence = blanketSequence++;
+    const sensorId = `sensor-blanket-${sequence}`;
+    sensors.push({
+      id: sensorId,
+      deviceKey: `blanket-device-${sequence}`,
+      name,
+      status: "OFFLINE",
+      latestMetrics: {},
+    });
+    bindBlanketToBed(sensorId, bed.id);
+    return sensorId;
+  }
+
+  function updateBlanket(sensorId: string, input: BlanketInput): void {
+    assertBlanketManager();
+    const sensor = sensors.find((item) => item.id === sensorId);
+    if (!sensor) throw new Error("毯子不存在");
+    const bed = beds.find((item) => item.id === input.bedId);
+    if (!bed) throw new Error("关联床位不存在");
+    const name = input.name.trim();
+    if (!name) throw new Error("毯子名称不能为空");
+
+    sensor.name = name;
+    const currentBinding = bindings.find(
+      (item) =>
+        item.sensorDeviceId === sensorId &&
+        item.role === "PRIMARY_SENSOR" &&
+        item.status === "ACTIVE",
+    );
+    if (!currentBinding || currentBinding.bedId !== bed.id) {
+      bindBlanketToBed(sensorId, bed.id);
+    }
+  }
+
+  function assertBlanketManager(): void {
+    if (!canManageBindings.value) {
+      throw new Error("仅管理员或开发者可以管理毯子");
+    }
+  }
+
+  function bindBlanketToBed(sensorId: string, bedId: string): void {
+    const now = new Date().toISOString();
+    for (const binding of bindings) {
+      if (binding.status !== "ACTIVE" || binding.role !== "PRIMARY_SENSOR") continue;
+      if (binding.bedId === bedId || binding.sensorDeviceId === sensorId) {
+        binding.status = "INACTIVE";
+        binding.activeTo = now;
+      }
+    }
+    bindings.push({
+      id: `binding-${bindingSequence++}`,
+      bedId,
+      sensorDeviceId: sensorId,
+      cameraId: null,
+      role: "PRIMARY_SENSOR",
+      status: "ACTIVE",
+      activeFrom: now,
+    });
+  }
+
   function updatePatient(bedId: string, input: PatientUpdateInput): void {
     const bed = beds.find((item) => item.id === bedId);
     if (!bed) throw new Error("床位不存在");
@@ -516,6 +704,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
 
   return {
     hospital,
+    platformName,
     wards,
     rooms,
     beds,
@@ -524,6 +713,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     bindings,
     staff,
     alarms,
+    staffTags,
     monitoringPolicy,
     mqttSettings,
     currentWardIds,
@@ -547,18 +737,24 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     setCurrentWardIds,
     setActiveRole,
     updateHospitalName,
+    updatePlatformName,
     canAccessModule,
     addWard,
     updateWard,
     addRoom,
     updateRoom,
     addStaff,
+    addStaffTag,
     updateStaff,
     addCamera,
+    addManagedCamera,
+    updateManagedCamera,
     updateCamera,
     updateMonitoringPolicy,
     updateMqttSettings,
     addBed,
+    addBlanket,
+    updateBlanket,
     updatePatient,
     ingestAlarm,
     resolveAlarm,

@@ -68,3 +68,26 @@ The MQTT time topic is retained and refreshed every 5 seconds:
 - The acknowledgement contains no application data, business JSON or added
   timestamp.
 - `QoS 2` is unnecessary for this use case because it adds a second round trip.
+
+## Developer alarm downlink
+
+`blanket-alarm-notify.service` exposes an internal HTTP endpoint through Nginx at
+`POST /api/developer/notify`. The browser never receives the MQTT publishing
+credential; the service uses the server-only publisher account and allows only
+bed alarm topics under hospital `H001`.
+
+The device subscribes to its own alarm topic and receives a notification:
+
+```json
+{
+  "type": "notification",
+  "alarmId": "developer-notify-1730000000000",
+  "level": "WARNING",
+  "title": "请检查当前床位毯子状态",
+  "bedId": "bed-a-01",
+  "occurredAt": "2026-11-05T21:00:00+08:00"
+}
+```
+
+The sensor payload keeps normal JSON metadata. Only the `data` field is
+explicitly hexadecimal, for example `"data": "ff,aa"`.

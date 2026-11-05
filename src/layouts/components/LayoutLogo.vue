@@ -4,7 +4,7 @@
       <router-link :key="+collapse" class="wh-full flex-center" to="/">
         <img :src="logo" class="w20px h20px" />
         <span v-if="!collapse" class="layout-logo__title">
-          {{ appConfig.title }}
+          {{ monitoringStore.platformName }}
         </span>
       </router-link>
     </transition>
@@ -12,8 +12,8 @@
 </template>
 
 <script lang="ts" setup>
-import { appConfig } from "@/settings";
 import logo from "@/assets/images/logo.png";
+import { useMonitoringStore } from "@/features/monitoring/store";
 
 defineProps({
   collapse: {
@@ -21,6 +21,8 @@ defineProps({
     required: true,
   },
 });
+
+const monitoringStore = useMonitoringStore();
 </script>
 
 <style lang="scss" scoped>

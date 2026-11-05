@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { runSensorProcessors, runVideoFrameProcessors } from "./processing";
+import {
+  normalizeHexData,
+  parseSensorPayload,
+  runSensorProcessors,
+  runVideoFrameProcessors,
+} from "./processing";
 
 const reading = {
   messageId: "message-01",
@@ -17,6 +22,23 @@ const frame = {
 };
 
 describe("sensor processor extension point", () => {
+  it("keeps only the data field in comma-separated hexadecimal form", () => {
+    expect(normalizeHexData("0xFF 0xaa")).toBe("ff,aa");
+
+    const readingWithHex = parseSensorPayload(
+      JSON.stringify({
+        ...reading,
+        data: "0xFF, 0xAA",
+      }),
+    );
+    expect(readingWithHex).toMatchObject({
+      deviceKey: "blanket-001",
+      status: "ONLINE",
+      data: "ff,aa",
+      metrics: { motionState: "STILL" },
+    });
+  });
+
   it("runs every registered processor against normalized telemetry", async () => {
     const findings = await runSensorProcessors(reading, [
       {

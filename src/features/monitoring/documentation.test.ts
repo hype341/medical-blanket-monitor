@@ -27,6 +27,7 @@ describe("online documentation", () => {
     expect(document).toContain("设备只使用 TCP MQTT 端口 `1883`");
     expect(document).toContain("设备动作选择“发布”");
     expect(document).toContain('"status": "ONLINE"');
+    expect(document).toContain('"data": "ff,aa"');
     expect(document).toContain("不会返回业务 JSON");
     expect(document).not.toContain("遥测主题");
     expect(document).not.toContain('"sensorKey"');

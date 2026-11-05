@@ -9,6 +9,7 @@ export interface SensorTelemetryEnvelope {
   bedId?: string;
   observedAt: string;
   status: SensorStatus;
+  data?: string;
   metrics: SensorMetrics;
   batteryPercent?: number;
   signalStrength?: number;
@@ -57,6 +58,29 @@ export interface SensorChartPoint {
 
 export interface SensorRenderConfig {
   refreshRateHz: number;
+}
+
+export function normalizeHexData(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const text = String(value).trim();
+  const compact = text.replace(/0x/gi, "").replace(/[\s,;:|_-]+/g, "");
+  if (!compact || compact.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(compact)) {
+    return text;
+  }
+  return compact.toLowerCase().match(/.{2}/g)?.join(",") ?? "";
+}
+
+export function parseSensorPayload(payload: string): SensorTelemetryEnvelope | null {
+  try {
+    const parsed = JSON.parse(payload) as SensorTelemetryEnvelope;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      ...parsed,
+      ...(parsed.data === undefined ? {} : { data: normalizeHexData(parsed.data) }),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function runSensorProcessors(

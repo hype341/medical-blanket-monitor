@@ -9,7 +9,7 @@
         <div class="login-brand__header">
           <el-image :src="logo" class="login-brand__logo" />
           <div class="login-brand__identity">
-            <span class="login-brand__name">{{ appConfig.title }}</span>
+            <span class="login-brand__name">{{ monitoringStore.platformName }}</span>
             <span class="login-brand__version">v{{ appConfig.version }}</span>
           </div>
         </div>
@@ -86,7 +86,10 @@
                   </el-form-item>
                 </el-tooltip>
 
-                <el-form-item prop="captchaCode">
+                <div v-if="isDemoLoginEnabled" class="login-card__demo-captcha">
+                  演示环境已跳过验证码，直接登录即可
+                </div>
+                <el-form-item v-else prop="captchaCode">
                   <div class="flex w-full gap-12px">
                     <el-input
                       v-model.trim="loginFormData.captchaCode"
@@ -167,7 +170,9 @@
           </transition>
         </div>
 
-        <div class="login-footer">医用智能毯安全监护平台 · 医疗数据仅限授权人员使用</div>
+        <div class="login-footer">
+          {{ monitoringStore.platformName }} · 医疗数据仅限授权人员使用
+        </div>
       </div>
     </div>
   </div>
@@ -213,7 +218,7 @@ const loginFormData = ref<LoginRequest>({
   username: "admin",
   password: "123456",
   captchaId: "",
-  captchaCode: isDemoLoginEnabled ? "1" : "",
+  captchaCode: "",
   rememberMe: AuthStorage.getRememberMe(),
 });
 const activeDemoAccount = computed(() =>
@@ -241,7 +246,7 @@ const loginRules = computed(() => ({
 function fillDemoAccount(username: string): void {
   loginFormData.value.username = username;
   loginFormData.value.password = "123456";
-  loginFormData.value.captchaCode = "1";
+  loginFormData.value.captchaCode = "";
 }
 
 /**
@@ -647,6 +652,14 @@ $input-h: 44px;
       height: 100%;
       object-fit: contain;
     }
+  }
+
+  &__demo-captcha {
+    padding: 7px 10px;
+    font-size: 11px;
+    color: #55766d;
+    background: #edf7f2;
+    border-left: 2px solid #4c8c7b;
   }
 
   &__options {

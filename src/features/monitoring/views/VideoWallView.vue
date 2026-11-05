@@ -41,13 +41,15 @@
             <span>接入策略</span>
             <strong>RTSP / WebRTC / HLS / FLV</strong>
           </div>
-          <el-button plain type="primary" @click="router.push('/bindings')">调整床位绑定</el-button>
+          <el-button plain type="primary" @click="router.push('/devices/bindings')">
+            调整床位绑定
+          </el-button>
         </footer>
       </article>
     </div>
 
     <el-empty v-else description="系统中尚未登记摄像头">
-      <el-button type="primary" @click="router.push('/bindings')">去配置绑定</el-button>
+      <el-button type="primary" @click="router.push('/devices/bindings')">去配置绑定</el-button>
     </el-empty>
   </div>
 </template>

@@ -23,9 +23,16 @@
       <small>{{ sensor?.deviceKey ?? "请先完成设备绑定" }}</small>
     </div>
 
-    <div class="sensor-graphic__state">
-      <span />
-      {{ statusLabel }}
+    <div class="sensor-graphic__meta">
+      <div v-if="sensor?.latestData" class="sensor-graphic__raw-data">
+        <span>原始数据</span>
+        <code>{{ sensor.latestData }}</code>
+      </div>
+
+      <div class="sensor-graphic__state">
+        <span />
+        {{ statusLabel }}
+      </div>
     </div>
   </div>
 </template>
@@ -141,6 +148,35 @@ const statusLabel = computed(() => {
   }
 }
 
+.sensor-graphic__meta {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.sensor-graphic__raw-data {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #d6e4df;
+
+  span {
+    font-size: 8px;
+    color: #7e918a;
+  }
+
+  code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 11px;
+    color: #215f53;
+    white-space: nowrap;
+  }
+}
+
 .sensor-graphic[data-status="ONLINE"] .sensor-graphic__state {
   color: #24624f;
   background: #edf7f2;
@@ -166,6 +202,10 @@ const statusLabel = computed(() => {
 
   .sensor-graphic__state {
     justify-self: start;
+  }
+
+  .sensor-graphic__meta {
+    justify-items: start;
   }
 }
 </style>

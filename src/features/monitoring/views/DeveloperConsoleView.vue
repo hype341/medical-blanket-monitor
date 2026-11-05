@@ -29,13 +29,59 @@
       </form>
     </section>
 
+    <section class="hospital-settings platform-settings">
+      <header>
+        <span>平台标识</span>
+        <h2>平台名称</h2>
+        <p>用于侧栏品牌、登录页和浏览器标题，修改后立即同步到整个平台。</p>
+      </header>
+      <form @submit.prevent="savePlatformName">
+        <el-input
+          v-model.trim="platformName"
+          maxlength="40"
+          clearable
+          placeholder="请输入平台名称"
+          aria-label="平台名称"
+        />
+        <el-button type="primary" native-type="submit" :disabled="!platformName">
+          保存平台名称
+        </el-button>
+      </form>
+    </section>
+
     <section class="alarm-test-panel">
       <div>
-        <span>告警联调</span>
-        <h2>验证标红与消息提示</h2>
-        <p>向 301-01 床发送一条测试告警，页面会立即标红并弹出提醒。</p>
+        <span>警告通知</span>
+        <h2>选择床位并下发 MQTT 通知</h2>
+        <p>设备订阅对应床位告警主题后即可收到通知；页面预览用于验证本系统的标红和提醒。</p>
       </div>
-      <el-button type="danger" plain @click="sendTestAlarm">发送测试告警并查看</el-button>
+      <div class="alarm-dispatch">
+        <el-select v-model="alarmBedId" aria-label="告警床位" placeholder="选择床位">
+          <el-option
+            v-for="bed in alarmBedOptions"
+            :key="bed.id"
+            :label="bed.label"
+            :value="bed.id"
+          />
+        </el-select>
+        <el-select v-model="alarmLevel" aria-label="警告级别">
+          <el-option label="提示" value="INFO" />
+          <el-option label="警告" value="WARNING" />
+          <el-option label="严重" value="CRITICAL" />
+        </el-select>
+        <el-input
+          v-model.trim="alarmMessage"
+          aria-label="警告内容"
+          maxlength="80"
+          placeholder="通知设备的内容"
+        />
+        <div class="alarm-dispatch__actions">
+          <el-button type="danger" :loading="sendingAlarm" @click="sendMqttAlarm">
+            下发警告
+          </el-button>
+          <el-button plain @click="sendTestAlarm">发送测试告警并查看</el-button>
+        </div>
+      </div>
     </section>
 
     <section class="developer-hero">
@@ -163,10 +209,19 @@ import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useRouter } from "vue-router";
 import { useMonitoringStore } from "../store";
+import {
+  publishAlarmNotification,
+  type NotificationLevel,
+} from "../notifications";
 
 const store = useMonitoringStore();
 const router = useRouter();
 const hospitalName = ref(store.hospital.name === "医院名称未设置" ? "" : store.hospital.name);
+const platformName = ref(store.platformName);
+const alarmBedId = ref(store.bedSummaries[0]?.bed.id ?? "");
+const alarmLevel = ref<NotificationLevel>("WARNING");
+const alarmMessage = ref("请检查当前床位毯子状态");
+const sendingAlarm = ref(false);
 const services = [
   { name: "Nginx", state: "静态站点在线", online: true },
   { name: "Spring Boot", state: "业务服务未接入", online: false },
@@ -185,6 +240,14 @@ const bedAlarmTopics = computed(() =>
 const dataTopicCount = computed(
   () => store.bedSummaries.filter((summary) => Boolean(summary.dataTopic)).length,
 );
+const alarmBedOptions = computed(() =>
+  store.bedSummaries.map((summary) => ({
+    id: summary.bed.id,
+    label: `${summary.ward?.name ?? "未分病区"} / ${summary.room?.name ?? "未分病房"} / ${
+      summary.bed.bedNo
+    } 床`,
+  })),
+);
 
 function saveHospitalName(): void {
   try {
@@ -193,6 +256,16 @@ function saveHospitalName(): void {
     ElMessage.success("医院名称已保存");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "医院名称保存失败");
+  }
+}
+
+function savePlatformName(): void {
+  try {
+    store.updatePlatformName(platformName.value);
+    platformName.value = store.platformName;
+    ElMessage.success("平台名称已保存");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "平台名称保存失败");
   }
 }
 
@@ -217,6 +290,34 @@ function sendTestAlarm(): void {
     occurredAt: new Date().toISOString(),
   });
   void router.push(`/beds/${bed.id}`);
+}
+
+async function sendMqttAlarm(): Promise<void> {
+  const summary = store.bedSummaries.find((item) => item.bed.id === alarmBedId.value);
+  if (!summary?.alarmTopic) {
+    ElMessage.error("当前床位没有告警主题");
+    return;
+  }
+  if (!alarmMessage.value.trim()) {
+    ElMessage.error("请填写警告内容");
+    return;
+  }
+
+  sendingAlarm.value = true;
+  try {
+    await publishAlarmNotification(summary.alarmTopic, {
+      alarmId: `developer-notify-${Date.now()}`,
+      bedId: summary.bed.id,
+      level: alarmLevel.value,
+      message: alarmMessage.value,
+      occurredAt: new Date().toISOString(),
+    });
+    ElMessage.success(`警告已通过 MQTT 下发到 ${summary.bed.bedNo} 床`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "MQTT 通知下发失败");
+  } finally {
+    sendingAlarm.value = false;
+  }
 }
 </script>
 
@@ -303,11 +404,15 @@ function sendTestAlarm(): void {
   }
 }
 
+.platform-settings {
+  border-left-color: #47788b;
+}
+
 .alarm-test-panel {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(420px, 1.15fr);
   gap: 20px;
   align-items: center;
-  justify-content: space-between;
   padding: 14px 18px;
   margin-top: 10px;
   background: #fff7f4;
@@ -336,6 +441,20 @@ function sendTestAlarm(): void {
     margin: 0;
     font-size: 10px;
     color: #806f6b;
+  }
+}
+
+.alarm-dispatch {
+  display: grid;
+  grid-template-columns: 180px 110px minmax(180px, 1fr);
+  gap: 8px;
+  align-items: center;
+
+  &__actions {
+    display: flex;
+    grid-column: 1 / -1;
+    gap: 8px;
+    justify-content: flex-end;
   }
 }
 
@@ -752,8 +871,16 @@ dl {
   }
 
   .alarm-test-panel {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     align-items: flex-start;
+  }
+
+  .alarm-dispatch {
+    grid-template-columns: 1fr 1fr;
+
+    > .el-input {
+      grid-column: 1 / -1;
+    }
   }
 
   .pipeline-grid {
@@ -778,6 +905,19 @@ dl {
   .developer-hero__signal {
     padding-left: 0;
     border-left: 0;
+  }
+
+  .alarm-dispatch {
+    grid-template-columns: 1fr;
+
+    > .el-input {
+      grid-column: auto;
+    }
+
+    &__actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
   }
 
   .service-flow {

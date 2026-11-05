@@ -4,25 +4,31 @@
       <div>
         <span>{{ store.hospital.name }} · 视频设备</span>
         <h1>摄像头管理</h1>
-        <p>统一维护摄像头接入方式，浏览器只接收平台签发的播放地址。</p>
+        <p>
+          {{
+            isDeveloper
+              ? "维护摄像头名称、床位对应关系和技术接入地址。"
+              : "维护摄像头名称及其对应病区、病房和床位。"
+          }}
+        </p>
       </div>
       <el-button type="primary" @click="openEditor()">新增摄像头</el-button>
     </header>
 
-    <section class="camera-guidance">
+    <section v-if="isDeveloper" class="camera-guidance">
       <strong>标准接入，不绑定品牌</strong>
       <p>后端生成 MediaMTX 路径，前端按 WebRTC、HLS、HTTP-FLV 自动选择播放线路。</p>
     </section>
 
-    <div class="camera-link-grid">
+    <div v-if="isDeveloper" class="camera-link-grid">
       <CameraLinkPanel v-for="camera in store.cameras" :key="camera.id" :camera="camera" />
     </div>
 
     <el-table :data="tableRows" class="camera-table">
       <el-table-column prop="name" label="摄像头" min-width="180" />
-      <el-table-column prop="cameraKey" label="设备标识" min-width="170" />
-      <el-table-column prop="sourceProtocol" label="接入方式" width="130" />
-      <el-table-column prop="linkedBeds" label="关联床位" min-width="200" />
+      <el-table-column prop="linkedBeds" label="对应病区 / 病房 / 床位" min-width="280" />
+      <el-table-column v-if="isDeveloper" prop="cameraKey" label="设备标识" min-width="170" />
+      <el-table-column v-if="isDeveloper" prop="sourceProtocol" label="接入方式" width="130" />
       <el-table-column label="设备状态" width="110">
         <template #default="{ row }">
           <el-tag :type="statusType(row.status)" effect="plain">
@@ -30,7 +36,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="播放地址" width="120">
+      <el-table-column v-if="isDeveloper" label="播放地址" width="120">
         <template #default="{ row }">
           <span>{{ row.playback ? "已签发" : "待接入" }}</span>
         </template>
@@ -42,7 +48,7 @@
       </el-table-column>
     </el-table>
 
-    <section class="camera-document">
+    <section v-if="isDeveloper" class="camera-document">
       <header>
         <div>
           <span>在线生成</span>
@@ -59,7 +65,7 @@
       <DocumentPreview :content="videoDocument" />
     </section>
 
-    <section class="protocol-notes">
+    <section v-if="isDeveloper" class="protocol-notes">
       <article>
         <span>01</span>
         <h2>RTSP 拉流</h2>
@@ -77,7 +83,18 @@
       </article>
     </section>
 
-    <CameraEditorDialog v-model="editorVisible" :camera="editorCamera" @save="saveCamera" />
+    <CameraEditorDialog
+      v-if="isDeveloper"
+      v-model="editorVisible"
+      :camera="editorCamera"
+      @save="saveCamera"
+    />
+    <ManagedCameraDialog
+      v-else
+      v-model="editorVisible"
+      :camera="editorCamera"
+      @save="saveManagedCamera"
+    />
   </div>
 </template>
 
@@ -87,13 +104,15 @@ import { ElMessage } from "element-plus";
 import CameraEditorDialog from "../components/CameraEditorDialog.vue";
 import CameraLinkPanel from "../components/CameraLinkPanel.vue";
 import DocumentPreview from "../components/DocumentPreview.vue";
+import ManagedCameraDialog from "../components/ManagedCameraDialog.vue";
 import { generateVideoDocumentation } from "../documentation";
 import { useMonitoringStore } from "../store";
-import type { CameraInput, CameraStatus } from "../types";
+import type { CameraInput, CameraStatus, ManagedCameraInput } from "../types";
 import { copyText } from "@/utils/clipboard";
 import { printMarkdownDocument } from "@/utils/document-export";
 
 const store = useMonitoringStore();
+const isDeveloper = computed(() => store.activeRole === "DEVELOPER");
 const editorVisible = ref(false);
 const editingCameraId = ref("");
 const generatedAt = ref(new Date().toLocaleString("zh-CN", { hour12: false }));
@@ -120,7 +139,10 @@ const tableRows = computed(() =>
   store.cameras.map((camera) => {
     const linkedBeds = store.bedSummaries
       .filter((summary) => summary.cameras.some((item) => item.id === camera.id))
-      .map((summary) => `${summary.room?.roomNo ?? ""} 房 ${summary.bed.bedNo} 床`);
+      .map(
+        (summary) =>
+          `${summary.ward?.name ?? "未分病区"} / ${summary.room?.name ?? "未分病房"} / ${summary.bed.bedNo} 床`,
+      );
     return {
       ...camera,
       sourceProtocol: "待配置",
@@ -131,6 +153,20 @@ const tableRows = computed(() =>
 
 function statusLabel(status: CameraStatus): string {
   return { ONLINE: "在线", STALE: "延迟", OFFLINE: "离线" }[status];
+}
+
+function saveManagedCamera(input: ManagedCameraInput, cameraId: string | null): void {
+  try {
+    if (cameraId) {
+      store.updateManagedCamera(cameraId, input);
+    } else {
+      store.addManagedCamera(input);
+    }
+    editorVisible.value = false;
+    ElMessage.success("摄像头已保存");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "摄像头保存失败");
+  }
 }
 
 function statusType(status: CameraStatus): "success" | "warning" | "info" {

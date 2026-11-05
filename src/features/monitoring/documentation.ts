@@ -85,6 +85,7 @@ ${sampleDataTopic}
   "deviceKey": "${sampleDeviceKey}",
   "bedId": "${sampleBedId}",
   "status": "ONLINE",
+  "data": "ff,aa",
   "metrics": {}
 }
 \`\`\`
@@ -103,6 +104,23 @@ ${sampleDataTopic}
 \`\`\`text
 ${sampleAlarmTopic}
 \`\`\`
+
+## 平台向设备下发警告
+
+设备需要订阅当前床位告警主题。开发者在开发者工作台选择床位、级别并填写内容后，平台通过服务器端 MQTT 账号发布通知：
+
+\`\`\`json
+{
+  "type": "notification",
+  "alarmId": "developer-notify-1730000000000",
+  "level": "WARNING",
+  "title": "请检查当前床位毯子状态",
+  "bedId": "${sampleBedId}",
+  "occurredAt": "2026-11-05T21:00:00+08:00"
+}
+\`\`\`
+
+设备端只处理 \`type = notification\` 的消息；MQTT 账号必须拥有该床位告警主题的订阅权限。
 
 ## 第三方直接订阅函数
 
@@ -159,7 +177,7 @@ ${topicRows}
 
 ## 传感器数据报文
 
-传感器图形只依赖设备身份、上报时间和状态。\`metrics\` 保留给后续识别处理器，当前允许为空对象；毯子不要求温度、压力或电量字段。
+传感器图形只依赖设备身份、上报时间和状态。\`data\` 只放设备原始数据，统一使用小写十六进制、逗号分隔，例如 \`ff,aa\`；其他报文内容保持正常 JSON 字段。\`metrics\` 保留给后续识别处理器，当前允许为空对象。
 
 \`observedAt\` 可以省略，平台收到消息后会使用服务器时间补充。服务器时间也可以通过 MQTT 保留主题 \`${SYSTEM_TIME_TOPIC}\` 或 HTTP 接口 \`/api/public/time\` 获取。
 
@@ -170,6 +188,7 @@ ${topicRows}
   "bedId": "${sampleBedId}",
   "observedAt": "${generatedAt}",
   "status": "ONLINE",
+  "data": "ff,aa",
   "metrics": {}
 }
 \`\`\`
@@ -181,6 +200,7 @@ ${topicRows}
 | \`bedId\` | string | 床位标识，用于校验传感器与床位关系 |
 | \`observedAt\` | ISO 8601 string（可选） | 设备采集时间；省略时由服务器补充 \`+08:00\` 时间 |
 | \`status\` | string | \`ONLINE\`、\`STALE\`、\`OFFLINE\` 或 \`ALARM\`，驱动传感器图形状态 |
+| \`data\` | string | 传感器原始数据，只在这一字段使用小写十六进制并以逗号分隔，例如 \`ff,aa\` |
 | \`metrics\` | object | 识别扩展字段；没有业务指标时传空对象 |
 
 第三方页面或识别服务调用 \`openMqttSensorStream\` 后，在 \`onTelemetry(reading)\` 中直接接收上述数据对象。

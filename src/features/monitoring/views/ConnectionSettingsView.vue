@@ -486,6 +486,7 @@ const sensorDataTemplate = JSON.stringify(
     bedId: "bed-a-01",
     observedAt: "2026-11-04T17:04:20+08:00",
     status: "ONLINE",
+    data: "ff,aa",
     metrics: {},
   },
   null,
@@ -529,6 +530,7 @@ const accessPayload = computed(() =>
       deviceKey: selectedAccessRow.value?.sensorKey ?? "",
       bedId: selectedAccessRow.value?.bedId ?? "",
       status: "ONLINE",
+      data: "ff,aa",
       metrics: {},
     },
     null,
@@ -580,6 +582,7 @@ async function copyDeviceAccess(): Promise<void> {
     "设备动作：只发布数据，不需要订阅",
     "QoS 0：不返回消息；QoS 1：只返回标准空 PUBACK",
     "时间：observedAt 可省略，服务器自动补充 +08:00",
+    "数据字段：data 使用小写十六进制，以逗号分隔，例如 ff,aa",
     "报文：",
     accessPayload.value,
   ].join("\n");

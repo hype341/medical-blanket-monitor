@@ -23,7 +23,15 @@
     </header>
 
     <div class="bed-card__patient">
-      <span>{{ summary.bed.patientName ?? "空床待分配" }}</span>
+      <div class="bed-card__patient-identity">
+        <img
+          v-if="summary.bed.patientName"
+          :src="summary.bed.patientAvatar || '/images/avatars/default.svg'"
+          alt=""
+          @error="useDefaultAvatar"
+        />
+        <span>{{ summary.bed.patientName ?? "空床待分配" }}</span>
+      </div>
       <span>{{ patientStateLabel }} · {{ bedStateLabel }}</span>
     </div>
 
@@ -106,6 +114,13 @@ const updateLabel = computed(() =>
 const unresolvedAlarms = computed(() =>
   (props.alarms ?? []).filter((alarm) => alarm.status !== "RESOLVED"),
 );
+
+function useDefaultAvatar(event: Event): void {
+  const image = event.target as HTMLImageElement;
+  if (image.dataset.fallbackApplied === "true") return;
+  image.dataset.fallbackApplied = "true";
+  image.src = "/images/avatars/default.svg";
+}
 </script>
 
 <style scoped lang="scss">
@@ -179,6 +194,28 @@ const unresolvedAlarms = computed(() =>
     font-weight: 700;
     color: #173c3a;
     letter-spacing: -0.04em;
+  }
+}
+
+.bed-card__patient-identity {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+
+  img {
+    width: 26px;
+    height: 26px;
+    object-fit: cover;
+    background: #fff;
+    border: 1px solid #dbe6e2;
+    border-radius: 50%;
+  }
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

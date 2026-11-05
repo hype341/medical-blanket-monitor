@@ -4,7 +4,7 @@
       <div>
         <span>{{ store.hospital.name }} · 管理中心</span>
         <h1>人员权限管理</h1>
-        <p>管理登录账号、角色、授权病区和账号启停状态。</p>
+        <p>管理登录账号、角色、角色标签、授权病区和账号启停状态。</p>
       </div>
       <el-button type="primary" @click="openEditor()">新增人员</el-button>
     </header>
@@ -14,6 +14,25 @@
       <span>{{ activeCount }} 个启用</span>
       <span>角色决定操作权限，病区授权决定可查看范围</span>
     </div>
+
+    <section class="staff-tag-manager" aria-label="角色标签管理">
+      <div>
+        <span>角色标签</span>
+        <small>用于标注责任分工、班次或岗位属性，不改变系统权限</small>
+      </div>
+      <div class="staff-tag-manager__items">
+        <el-tag v-for="tag in store.staffTags" :key="tag" effect="plain" round>{{ tag }}</el-tag>
+        <el-button
+          class="staff-tag-manager__add"
+          circle
+          aria-label="新增角色标签"
+          title="新增角色标签"
+          @click="tagEditorVisible = true"
+        >
+          +
+        </el-button>
+      </div>
+    </section>
 
     <div class="staff-table">
       <div class="staff-table__head">
@@ -25,7 +44,14 @@
         <span>操作</span>
       </div>
       <div v-for="member in visibleStaff" :key="member.id" class="staff-row">
-        <strong>{{ member.displayName }}</strong>
+        <div class="staff-name-cell">
+          <strong>{{ member.displayName }}</strong>
+          <div v-if="member.tags?.length" class="staff-name-cell__tags">
+            <el-tag v-for="tag in member.tags" :key="tag" size="small" effect="plain">
+              {{ tag }}
+            </el-tag>
+          </div>
+        </div>
         <div class="account-cell">
           <span>{{ member.username }}</span>
           <small>{{ member.passwordUpdatedAt ? "密码已设置" : "密码未设置" }}</small>
@@ -83,6 +109,20 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="角色标签">
+          <el-select
+            v-model="form.tags"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            class="staff-tag-select w-full"
+            aria-label="角色标签"
+            placeholder="选择或输入标签"
+          >
+            <el-option v-for="tag in store.staffTags" :key="tag" :label="tag" :value="tag" />
+          </el-select>
+        </el-form-item>
         <el-form-item v-if="store.activeRole === 'DEVELOPER'" label="开放模块">
           <el-checkbox-group v-model="form.modulePermissions" class="module-grid">
             <el-checkbox
@@ -131,6 +171,25 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="tagEditorVisible" title="新建角色标签" width="420px">
+      <el-form label-position="top">
+        <el-form-item label="标签名称">
+          <el-input
+            v-model.trim="newTagName"
+            aria-label="角色标签名称"
+            maxlength="20"
+            placeholder="例如：责任护士、夜班、实习"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="tagEditorVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!newTagName.trim()" @click="addTag">
+          确认添加标签
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -143,6 +202,8 @@ import type { MonitoringRole, StaffInput, StaffStatus } from "../types";
 
 const store = useMonitoringStore();
 const editorVisible = ref(false);
+const tagEditorVisible = ref(false);
+const newTagName = ref("");
 const editingStaffId = ref("");
 const form = reactive<StaffInput>({
   username: "",
@@ -151,6 +212,7 @@ const form = reactive<StaffInput>({
   wardIds: [],
   status: "ACTIVE",
   modulePermissions: defaultModulesForRole("NURSE"),
+  tags: [],
 });
 
 const activeCount = computed(
@@ -179,6 +241,7 @@ function openEditor(staffId?: string): void {
       wardIds: [...member.wardIds],
       status: member.status,
       modulePermissions: [...(member.modulePermissions ?? [])],
+      tags: [...(member.tags ?? [])],
       initialPassword: "",
     });
   } else {
@@ -189,6 +252,7 @@ function openEditor(staffId?: string): void {
       wardIds: store.wards[0] ? [store.wards[0].id] : [],
       status: "ACTIVE" as StaffStatus,
       modulePermissions: defaultModulesForRole("NURSE"),
+      tags: [],
       initialPassword: "",
     });
   }
@@ -220,9 +284,21 @@ function toggleStatus(staffId: string): void {
     wardIds: member.wardIds,
     status: member.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
     modulePermissions: [...(member.modulePermissions ?? [])],
+    tags: [...(member.tags ?? [])],
     initialPassword: "",
   });
   ElMessage.success("账号状态已更新");
+}
+
+function addTag(): void {
+  try {
+    store.addStaffTag(newTagName.value);
+    newTagName.value = "";
+    tagEditorVisible.value = false;
+    ElMessage.success("角色标签已添加");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "角色标签添加失败");
+  }
 }
 
 function roleLabel(role: MonitoringRole): string {
@@ -292,11 +368,79 @@ function applyRoleDefaults(role: MonitoringRole): void {
   border-left: 3px solid #2f806a;
 }
 
+.staff-tag-manager {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  margin-top: 10px;
+  background: #fbfcfb;
+  border: 1px solid #e0e8e5;
+
+  > div:first-child {
+    display: grid;
+    gap: 3px;
+
+    span {
+      font-size: 10px;
+      font-weight: 650;
+      color: #315f55;
+    }
+
+    small {
+      font-size: 9px;
+      color: #7e8e89;
+    }
+  }
+}
+
+.staff-tag-manager__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.staff-tag-manager__add {
+  width: 26px;
+  height: 26px;
+  color: #2f806a;
+  background: #edf7f2;
+  border-color: #bdd6ce;
+}
+
 .staff-table {
   margin-top: 14px;
   overflow-x: auto;
   background: #fff;
   border: 1px solid #dbe6e2;
+}
+
+.staff-name-cell {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+
+  strong {
+    color: #315f55;
+  }
+}
+
+.staff-name-cell__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+
+  :deep(.el-tag) {
+    height: 18px;
+    padding: 0 5px;
+    font-size: 8px;
+    color: #5d6f69;
+    background: #f3f6f5;
+    border-color: #dfe6e3;
+  }
 }
 
 .staff-table__head,

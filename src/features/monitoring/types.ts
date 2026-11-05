@@ -7,6 +7,7 @@ export type StaffStatus = "ACTIVE" | "DISABLED";
 export type PermissionModule =
   | "overview"
   | "beds"
+  | "blankets"
   | "bindings"
   | "organization"
   | "staff"
@@ -46,6 +47,7 @@ export interface Bed {
   roomId: string;
   bedNo: string;
   patientName?: string;
+  patientAvatar?: string;
   patientNo?: string;
   patientStatus?: PatientStatus;
   lastEditedBy?: MonitoringRole;
@@ -61,6 +63,7 @@ export interface SensorDevice {
   model?: string;
   status: SensorStatus;
   lastSeenAt?: string;
+  latestData?: string;
   latestMetrics: SensorMetrics;
 }
 
@@ -136,6 +139,11 @@ export interface BindingInput {
   cameraId: string | null;
 }
 
+export interface BlanketInput {
+  name: string;
+  bedId: string;
+}
+
 export interface AddBedInput {
   wardId: string;
   roomId: string;
@@ -183,6 +191,7 @@ export interface StaffMember {
   status: StaffStatus;
   passwordUpdatedAt?: string;
   modulePermissions?: PermissionModule[];
+  tags?: string[];
 }
 
 export interface StaffInput {
@@ -193,6 +202,7 @@ export interface StaffInput {
   status: StaffStatus;
   initialPassword?: string;
   modulePermissions?: PermissionModule[];
+  tags?: string[];
 }
 
 export interface CameraInput {
@@ -201,6 +211,11 @@ export interface CameraInput {
   name: string;
   vendor?: string;
   model?: string;
+}
+
+export interface ManagedCameraInput {
+  name: string;
+  bedId: string;
 }
 
 export interface MonitoringPolicy {

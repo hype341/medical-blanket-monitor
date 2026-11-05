@@ -26,7 +26,13 @@
       <el-dropdown trigger="click">
         <div class="layout-user">
           <div class="layout-user__avatar">
-            <img :src="userStore.userInfo.avatar" class="layout-user__avatar-img" />
+            <img
+              :src="avatarSrc"
+              :alt="`${displayName}头像`"
+              class="layout-user__avatar-img"
+              data-testid="user-avatar"
+              @error="useDefaultAvatar"
+            />
           </div>
           <span class="layout-user__name">{{ displayName }}</span>
         </div>
@@ -68,6 +74,23 @@ const settingStore = useSettingsStore();
 const userStore = useUserStore();
 const monitoringStore = useMonitoringStore();
 const tenantStore = useTenantStoreHook();
+const avatarSrc = computed(() => {
+  if (userStore.userInfo.avatar) return userStore.userInfo.avatar;
+  const roleAssets = {
+    NURSE: "/images/avatars/nurse.svg",
+    HEAD_NURSE: "/images/avatars/head-nurse.svg",
+    ADMIN: "/images/avatars/default.svg",
+    DEVELOPER: "/images/avatars/developer.svg",
+  };
+  return roleAssets[monitoringStore.activeRole];
+});
+
+function useDefaultAvatar(event: Event): void {
+  const image = event.target as HTMLImageElement;
+  if (image.dataset.fallbackApplied === "true") return;
+  image.dataset.fallbackApplied = "true";
+  image.src = "/images/avatars/default.svg";
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -287,6 +310,8 @@ function handleSettingsClick() {
     width: 28px;
     height: 28px;
     overflow: hidden;
+    background: #fff;
+    border: 1px solid rgb(255 255 255 / 70%);
     border-radius: 50%;
   }
 

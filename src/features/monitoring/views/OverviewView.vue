@@ -238,7 +238,14 @@ const moduleLinks = computed(() => {
       visible: store.canAccessModule("beds"),
     },
     {
-      path: "/bindings",
+      path: "/devices/blankets",
+      kind: "设备",
+      label: "毯子管理",
+      description: "维护毯子名称与对应病区、病房和床位",
+      visible: store.canAccessModule("blankets"),
+    },
+    {
+      path: "/devices/bindings",
       kind: "设备",
       label: "设备绑定",
       description: "查看床位与传感器、摄像头的对应关系",

@@ -38,7 +38,7 @@
 
       <div class="layout-double__secondary" :class="{ 'is-collapsed': !secondaryExpanded }">
         <div v-if="showLogo" class="layout-double__title">
-          {{ appConfig.title }}
+          {{ monitoringStore.platformName }}
         </div>
 
         <el-scrollbar class="layout-double__secondary-scroll">
@@ -70,7 +70,7 @@
 import { useLayout } from "../composables/useLayout";
 import { useMixMenu } from "../composables/useMixMenu";
 import { useAppStore } from "@/stores";
-import { appConfig } from "@/settings";
+import { useMonitoringStore } from "@/features/monitoring/store";
 import { translateRouteTitle } from "@/lang/utils";
 import BaseLayout from "../BaseLayout.vue";
 import LayoutLogo from "../components/LayoutLogo.vue";
@@ -81,6 +81,7 @@ import LayoutSidebar from "../components/LayoutSidebar.vue";
 import LayoutMenuIcon from "../components/LayoutMenuIcon.vue";
 
 const appStore = useAppStore();
+const monitoringStore = useMonitoringStore();
 const { showTagsView, showLogo, isSidebarOpen, toggleSidebar } = useLayout();
 
 const secondaryExpanded = computed(() => appStore.secondarySidebar?.opened ?? true);

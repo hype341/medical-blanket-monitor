@@ -101,25 +101,57 @@ export const constantRoutes: RouteRecordRaw[] = [
         },
       },
       {
-        path: "bindings",
-        name: "DeviceBindings",
-        component: () => import("@/features/monitoring/views/BindingsView.vue"),
+        path: "devices",
+        name: "DeviceManagement",
+        redirect: "/devices/bindings",
         meta: {
-          title: "设备绑定",
-          icon: "api",
-          module: "bindings",
+          title: "设备管理",
+          icon: "monitor",
         },
+        children: [
+          {
+            path: "bindings",
+            name: "DeviceBindings",
+            component: () => import("@/features/monitoring/views/BindingsView.vue"),
+            meta: {
+              title: "设备绑定",
+              icon: "api",
+              module: "bindings",
+            },
+          },
+          {
+            path: "blankets",
+            name: "BlanketManagement",
+            component: () => import("@/features/monitoring/views/BlanketManagementView.vue"),
+            meta: {
+              title: "毯子管理",
+              icon: "flexible",
+              roles: ["ADMIN", "DEVELOPER"],
+              module: "blankets",
+            },
+          },
+          {
+            path: "cameras",
+            name: "CameraManagement",
+            component: () => import("@/features/monitoring/views/CameraListView.vue"),
+            meta: {
+              title: "摄像头管理",
+              icon: "monitor",
+              roles: ["ADMIN", "DEVELOPER"],
+              module: "video",
+            },
+          },
+        ],
       },
       {
-        path: "devices/cameras",
-        name: "CameraManagement",
-        component: () => import("@/features/monitoring/views/CameraListView.vue"),
-        meta: {
-          title: "视频管理",
-          icon: "monitor",
-          roles: ["DEVELOPER"],
-          module: "video",
-        },
+        path: "bindings",
+        redirect: "/devices/bindings",
+        meta: { hidden: true },
+      },
+      {
+        path: "blankets",
+        redirect: "/devices/blankets",
+        meta: { hidden: true },
       },
       {
         path: "admin/management",
