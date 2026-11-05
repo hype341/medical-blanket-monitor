@@ -34,6 +34,30 @@ function loadStoredAlarms(): AlarmEnvelope[] {
   }
 }
 
+const MQTT_SETTINGS_KEY = "monitoring-mqtt-settings";
+const DEFAULT_MQTT_SETTINGS: MqttSettings = {
+  brokerUrl: "mqtt://192.168.86.128:1883",
+  websocketUrl: "ws://192.168.86.128:8083/mqtt",
+  clientId: "medical-blanket-platform",
+  username: "blanket-service",
+  password: "demo-mqtt-secret",
+  alarmTopic: "medical-blanket/v1/+/+/+/+/alarm",
+  alarmTitleTemplate: "{{deviceName}} 状态异常",
+  alarmDetailTemplate: "{{bedName}} 在 {{occurredAt}} 上报 {{alarmCode}}",
+  qos: 1,
+};
+
+function loadMqttSettings(): MqttSettings {
+  try {
+    const value = JSON.parse(localStorage.getItem(MQTT_SETTINGS_KEY) ?? "null") as unknown;
+    return value && typeof value === "object"
+      ? { ...DEFAULT_MQTT_SETTINGS, ...(value as Partial<MqttSettings>) }
+      : { ...DEFAULT_MQTT_SETTINGS };
+  } catch {
+    return { ...DEFAULT_MQTT_SETTINGS };
+  }
+}
+
 export const useMonitoringStore = defineStore("monitoring", () => {
   const fixture = ref<MonitoringData>(createMonitoringFixture());
   const storedHospitalName = localStorage.getItem("monitoring-hospital-name");
@@ -60,17 +84,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     clipAfterSeconds: 60,
     recordingRetentionMinutes: 1_440,
   });
-  const mqttSettings = ref<MqttSettings>({
-    brokerUrl: "mqtt://192.168.86.128:1883",
-    websocketUrl: "ws://192.168.86.128:8083/mqtt",
-    clientId: "medical-blanket-platform",
-    username: "blanket-service",
-    password: "demo-mqtt-secret",
-    alarmTopic: "medical-blanket/v1/+/+/+/+/alarm",
-    alarmTitleTemplate: "{{deviceName}} 状态异常",
-    alarmDetailTemplate: "{{bedName}} 在 {{occurredAt}} 上报 {{alarmCode}}",
-    qos: 1,
-  });
+  const mqttSettings = ref<MqttSettings>(loadMqttSettings());
   let bindingSequence = 100;
   let bedSequence = 100;
   let wardSequence = 100;
@@ -375,6 +389,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       password: settings.password,
       alarmTopic: settings.alarmTopic.trim(),
     };
+    localStorage.setItem(MQTT_SETTINGS_KEY, JSON.stringify(mqttSettings.value));
   }
 
   function addBed(input: AddBedInput): string {

@@ -36,6 +36,14 @@ export function buildBedDataTopic(input: BedDataTopicInput): string {
   ].join("/");
 }
 
+export function buildSensorDataApiPath(bedId: string): string {
+  return `/api/public/sensors/${encodeURIComponent(bedId)}`;
+}
+
+export function buildMqttTopicUrl(brokerUrl: string, topic: string): string {
+  return `${brokerUrl.replace(/\/+$/, "")}/${topic.replace(/^\/+/, "")}`;
+}
+
 function normalize(value: string): string {
   return value.trim().replace(/\s+/g, "_");
 }

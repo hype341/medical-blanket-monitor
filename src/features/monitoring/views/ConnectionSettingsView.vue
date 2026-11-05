@@ -133,17 +133,30 @@
                   <strong>{{ row.roomName }} · {{ row.bedNo }} 床</strong>
                   <span>{{ row.wardName }} · {{ row.sensorName }}</span>
                 </div>
-                <code :title="row.dataTopic || '绑定传感器后生成'">
-                  {{ row.dataTopic || "绑定传感器后生成" }}
-                </code>
-                <el-button
-                  text
-                  type="primary"
-                  :disabled="!row.dataTopic"
-                  @click="row.dataTopic && copyTopic(row.dataTopic, '床位数据主题')"
-                >
-                  复制
-                </el-button>
+                <div class="data-topic-value">
+                  <code :title="row.dataTopic || '绑定传感器后生成'">
+                    {{ row.dataTopic || "绑定传感器后生成" }}
+                  </code>
+                  <small>{{ row.dataApiPath || "数据链接待生成" }}</small>
+                </div>
+                <div class="topic-row-actions">
+                  <el-button
+                    text
+                    type="primary"
+                    :disabled="!row.dataTopic"
+                    @click="row.dataTopic && copyTopic(row.dataTopic, '床位数据主题')"
+                  >
+                    复制主题
+                  </el-button>
+                  <el-button
+                    text
+                    type="primary"
+                    :disabled="!row.dataApiPath"
+                    @click="row.dataApiPath && copySensorLink(row.dataApiPath)"
+                  >
+                    复制链接
+                  </el-button>
+                </div>
               </article>
             </div>
           </div>
@@ -281,7 +294,7 @@ import { generateMqttDocumentation } from "../documentation";
 import { useMonitoringStore } from "../store";
 import type { MqttSettings } from "../types";
 import { copyText } from "@/utils/clipboard";
-import { SENSOR_DATA_TOPIC } from "../messaging";
+import { buildMqttTopicUrl, buildSensorDataApiPath, SENSOR_DATA_TOPIC } from "../messaging";
 import { printMarkdownDocument } from "@/utils/document-export";
 
 const store = useMonitoringStore();
@@ -332,6 +345,8 @@ const bedTopicRows = computed(() =>
   store.bedSummaries.map((summary) => ({
     bedId: summary.bed.id,
     dataTopic: summary.dataTopic,
+    dataApiPath: summary.dataTopic ? buildSensorDataApiPath(summary.bed.id) : null,
+    mqttLink: summary.dataTopic ? buildMqttTopicUrl(form.brokerUrl, summary.dataTopic) : null,
     alarmTopic: summary.alarmTopic,
     wardName: summary.ward?.name ?? "未分病区",
     roomName: summary.room?.name ?? "未分病房",
@@ -362,6 +377,15 @@ async function copyTopic(topic: string, label = "主题"): Promise<void> {
     ElMessage.success(`${label}已复制`);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "主题复制失败");
+  }
+}
+
+async function copySensorLink(path: string): Promise<void> {
+  try {
+    await copyText(new URL(path, window.location.origin).toString());
+    ElMessage.success("传感器数据链接已复制");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "链接复制失败");
   }
 }
 

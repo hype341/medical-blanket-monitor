@@ -36,8 +36,10 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
     }),
   ).toBeVisible();
   await expect(
-    page.getByText(/medical-blanket\/v1\/H001\/WARD-A\/301-01\/sensor\/blanket-001\/data/),
+    page.getByText(/medical-blanket\/v1\/H001\/WARD-A\/301-01\/sensor\/blanket-001\/data/).first(),
   ).toBeVisible();
+  await expect(page.getByText("传感器数据接口", { exact: true })).toBeVisible();
+  await expect(page.getByText(/\/api\/public\/sensors\/bed-a-01/).first()).toBeVisible();
   await expect(page.getByText(/sensor\/.+\/telemetry/)).toHaveCount(0);
   await expect(page.getByText("毯面温度")).toHaveCount(0);
   await expect(page.getByText("设备电量")).toHaveCount(0);
@@ -189,9 +191,18 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
   await expect(page.getByText("EMQX 接入")).toBeVisible();
   await expect(page.getByRole("heading", { name: "床位数据与告警", exact: true })).toBeVisible();
+  await page.getByLabel("Client ID").fill("persisted-client-test");
+  await page.getByRole("button", { name: "保存连接配置" }).click();
+  await expect(page.getByText("MQTT 配置已保存")).toBeVisible();
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.getByLabel("Client ID")).toHaveValue("persisted-client-test");
   await expect(page.getByText("9 个数据主题")).toBeVisible();
-  await page.locator(".topic-panel--data").getByRole("button", { name: "复制" }).first().click();
-  await expect(page.getByText("床位数据主题已复制")).toBeVisible();
+  await page
+    .locator(".topic-panel--data")
+    .getByRole("button", { name: "复制链接" })
+    .first()
+    .click();
+  await expect(page.getByText("传感器数据链接已复制")).toBeVisible();
   await page.getByRole("tab", { name: /床位告警/ }).click();
   await expect(page.getByText("10 个床位告警主题")).toBeVisible();
   await page.locator(".topic-panel--alarm").getByRole("button", { name: "复制" }).first().click();
@@ -265,7 +276,14 @@ test("warning turns red and requires nurse actions to resolve and delete", async
   await page.waitForTimeout(600);
   await page.screenshot({ path: "test-results/monitoring-alarm-open.png", fullPage: true });
   await page.getByRole("button", { name: "查看回放" }).click();
-  await expect(page.locator(".recording-player")).toBeVisible({ timeout: 10_000 });
+  await expect
+    .poll(
+      async () =>
+        (await page.locator(".recording-player").count()) +
+        (await page.getByText("该告警时刻暂无对应录像片段").count()),
+      { timeout: 10_000 },
+    )
+    .toBeGreaterThan(0);
 
   await page.getByRole("button", { name: "标记已解决" }).click();
   await expect(alarmCard).toHaveAttribute("data-status", "RESOLVED");

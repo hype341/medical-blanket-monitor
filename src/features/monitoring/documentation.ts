@@ -1,6 +1,6 @@
 import type { MonitoringData, MqttSettings } from "./types";
 import { getBedMonitorSummary } from "./selectors";
-import { SENSOR_DATA_TOPIC } from "./messaging";
+import { buildSensorDataApiPath, SENSOR_DATA_TOPIC } from "./messaging";
 
 export function generateMqttDocumentation(
   data: MonitoringData,
@@ -18,7 +18,9 @@ export function generateMqttDocumentation(
       const room = data.rooms.find((item) => item.id === bed.roomId);
       return `| ${ward?.name ?? "-"} | ${room?.roomNo ?? "-"} | ${bed.bedNo} | ${
         summary?.sensor?.deviceKey ?? "未绑定"
-      } | ${summary?.dataTopic ?? "未生成"} | ${summary?.alarmTopic ?? "未生成"} |`;
+      } | ${summary?.dataTopic ?? "未生成"} | ${
+        summary?.dataTopic ? buildSensorDataApiPath(bed.id) : "未生成"
+      } | ${summary?.alarmTopic ?? "未生成"} |`;
     })
     .join("\n");
 
@@ -43,6 +45,8 @@ export function generateMqttDocumentation(
 
 ## 第三方直接订阅函数
 
+全部传感器订阅：
+
 \`\`\`ts
 import { openMqttSensorStream } from "@/features/monitoring/stream-api";
 
@@ -62,12 +66,34 @@ const stream = openMqttSensorStream(settings, {
 stream.close();
 \`\`\`
 
+单个传感器订阅：
+
+\`\`\`ts
+import { openSensorDataStream } from "@/features/monitoring/stream-api";
+
+const sensorStream = openSensorDataStream(
+  settings,
+  "${rows[0]?.summary?.dataTopic ?? "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data"}",
+  {
+    onData(reading) {
+      console.log("单床位传感器数据", reading);
+    },
+    onError(error) {
+      console.error("传感器连接失败", error);
+    },
+  },
+);
+
+// 停止接收时调用
+sensorStream.close();
+\`\`\`
+
 ## 床位数据与告警 Topic
 
 每张床位分别拥有独立的数据 Topic 和告警 Topic。
 
-| 病区 | 病房 | 床位 | 传感器 | 床位数据 Topic | 床位告警 Topic |
-| --- | --- | --- | --- | --- | --- |
+| 病区 | 病房 | 床位 | 传感器 | 床位数据 Topic | 数据 API | 床位告警 Topic |
+| --- | --- | --- | --- | --- | --- | --- |
 ${topicRows}
 
 ## 传感器数据报文
@@ -95,6 +121,50 @@ ${topicRows}
 | \`metrics\` | object | 识别扩展字段；没有业务指标时传空对象 |
 
 第三方页面或识别服务调用 \`openMqttSensorStream\` 后，在 \`onTelemetry(reading)\` 中直接接收上述数据对象。
+
+## 传感器数据处理扩展
+
+原始数据和识别结果保持分离。后续新增毯子状态、离床、跌倒或其他规则时，只需要增加处理器：
+
+\`\`\`ts
+import {
+  openSensorDataStream,
+  type SensorDataStreamHandlers,
+} from "@/features/monitoring/stream-api";
+import {
+  runSensorProcessors,
+  type SensorDataProcessor,
+} from "@/features/monitoring/processing";
+
+const processors: SensorDataProcessor[] = [
+  {
+    id: "blanket-state-processor",
+    analyze(reading) {
+      return reading.status === "ALARM"
+        ? [
+            {
+              code: "BLANKET_ALARM",
+              severity: "WARNING",
+              title: "毯子状态异常",
+              bedId: reading.bedId,
+            },
+          ]
+        : [];
+    },
+  },
+];
+
+const handlers: SensorDataStreamHandlers = {
+  async onData(reading) {
+    const findings = await runSensorProcessors(reading, processors);
+    console.log("识别结果", findings);
+  },
+};
+
+openSensorDataStream(settings, dataTopic, handlers);
+\`\`\`
+
+处理器通过 \`SensorDataProcessor\` 接口扩展，\`runSensorProcessors\` 会并行执行已注册处理器并返回统一的 \`DataFinding[]\`。
 
 ## 告警报文示例
 

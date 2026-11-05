@@ -6,6 +6,7 @@ describe("monitoring store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     sessionStorage.removeItem("monitoring-alarms");
+    localStorage.removeItem("monitoring-mqtt-settings");
   });
 
   it("only exposes beds from assigned wards", () => {
@@ -259,6 +260,21 @@ describe("monitoring store", () => {
         qos: 2,
       }),
     ).toThrow("仅开发者可以修改 MQTT 配置");
+  });
+
+  it("restores saved MQTT settings in a new session", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("DEVELOPER");
+    store.updateMqttSettings({
+      ...store.mqttSettings,
+      clientId: "persisted-client",
+      username: "blanket-device",
+    });
+
+    setActivePinia(createPinia());
+    const restored = useMonitoringStore();
+    expect(restored.mqttSettings.clientId).toBe("persisted-client");
+    expect(restored.mqttSettings.username).toBe("blanket-device");
   });
 
   it("gives the developer technical visibility beyond hospital administrators", () => {

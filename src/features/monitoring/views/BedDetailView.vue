@@ -115,6 +115,7 @@
         </div>
 
         <SensorDeviceGraphic :sensor="summary.sensor" />
+        <SensorLinkPanel :summary="summary" :settings="store.mqttSettings" compact />
 
         <div class="sensor-contract">
           <span>数据接口</span>
@@ -155,6 +156,7 @@ import PatientEditor from "../components/PatientEditor.vue";
 import RecordingPlayer from "../components/RecordingPlayer.vue";
 import RecordingTimeline from "../components/RecordingTimeline.vue";
 import SensorDeviceGraphic from "../components/SensorDeviceGraphic.vue";
+import SensorLinkPanel from "../components/SensorLinkPanel.vue";
 import {
   findPlaybackSegment,
   mapMediaMtxPlaybackItems,

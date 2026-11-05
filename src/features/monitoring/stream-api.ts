@@ -16,6 +16,12 @@ export interface SensorStreamController {
   close: () => void;
 }
 
+export interface SensorDataStreamHandlers {
+  onData?: (reading: SensorTelemetryEnvelope) => void;
+  onStatus?: SensorStreamHandlers["onStatus"];
+  onError?: (error: Error) => void;
+}
+
 export interface CameraStreamHandlers {
   onReady?: (stream: MediaStream | null, protocol: "webrtc" | "hls" | "flv") => void;
   onError?: (error: Error) => void;
@@ -74,6 +80,58 @@ export function openMqttSensorStream(
     });
   } catch (error) {
     handlers.onError?.(error instanceof Error ? error : new Error("MQTT connection failed"));
+  }
+
+  return {
+    close() {
+      closed = true;
+      client?.end(true);
+      handlers.onStatus?.("closed");
+    },
+  };
+}
+
+/**
+ * Subscribe to one bed's sensor data topic only.
+ */
+export function openSensorDataStream(
+  settings: MqttSettings,
+  dataTopic: string,
+  handlers: SensorDataStreamHandlers = {},
+): SensorStreamController {
+  let client: MqttClient | null = null;
+  let closed = false;
+
+  try {
+    handlers.onStatus?.("connecting");
+    client = mqtt.connect(settings.websocketUrl, {
+      clientId: `${settings.clientId}-${dataTopic.split("/").at(-2) ?? "sensor"}`,
+      username: settings.username,
+      password: settings.password,
+      reconnectPeriod: 3_000,
+      connectTimeout: 10_000,
+      clean: true,
+    });
+    client.on("connect", () => {
+      if (!client || closed) return;
+      handlers.onStatus?.("connected");
+      client.subscribe([dataTopic], { qos: settings.qos }, (error) => {
+        if (error) handlers.onError?.(error);
+      });
+    });
+    client.on("reconnect", () => handlers.onStatus?.("reconnecting"));
+    client.on("error", (error) => handlers.onError?.(error));
+    client.on("message", (_topic, payload) => {
+      try {
+        handlers.onData?.(JSON.parse(payload.toString("utf8")) as SensorTelemetryEnvelope);
+      } catch {
+        handlers.onError?.(new Error(`Invalid sensor payload on ${dataTopic}`));
+      }
+    });
+  } catch (error) {
+    handlers.onError?.(
+      error instanceof Error ? error : new Error("Sensor stream connection failed"),
+    );
   }
 
   return {

@@ -31,6 +31,10 @@ describe("online documentation", () => {
     expect(document).toContain('"title": "毯子状态异常"');
     expect(document).toContain("A 病区 · 外科");
     expect(document).toContain("openMqttSensorStream");
+    expect(document).toContain("openSensorDataStream");
+    expect(document).toContain("runSensorProcessors");
+    expect(document).toContain("SensorDataProcessor");
+    expect(document).toContain("/api/public/sensors/bed-a-01");
   });
 
   it("generates camera endpoints and room mappings", () => {
