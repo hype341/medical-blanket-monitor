@@ -1,10 +1,14 @@
 $ErrorActionPreference = "Stop"
 
 $brokerAddress = "192.168.86.128"
-$ports = @(1883, 8083)
+$ports = @(80, 1883, 8083)
 
 foreach ($port in $ports) {
-  $firewallRule = "Medical Blanket MQTT $port"
+  $firewallRule = if ($port -eq 80) {
+    "Medical Blanket HTTP 80"
+  } else {
+    "Medical Blanket MQTT $port"
+  }
   $existingProxy = netsh interface portproxy show v4tov4 |
     Select-String -Pattern "^0\.0\.0\.0\s+$port\s+$([regex]::Escape($brokerAddress))\s+$port\s*$"
 
