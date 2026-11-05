@@ -146,6 +146,7 @@ export function openSensorDataStream(
 
 export interface PlatformAlarmStreamHandlers {
   onAlarm?: (alarm: AlarmEnvelope) => void;
+  onDeleted?: (alarmId: string) => void;
   onStatus?: SensorStreamHandlers["onStatus"];
   onError?: (error: Error) => void;
 }
@@ -164,7 +165,20 @@ export function openPlatformAlarmStream(
     socket = new WebSocket(`${protocol}//${window.location.host}/ws/alarms`);
     socket.onopen = () => handlers.onStatus?.("connected");
     socket.onmessage = (event) => {
-      const alarm = parseAlarmMessage(String(event.data));
+      const raw = String(event.data);
+      let message: { event?: string; alarm?: unknown; alarmId?: string };
+      try {
+        message = JSON.parse(raw) as typeof message;
+      } catch {
+        return;
+      }
+      if (message.event === "alarm.deleted" && message.alarmId) {
+        handlers.onDeleted?.(message.alarmId);
+        return;
+      }
+      const alarm = parseAlarmMessage(
+        message.event && message.alarm ? JSON.stringify(message.alarm) : raw,
+      );
       if (alarm) handlers.onAlarm?.(alarm);
     };
     socket.onerror = () => handlers.onError?.(new Error("Alarm WebSocket connection failed"));

@@ -455,6 +455,49 @@ test("live MQTT warning is displayed as the same red bed alarm", async ({ page, 
   );
 });
 
+test("resolved MQTT alarm synchronizes across open platform pages", async ({ browser, request }) => {
+  const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
+  test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+
+  const watcherContext = await browser.newContext();
+  const operatorContext = await browser.newContext();
+  const watcher = await watcherContext.newPage();
+  const operator = await operatorContext.newPage();
+
+  try {
+    await loginAs(watcher, "admin");
+    await loginAs(operator, "nurse");
+    await watcher.waitForTimeout(1_000);
+    const alarmId = `live-sync-${Date.now()}`;
+    const response = await request.post(`${liveOrigin}/api/developer/notify`, {
+      data: {
+        topic: "medical-blanket/v1/H001/WARD-A/301-01/alarm",
+        notification: {
+          type: "notification",
+          alarmId,
+          level: "WARNING",
+          title: "跨页面同步告警",
+          bedId: "bed-a-01",
+          occurredAt: new Date().toISOString(),
+        },
+      },
+    });
+    expect(response.ok()).toBe(true);
+    await expect(watcher.locator(".navbar-alert-badge")).toHaveText("1");
+    await expect(operator.locator(".navbar-alert-badge")).toHaveText("1");
+
+    await operator.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+    await operator.getByRole("button", { name: "标记已解决" }).click();
+    await expect(watcher.locator(".navbar-alert-badge")).toHaveCount(0);
+    await expect(
+      operator.locator(".alarm-card").filter({ hasText: "跨页面同步告警" }),
+    ).toHaveAttribute("data-status", "RESOLVED");
+  } finally {
+    await watcherContext.close();
+    await operatorContext.close();
+  }
+});
+
 test("head nurse only receives the assigned ward", async ({ page }) => {
   await loginAs(page, "head-nurse");
   await expect(page.getByText("A 病区护士长", { exact: true })).toBeVisible();

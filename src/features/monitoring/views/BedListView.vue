@@ -98,6 +98,7 @@ import AddBedDialog from "../components/AddBedDialog.vue";
 import BedStatusCard from "../components/BedStatusCard.vue";
 import { filterBedSummaries } from "../selectors";
 import { useMonitoringStore } from "../store";
+import { navigateToBedDetail } from "../navigation";
 import type { AddBedInput, BedMonitorSummary, BedStatus } from "../types";
 
 const router = useRouter();
@@ -128,8 +129,8 @@ const roomGroups = computed(() =>
     .filter((room) => room.beds.length),
 );
 
-function openBed(bedId: string): void {
-  router.push(`/beds/${bedId}`);
+async function openBed(bedId: string): Promise<void> {
+  await navigateToBedDetail(router, bedId);
 }
 
 function resetFilters(): void {

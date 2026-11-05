@@ -261,6 +261,7 @@ import {
   publishAlarmNotification,
   type NotificationLevel,
 } from "../notifications";
+import { navigateToBedDetail } from "../navigation";
 
 const store = useMonitoringStore();
 const router = useRouter();
@@ -323,27 +324,49 @@ function savePlatformName(): void {
   }
 }
 
-function sendTestAlarm(): void {
+async function sendTestAlarm(): Promise<void> {
   const bed = store.beds.find((item) => item.id === "bed-a-01");
   if (!bed) {
     ElMessage.error("未找到测试床位");
     return;
   }
-  store.ingestAlarm({
-    alarmId: `developer-test-${Date.now()}`,
-    code: "DEVELOPER_TEST_ALARM",
-    level: "WARNING",
-    status: "OPEN",
-    title: "毯子状态异常",
-    detail: "开发者工作台触发的联调告警",
-    sensorKey: "blanket-001",
-    cameraKey: "camera-01",
-    wardId: bed.wardId,
-    roomId: bed.roomId,
-    bedId: bed.id,
-    occurredAt: new Date().toISOString(),
-  });
-  void router.push(`/beds/${bed.id}`);
+  const alarmId = `developer-test-${Date.now()}`;
+  const occurredAt = new Date().toISOString();
+  const summary = store.bedSummaries.find((item) => item.bed.id === bed.id);
+  if (import.meta.env.VITE_MOCK_ENABLED === "true") {
+    store.ingestAlarm({
+      alarmId,
+      code: "DEVELOPER_TEST_ALARM",
+      level: "WARNING",
+      status: "OPEN",
+      title: "毯子状态异常",
+      detail: "开发者工作台触发的联调告警",
+      sensorKey: "blanket-001",
+      cameraKey: "camera-01",
+      wardId: bed.wardId,
+      roomId: bed.roomId,
+      bedId: bed.id,
+      occurredAt,
+    });
+  } else {
+    if (!summary?.alarmTopic) {
+      ElMessage.error("当前床位没有告警主题");
+      return;
+    }
+    try {
+      await publishAlarmNotification(summary.alarmTopic, {
+        alarmId,
+        bedId: bed.id,
+        level: "WARNING",
+        message: "毯子状态异常",
+        occurredAt,
+      });
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : "测试告警下发失败");
+      return;
+    }
+  }
+  await navigateToBedDetail(router, bed.id);
 }
 
 async function sendMqttAlarm(): Promise<void> {

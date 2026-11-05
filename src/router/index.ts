@@ -282,6 +282,19 @@ const router = createRouter({
   scrollBehavior: () => ({ left: 0, top: 0 }),
 });
 
+// 部署更新期间，旧页面可能引用已经替换掉的懒加载文件。
+// 检测到 chunk 加载失败时自动完整刷新一次，避免用户看到空白页。
+router.onError((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!/Failed to fetch dynamically imported module|Loading chunk|Importing a module/i.test(message)) {
+    return;
+  }
+  const lastReload = Number(sessionStorage.getItem("blanket-chunk-reload-at") ?? "0");
+  if (Date.now() - lastReload < 10_000) return;
+  sessionStorage.setItem("blanket-chunk-reload-at", String(Date.now()));
+  window.location.reload();
+});
+
 /**
  * 全局注册 router
  */

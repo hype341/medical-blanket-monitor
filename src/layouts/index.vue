@@ -30,6 +30,7 @@ onMounted(() => {
   if (import.meta.env.VITE_MOCK_ENABLED === "true") return;
   alarmStream = openPlatformAlarmStream({
     onAlarm: (alarm) => monitoringStore.ingestAlarm(alarm),
+    onDeleted: (alarmId) => monitoringStore.removeAlarm(alarmId),
   });
 });
 

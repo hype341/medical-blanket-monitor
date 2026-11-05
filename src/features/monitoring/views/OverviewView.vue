@@ -50,7 +50,7 @@
                     type="button"
                     class="bed-chip"
                     :data-status="summary.sensor?.status ?? 'OFFLINE'"
-                    @click="router.push(`/beds/${summary.bed.id}`)"
+                    @click="navigateToBedDetail(router, summary.bed.id)"
                   >
                     <span>{{ summary.bed.bedNo }}</span>
                     <small>{{ summary.bed.patientName ?? "空床" }}</small>
@@ -76,7 +76,7 @@
             type="button"
             class="attention-item"
             :data-tone="item.tone"
-            @click="router.push(`/beds/${item.bedId}`)"
+            @click="navigateToBedDetail(router, item.bedId)"
           >
             <span class="attention-item__mark" />
             <div>
@@ -119,6 +119,7 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useMonitoringStore } from "../store";
+import { navigateToBedDetail } from "../navigation";
 
 const router = useRouter();
 const store = useMonitoringStore();

@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -27,7 +28,7 @@ public class AlarmStore {
         this.socketHandler = socketHandler;
     }
 
-    public void accept(JsonNode input) {
+    public synchronized void accept(JsonNode input) {
         if (!(input instanceof ObjectNode payload)) return;
         String alarmId = payload.path("alarmId").asText("");
         String bedId = payload.path("bedId").asText("");
@@ -39,9 +40,29 @@ public class AlarmStore {
         boolean isNew = alarms.putIfAbsent(alarmId, payload.deepCopy()) == null;
         if (isNew) {
             order.add(alarmId);
-            socketHandler.broadcast(payload);
+            socketHandler.broadcast(event("alarm.created", payload));
         }
         while (order.size() > 250) alarms.remove(order.remove(0));
+    }
+
+    public synchronized Optional<ObjectNode> resolve(String alarmId) {
+        ObjectNode alarm = alarms.get(alarmId);
+        if (alarm == null) return Optional.empty();
+        alarm.put("status", "RESOLVED");
+        alarm.put("resolvedAt", OffsetDateTime.now(ZONE).format(FORMAT));
+        socketHandler.broadcast(event("alarm.updated", alarm));
+        return Optional.of(alarm.deepCopy());
+    }
+
+    public synchronized boolean delete(String alarmId) {
+        ObjectNode removed = alarms.remove(alarmId);
+        if (removed == null) return false;
+        order.remove(alarmId);
+        ObjectNode event = objectMapper.createObjectNode();
+        event.put("event", "alarm.deleted");
+        event.put("alarmId", alarmId);
+        socketHandler.broadcast(event);
+        return true;
     }
 
     public List<ObjectNode> list(String bedId) {
@@ -56,5 +77,12 @@ public class AlarmStore {
 
     public ObjectNode envelope(ObjectNode alarm) {
         return alarm;
+    }
+
+    private ObjectNode event(String name, ObjectNode alarm) {
+        ObjectNode event = objectMapper.createObjectNode();
+        event.put("event", name);
+        event.set("alarm", alarm.deepCopy());
+        return event;
     }
 }

@@ -79,8 +79,8 @@
           :location-label="`${summary.ward?.name ?? ''} · ${summary.room?.name ?? ''} · ${summary.bed.bedNo} 床`"
           :topic="summary.alarmTopic ?? ''"
           :show-topic="store.activeRole === 'DEVELOPER'"
-          @resolve="store.resolveAlarm"
-          @remove="store.removeAlarm"
+          @resolve="resolveAlarmEverywhere"
+          @remove="removeAlarmEverywhere"
           @open-recording="openAlarmRecording"
         />
       </section>
@@ -263,6 +263,36 @@ function openAlarmRecording(alarm: AlarmEnvelope): void {
   if (!openRecordingAt(alarm.occurredAt)) {
     ElMessage.warning("该告警时刻暂无对应录像片段");
   }
+}
+
+async function resolveAlarmEverywhere(alarmId: string): Promise<void> {
+  if (import.meta.env.VITE_MOCK_ENABLED === "true") {
+    store.resolveAlarm(alarmId);
+    return;
+  }
+  const response = await fetch(`/api/alarms/${encodeURIComponent(alarmId)}/resolve`, {
+    method: "PATCH",
+  });
+  if (!response.ok) {
+    ElMessage.error("告警状态同步失败");
+    return;
+  }
+  store.resolveAlarm(alarmId);
+}
+
+async function removeAlarmEverywhere(alarmId: string): Promise<void> {
+  if (import.meta.env.VITE_MOCK_ENABLED === "true") {
+    store.removeAlarm(alarmId);
+    return;
+  }
+  const response = await fetch(`/api/alarms/${encodeURIComponent(alarmId)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    ElMessage.error("告警删除同步失败");
+    return;
+  }
+  store.removeAlarm(alarmId);
 }
 
 function savePatient(input: PatientUpdateInput): void {
