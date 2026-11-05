@@ -42,3 +42,6 @@ yarn.lock
 
 # Local deploy config
 deploy.mjs
+
+# Sensitive operational credentials
+private/
