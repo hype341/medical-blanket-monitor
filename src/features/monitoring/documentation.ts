@@ -166,6 +166,10 @@ openSensorDataStream(settings, dataTopic, handlers);
 
 处理器通过 \`SensorDataProcessor\` 接口扩展，\`runSensorProcessors\` 会并行执行已注册处理器并返回统一的 \`DataFinding[]\`。
 
+## 设备发布确认
+
+设备只需要上报数据时使用 \`QoS 0\`，不返回任何消息。设备需要确认 Broker 已接收时使用 \`QoS 1\`，Broker 只返回一个标准的空 \`PUBACK\`，不会返回业务 JSON 或附加时间字段。不要为简单确认额外建立返回 Topic。
+
 ## 告警报文示例
 
 告警 Topic 直接归属于床位，报文中的 \`bedId\` 用于二次校验。

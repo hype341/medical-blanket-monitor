@@ -34,6 +34,7 @@ describe("online documentation", () => {
     expect(document).toContain("openSensorDataStream");
     expect(document).toContain("runSensorProcessors");
     expect(document).toContain("SensorDataProcessor");
+    expect(document).toContain("PUBACK");
     expect(document).toContain("/api/public/sensors/bed-a-01");
   });
 

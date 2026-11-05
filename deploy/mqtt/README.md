@@ -38,3 +38,13 @@ http://10.208.236.217/api/public/sensors/{bedId}
 
 File writes are coalesced every 100 ms so high-rate publishing does not block
 MQTT intake.
+
+## Publish acknowledgement
+
+- `QoS 0`: no return; best throughput and lowest latency.
+- `QoS 1`: EMQX returns one empty standard `PUBACK` after accepting the message.
+  This is the recommended simple acknowledgement when the device needs
+  confirmation.
+- The acknowledgement contains no application data, business JSON or added
+  timestamp.
+- `QoS 2` is unnecessary for this use case because it adds a second round trip.
