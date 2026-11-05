@@ -8,7 +8,8 @@ import os
 import signal
 import subprocess
 import sys
-from datetime import datetime, timezone
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -22,9 +23,15 @@ MQTT_TOPIC = os.environ.get(
     "MQTT_TOPIC",
     "medical-blanket/v1/+/+/+/sensor/+/data",
 )
+WRITE_INTERVAL_SECONDS = max(
+    0.01,
+    float(os.environ.get("SENSOR_WRITE_INTERVAL_MS", "100")) / 1000,
+)
 
 running = True
 subscriber: subprocess.Popen[str] | None = None
+pending_payloads: dict[str, dict[str, Any]] = {}
+pending_lock = threading.Lock()
 
 
 def stop_service(_signum: int, _frame: Any) -> None:
@@ -37,7 +44,7 @@ def stop_service(_signum: int, _frame: Any) -> None:
 def atomic_write_json(file_path: Path, value: dict[str, Any]) -> None:
     temporary = file_path.with_name(f".{file_path.name}.{os.getpid()}.tmp")
     temporary.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2),
+        json.dumps(value, ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8",
     )
     os.replace(temporary, file_path)
@@ -62,36 +69,23 @@ def process_message(topic: str, payload_text: str) -> None:
     if not isinstance(payload, dict):
         return
 
-    envelope = {
-        **payload,
-        "sourceTopic": topic,
-        "bedCode": parts[4],
-        "deviceKey": payload.get("deviceKey") or parts[-2],
-        "receivedAt": datetime.now(timezone.utc).astimezone().isoformat(),
-    }
-    keys = {
-        safe_key(str(envelope.get("bedId", ""))),
-        safe_key(str(envelope.get("bedCode", ""))),
-        safe_key(str(envelope.get("deviceKey", ""))),
-    }
+    bed_id = safe_key(str(payload.get("bedId", "")))
+    if not bed_id:
+        return
 
-    index_path = OUTPUT_DIR / "index.json"
-    try:
-        index = json.loads(index_path.read_text(encoding="utf-8"))
-        if not isinstance(index, dict):
-            index = {}
-    except (FileNotFoundError, json.JSONDecodeError):
-        index = {}
+    # Keep only the newest payload per bed; disk writes are rate-limited below.
+    with pending_lock:
+        pending_payloads[bed_id] = payload
 
-    for key in keys:
-        if key:
-            atomic_write_json(OUTPUT_DIR / f"{key}.json", envelope)
-            index[key] = {
-                "url": f"/api/public/sensors/{key}",
-                "updatedAt": envelope["receivedAt"],
-            }
 
-    atomic_write_json(index_path, index)
+def writer_loop() -> None:
+    while running:
+        time.sleep(WRITE_INTERVAL_SECONDS)
+        with pending_lock:
+            batch = pending_payloads.copy()
+            pending_payloads.clear()
+        for bed_id, payload in batch.items():
+            atomic_write_json(OUTPUT_DIR / f"{bed_id}.json", payload)
 
 
 def main() -> int:
@@ -104,6 +98,8 @@ def main() -> int:
     signal.signal(signal.SIGINT, stop_service)
 
     global subscriber
+    writer = threading.Thread(target=writer_loop, daemon=True)
+    writer.start()
     subscriber = subprocess.Popen(
         [
             "/usr/bin/mosquitto_sub",
