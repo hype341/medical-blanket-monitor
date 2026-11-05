@@ -99,6 +99,54 @@
       </div>
     </section>
 
+    <section class="developer-live" aria-label="实时运行数据">
+      <header>
+        <span>实时运行数据</span>
+        <small>当前授权范围</small>
+      </header>
+      <div>
+        <article>
+          <strong>{{ store.visibleBeds.length }}</strong>
+          <span>床位</span>
+        </article>
+        <article>
+          <strong>{{ store.sensors.length }}</strong>
+          <span>毯子</span>
+        </article>
+        <article>
+          <strong>{{ store.cameras.length }}</strong>
+          <span>摄像头</span>
+        </article>
+        <article :data-alert="store.openAlarmCount > 0">
+          <strong>{{ store.openAlarmCount }}</strong>
+          <span>待处理告警</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="developer-shortcuts" aria-label="开发者快捷入口">
+      <button type="button" @click="router.push('/devices/blankets')">
+        <span>设备目录</span>
+        <strong>毯子目录</strong>
+        <small>名称、床位对应关系和 MQTT 同步</small>
+      </button>
+      <button type="button" @click="router.push('/devices/bindings')">
+        <span>设备关系</span>
+        <strong>设备绑定</strong>
+        <small>毯子与摄像头归属床位</small>
+      </button>
+      <button type="button" @click="router.push('/devices/cameras')">
+        <span>视频管线</span>
+        <strong>摄像头链接</strong>
+        <small>WebRTC、HLS、RTSP 和回放入口</small>
+      </button>
+      <button type="button" @click="router.push('/admin/connections')">
+        <span>数据管线</span>
+        <strong>MQTT 接入</strong>
+        <small>主题、报文、文档和在线诊断</small>
+      </button>
+    </section>
+
     <div class="pipeline-grid">
       <button
         class="pipeline-card pipeline-card--mqtt"
@@ -189,15 +237,15 @@
       <dl>
         <div>
           <dt>前端 API</dt>
-          <dd>/prod-api/api/v1</dd>
+          <dd>/api/public/sensors/{bedId}</dd>
         </div>
         <div>
-          <dt>视频代理</dt>
-          <dd>/live</dd>
+          <dt>服务器时间</dt>
+          <dd>/api/public/time</dd>
         </div>
         <div>
-          <dt>录放入口</dt>
-          <dd>http://10.208.236.131:9996</dd>
+          <dt>告警通知</dt>
+          <dd>MQTT · notification</dd>
         </div>
       </dl>
     </section>
@@ -222,12 +270,18 @@ const alarmBedId = ref(store.bedSummaries[0]?.bed.id ?? "");
 const alarmLevel = ref<NotificationLevel>("WARNING");
 const alarmMessage = ref("请检查当前床位毯子状态");
 const sendingAlarm = ref(false);
-const services = [
+const services = computed(() => [
   { name: "Nginx", state: "静态站点在线", online: true },
-  { name: "Spring Boot", state: "业务服务未接入", online: false },
-  { name: "EMQX", state: "等待 MQTT 参数", online: false },
-  { name: "MediaMTX", state: "实时流在线", online: true },
-];
+  { name: "EMQX", state: store.mqttSettings.brokerUrl, online: true },
+  { name: "MQTT 告警监听", state: "WebSocket 实时订阅", online: true },
+  {
+    name: "MediaMTX",
+    state: store.cameras.some((camera) => camera.status === "ONLINE")
+      ? "实时流在线"
+      : "等待视频设备",
+    online: store.cameras.some((camera) => camera.status === "ONLINE"),
+  },
+]);
 const bedAlarmTopics = computed(() =>
   Array.from(
     new Set(
@@ -525,6 +579,116 @@ async function sendMqttAlarm(): Promise<void> {
   small {
     font-size: 9px;
     color: #91b4a9;
+  }
+}
+
+.developer-live {
+  padding: 14px 16px;
+  margin-top: 14px;
+  background: #fff;
+  border: 1px solid #dbe6e2;
+
+  > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e6ece9;
+
+    span {
+      font-size: 11px;
+      font-weight: 680;
+      color: #2d665a;
+    }
+
+    small {
+      font-size: 9px;
+      color: #81918c;
+    }
+  }
+
+  > div {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 11px;
+  }
+
+  article {
+    display: flex;
+    gap: 7px;
+    align-items: baseline;
+    padding: 4px 14px;
+    border-right: 1px solid #e7eeeb;
+
+    &:last-child {
+      border-right: 0;
+    }
+
+    strong {
+      font-family: "Avenir Next", "Noto Sans SC", sans-serif;
+      font-size: 25px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: #28695b;
+    }
+
+    span {
+      font-size: 9px;
+      color: #7e8f89;
+    }
+
+    &[data-alert="true"] strong {
+      color: #b83e34;
+    }
+  }
+}
+
+.developer-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 14px;
+  overflow: hidden;
+  background: #dbe6e2;
+  border: 1px solid #dbe6e2;
+
+  button {
+    display: grid;
+    gap: 4px;
+    padding: 14px;
+    color: #315f55;
+    text-align: left;
+    cursor: pointer;
+    background: #fff;
+    border: 0;
+    transition:
+      color 160ms ease,
+      background 160ms ease;
+
+    &:hover,
+    &:focus-visible {
+      color: #174e46;
+      outline: none;
+      background: #f0f8f4;
+    }
+
+    span {
+      font-size: 8px;
+      font-weight: 650;
+      color: #5a8a7d;
+      letter-spacing: 0.08em;
+    }
+
+    strong {
+      font-size: 13px;
+      font-weight: 680;
+    }
+
+    small {
+      font-size: 9px;
+      line-height: 1.5;
+      color: #7f908a;
+    }
   }
 }
 
@@ -887,6 +1051,11 @@ dl {
     grid-template-columns: 1fr;
   }
 
+  .developer-live > div,
+  .developer-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .service-flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -922,6 +1091,20 @@ dl {
 
   .service-flow {
     grid-template-columns: 1fr;
+  }
+
+  .developer-live > div,
+  .developer-shortcuts {
+    grid-template-columns: 1fr;
+  }
+
+  .developer-live article {
+    border-right: 0;
+    border-bottom: 1px solid #e7eeeb;
+
+    &:last-child {
+      border-bottom: 0;
+    }
   }
 }
 </style>

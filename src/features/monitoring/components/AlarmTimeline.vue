@@ -57,7 +57,7 @@
       </div>
     </div>
 
-    <footer>
+    <footer v-if="showTopic">
       <span>本床位独立告警 Topic</span>
       <code :title="topic || '尚未生成'">{{ topic || "尚未生成" }}</code>
       <small>告警前 30 秒 + 后 60 秒自动剪辑</small>
@@ -74,11 +74,13 @@ const props = withDefaults(
     alarms?: AlarmEnvelope[];
     locationLabel?: string;
     topic?: string;
+    showTopic?: boolean;
   }>(),
   {
     alarms: () => [],
     locationLabel: "",
     topic: "",
+    showTopic: true,
   },
 );
 

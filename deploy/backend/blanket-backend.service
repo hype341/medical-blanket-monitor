@@ -1,0 +1,19 @@
+[Unit]
+Description=Medical Blanket Spring Boot API
+After=network.target docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/blanket/blanket-backend.env
+ExecStart=/usr/bin/java -Xms128m -Xmx512m -jar /opt/blanket/blanket-backend.jar
+Restart=always
+RestartSec=3
+User=www-data
+Group=www-data
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

@@ -25,7 +25,7 @@ async function openDevicePage(page: Page, label: string): Promise<void> {
 }
 
 test("nurse can open a bed monitor from the safety overview", async ({ page }) => {
-  await loginAsAdmin(page);
+  await loginAs(page, "nurse");
 
   await expect(page.getByRole("heading", { name: "安全总览" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "功能模块" })).toBeVisible();
@@ -51,16 +51,10 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(page.getByTestId("sensor-graphic")).toBeVisible();
   await expect(page.getByText("原始数据", { exact: true })).toBeVisible();
   await expect(page.getByText("ff,aa", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("medical-blanket/v1/H001/WARD-A/301-01/alarm", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(/medical-blanket\/v1\/H001\/WARD-A\/301-01\/sensor\/blanket-001\/data/).first(),
-  ).toBeVisible();
-  await expect(page.getByText("传感器数据接口", { exact: true })).toBeVisible();
-  await expect(page.getByText(/\/api\/public\/sensors\/bed-a-01/).first()).toBeVisible();
+  await expect(page.getByText("传感器数据接口", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/medical-blanket\/v1\//)).toHaveCount(0);
+  await expect(page.getByText(/\/api\/public\/sensors\/bed-a-01/)).toHaveCount(0);
+  await expect(page.locator(".camera-links")).toHaveCount(0);
   await expect(page.getByText(/sensor\/.+\/telemetry/)).toHaveCount(0);
   await expect(page.getByText("毯面温度")).toHaveCount(0);
   await expect(page.getByText("设备电量")).toHaveCount(0);
@@ -180,6 +174,9 @@ test("administrator can edit bed location and overwrite patient content", async 
 test("only administrators can manage wards and rooms", async ({ page }) => {
   await loginAsAdmin(page);
   await page.getByText("管理设置", { exact: true }).first().click();
+  await expect(page.getByText("病区与病房", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("人员权限", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("告警与录像策略", { exact: true }).first()).toBeVisible();
   await page.getByText("病区与病房", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "病区与病房管理" })).toBeVisible();
 
@@ -207,8 +204,9 @@ test("only administrators can manage wards and rooms", async ({ page }) => {
   await expect(page.getByText("李护士").first()).toBeVisible();
   await expect(page.locator(".staff-row").filter({ hasText: "李护士" })).toContainText("责任护士");
   await page.locator(".staff-page").screenshot({ path: "test-results/monitoring-staff-tags.png" });
+  await page.screenshot({ path: "test-results/monitoring-navigation-groups.png" });
 
-  await page.getByText("告警与录像", { exact: true }).first().click();
+  await page.getByText("告警与录像策略", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "告警与录像策略" })).toBeVisible();
   await expect(page.getByText("系统连接", { exact: true })).toHaveCount(0);
 });
@@ -222,9 +220,13 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
     .filter({ hasText: "开发者概览" })
     .click();
   await expect(page.getByRole("heading", { name: "开发者工作台" })).toBeVisible();
+  await expect(page.getByText("实时运行数据")).toBeVisible();
+  await expect(page.getByRole("button", { name: /毯子目录/ })).toBeVisible();
+  await expect(page.getByText("MQTT 告警监听")).toBeVisible();
   await expect(page.getByRole("combobox", { name: "告警床位" })).toBeVisible();
   await expect(page.getByLabel("警告内容")).toBeVisible();
   await expect(page.getByRole("button", { name: "下发警告" })).toBeVisible();
+  await page.screenshot({ path: "test-results/monitoring-developer-overview-v2.png", fullPage: true });
   await page
     .locator(".alarm-test-panel")
     .screenshot({ path: "test-results/monitoring-alarm-dispatch.png" });
@@ -369,6 +371,18 @@ test("administrator can manage camera names and locations without stream links",
   await expect(page.getByText(/A 病区 · 外科 \/ 302 病房 \/ 01 床/).first()).toBeVisible();
 });
 
+test("developer can still see technical MQTT and camera links in bed detail", async ({ page }) => {
+  await loginAs(page, "developer");
+  await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+
+  await expect(page.locator(".sensor-links")).toBeVisible();
+  await expect(page.locator(".camera-links")).toBeVisible();
+  await expect(
+    page.getByText("medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data").first(),
+  ).toBeVisible();
+  await expect(page.getByText("本床位独立告警 Topic")).toBeVisible();
+});
+
 test("developer can rename the platform brand", async ({ page }) => {
   await loginAs(page, "developer");
   await page
@@ -409,6 +423,36 @@ test("developer can send a bed notification through the MQTT service", async ({ 
       title: "请检查当前床位毯子状态",
     },
   });
+});
+
+test("live MQTT warning is displayed as the same red bed alarm", async ({ page, request }) => {
+  const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
+  test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+
+  await loginAs(page, "developer");
+  await page.waitForTimeout(1_000);
+  const alarmId = `live-warning-${Date.now()}`;
+  const response = await request.post(`${liveOrigin}/api/developer/notify`, {
+    data: {
+      topic: "medical-blanket/v1/H001/WARD-A/301-01/alarm",
+      notification: {
+        type: "notification",
+        alarmId,
+        level: "WARNING",
+        title: "MQTT 红色告警联调",
+        bedId: "bed-a-01",
+        occurredAt: new Date().toISOString(),
+      },
+    },
+  });
+  expect(response.ok()).toBe(true);
+
+  await expect(page.locator(".navbar-alert-badge")).toHaveText("1");
+  await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+  await expect(page.locator(".alarm-card").filter({ hasText: "MQTT 红色告警联调" })).toHaveAttribute(
+    "data-status",
+    "OPEN",
+  );
 });
 
 test("head nurse only receives the assigned ward", async ({ page }) => {

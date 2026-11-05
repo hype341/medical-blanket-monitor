@@ -61,7 +61,11 @@
         <button v-if="recordingAt" type="button" class="back-to-live" @click="returnToLive">
           返回实时画面
         </button>
-        <CameraLinkPanel :camera="selectedCamera" compact />
+        <CameraLinkPanel
+          v-if="store.activeRole === 'DEVELOPER'"
+          :camera="selectedCamera"
+          compact
+        />
         <RecordingTimeline
           :segments="recordingSegments"
           :alarms="alarms"
@@ -74,6 +78,7 @@
           :alarms="alarms"
           :location-label="`${summary.ward?.name ?? ''} · ${summary.room?.name ?? ''} · ${summary.bed.bedNo} 床`"
           :topic="summary.alarmTopic ?? ''"
+          :show-topic="store.activeRole === 'DEVELOPER'"
           @resolve="store.resolveAlarm"
           @remove="store.removeAlarm"
           @open-recording="openAlarmRecording"
@@ -122,9 +127,14 @@
         </div>
 
         <SensorDeviceGraphic :sensor="summary.sensor" />
-        <SensorLinkPanel :summary="summary" :settings="store.mqttSettings" compact />
+        <SensorLinkPanel
+          v-if="store.activeRole === 'DEVELOPER'"
+          :summary="summary"
+          :settings="store.mqttSettings"
+          compact
+        />
 
-        <div class="sensor-contract">
+        <div v-if="store.activeRole === 'DEVELOPER'" class="sensor-contract">
           <span>数据接口</span>
           <p>传感器只上报标准化设备事件，由后续分析处理器解释和扩展。</p>
           <code v-if="summary.dataTopic">数据：{{ summary.dataTopic }}</code>
@@ -222,6 +232,8 @@ const recordingSegments = ref<RecordingSegment[]>([]);
 const recordingAt = ref("");
 const playbackPositionAt = ref("");
 let recordingTimer: ReturnType<typeof setInterval> | null = null;
+let sensorTimer: ReturnType<typeof setInterval> | null = null;
+let sensorFetching = false;
 const alarms = computed(() => store.alarms.filter((alarm) => alarm.bedId === route.params.bedId));
 
 function openRecordingAt(targetAt: string): boolean {
@@ -297,13 +309,37 @@ async function refreshRecordings(): Promise<void> {
   }
 }
 
+async function refreshSensorSnapshot(): Promise<void> {
+  const bedId = summary.value?.bed.id;
+  if (!bedId || sensorFetching) return;
+  sensorFetching = true;
+  try {
+    const response = await fetch(`/api/public/sensors/${encodeURIComponent(bedId)}`);
+    if (response.ok) {
+      const snapshot = (await response.json()) as {
+        status?: "ONLINE" | "STALE" | "OFFLINE" | "ALARM";
+        data?: string;
+        observedAt?: string;
+      };
+      store.syncSensorSnapshot(bedId, snapshot);
+    }
+  } catch {
+    // Keep the last successful reading during a temporary backend outage.
+  } finally {
+    sensorFetching = false;
+  }
+}
+
 onMounted(() => {
   void refreshRecordings();
+  void refreshSensorSnapshot();
   recordingTimer = setInterval(() => void refreshRecordings(), 15_000);
+  sensorTimer = setInterval(() => void refreshSensorSnapshot(), 1_000);
 });
 
 onBeforeUnmount(() => {
   if (recordingTimer) clearInterval(recordingTimer);
+  if (sensorTimer) clearInterval(sensorTimer);
 });
 </script>
 

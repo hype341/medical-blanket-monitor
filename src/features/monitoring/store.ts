@@ -5,6 +5,7 @@ import { createMonitoringFixture } from "./mock-data";
 import { defaultModulesForRole } from "./permissions";
 import type { AlarmEnvelope } from "./recording";
 import { getBedMonitorSummary } from "./selectors";
+import { normalizeHexData } from "./processing";
 import type {
   AddBedInput,
   BlanketInput,
@@ -22,6 +23,7 @@ import type {
   PermissionModule,
   PatientUpdateInput,
   SensorDevice,
+  SensorSnapshot,
   StaffInput,
   UpdateRoomInput,
   UpdateWardInput,
@@ -39,6 +41,7 @@ function loadStoredAlarms(): AlarmEnvelope[] {
 const MQTT_SETTINGS_KEY = "monitoring-mqtt-settings";
 const PLATFORM_NAME_KEY = "monitoring-platform-name";
 const STAFF_TAGS_KEY = "monitoring-staff-tags";
+const MODULE_MIGRATION_KEY = "monitoring-module-schema";
 const DEFAULT_PLATFORM_NAME = "医用智能毯安全监护平台";
 const DEFAULT_STAFF_TAGS = ["责任护士", "夜班", "实习"];
 const DEFAULT_MQTT_SETTINGS: MqttSettings = {
@@ -47,7 +50,7 @@ const DEFAULT_MQTT_SETTINGS: MqttSettings = {
   clientId: "medical-blanket-platform",
   username: "blanket-service",
   password: "demo-mqtt-secret",
-  alarmTopic: "medical-blanket/v1/+/+/+/+/alarm",
+  alarmTopic: "medical-blanket/v1/+/+/+/alarm",
   alarmTitleTemplate: "{{deviceName}} 状态异常",
   alarmDetailTemplate: "{{bedName}} 在 {{occurredAt}} 上报 {{alarmCode}}",
   qos: 1,
@@ -56,9 +59,12 @@ const DEFAULT_MQTT_SETTINGS: MqttSettings = {
 function loadMqttSettings(): MqttSettings {
   try {
     const value = JSON.parse(localStorage.getItem(MQTT_SETTINGS_KEY) ?? "null") as unknown;
-    return value && typeof value === "object"
-      ? { ...DEFAULT_MQTT_SETTINGS, ...(value as Partial<MqttSettings>) }
-      : { ...DEFAULT_MQTT_SETTINGS };
+    if (!value || typeof value !== "object") return { ...DEFAULT_MQTT_SETTINGS };
+    const restored = { ...DEFAULT_MQTT_SETTINGS, ...(value as Partial<MqttSettings>) };
+    if (restored.alarmTopic === "medical-blanket/v1/+/+/+/+/alarm") {
+      restored.alarmTopic = DEFAULT_MQTT_SETTINGS.alarmTopic;
+    }
+    return restored;
   } catch {
     return { ...DEFAULT_MQTT_SETTINGS };
   }
@@ -96,9 +102,19 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   );
   const alarms = ref<AlarmEnvelope[]>(loadStoredAlarms());
   const staffTags = ref<string[]>(loadStaffTags());
-  watch(alarms, (value) => sessionStorage.setItem("monitoring-alarms", JSON.stringify(value)), {
-    deep: true,
-  });
+  let alarmPersistTimer: ReturnType<typeof setTimeout> | null = null;
+  watch(
+    alarms,
+    (value) => {
+      const serialized = JSON.stringify(value);
+      if (alarmPersistTimer) clearTimeout(alarmPersistTimer);
+      alarmPersistTimer = setTimeout(() => {
+        sessionStorage.setItem("monitoring-alarms", serialized);
+        alarmPersistTimer = null;
+      }, 250);
+    },
+    { deep: true },
+  );
   const monitoringPolicy = ref<MonitoringPolicy>({
     clipBeforeSeconds: 30,
     clipAfterSeconds: 60,
@@ -112,6 +128,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
   let roomSequence = 100;
   let staffSequence = 100;
   let cameraSequence = 100;
+  const alarmNotificationTimes = new Map<string, number>();
 
   const { hospital, wards, rooms, beds, sensors, cameras, bindings, staff } = fixture.value;
   const activeUsername = ref(sessionStorage.getItem("monitoring-username") ?? "");
@@ -121,6 +138,16 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       ? (JSON.parse(storedModules) as PermissionModule[])
       : defaultModulesForRole(activeRole.value),
   );
+  if (
+    (activeRole.value === "ADMIN" || activeRole.value === "DEVELOPER") &&
+    localStorage.getItem(MODULE_MIGRATION_KEY) !== "2"
+  ) {
+    activeModulePermissions.value = Array.from(
+      new Set([...activeModulePermissions.value, "blankets", "video"]),
+    );
+    sessionStorage.setItem("monitoring-modules", JSON.stringify(activeModulePermissions.value));
+    localStorage.setItem(MODULE_MIGRATION_KEY, "2");
+  }
 
   const currentWards = computed(() =>
     wards.filter((ward) => currentWardIds.value.includes(ward.id)),
@@ -666,12 +693,16 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       roomId: alarm.roomId || bed.roomId,
     };
     const existing = alarms.value.findIndex((item) => item.alarmId === alarm.alarmId);
+    const shouldNotify = existing === -1;
     if (existing === -1) {
       alarms.value.unshift(normalizedAlarm);
     } else {
       alarms.value[existing] = normalizedAlarm;
     }
-    if (typeof window !== "undefined") {
+    const lastNotification = alarmNotificationTimes.get(alarm.bedId) ?? 0;
+    const canNotify = Date.now() - lastNotification >= 1_500;
+    if (shouldNotify && canNotify && typeof window !== "undefined") {
+      alarmNotificationTimes.set(alarm.bedId, Date.now());
       ElNotification({
         title: `${bed.bedNo} 床告警`,
         message: alarm.title,
@@ -696,6 +727,24 @@ export const useMonitoringStore = defineStore("monitoring", () => {
 
   function setSensorDevices(nextSensors: SensorDevice[]): void {
     sensors.splice(0, sensors.length, ...nextSensors);
+  }
+
+  function syncSensorSnapshot(bedId: string, snapshot: SensorSnapshot): void {
+    const summary = getBedMonitorSummary(bedId, fixture.value);
+    const sensor = summary?.sensor;
+    if (!sensor) return;
+    if (
+      snapshot.status === "ONLINE" ||
+      snapshot.status === "STALE" ||
+      snapshot.status === "OFFLINE" ||
+      snapshot.status === "ALARM"
+    ) {
+      sensor.status = snapshot.status;
+    }
+    if (typeof snapshot.data === "string") {
+      sensor.latestData = normalizeHexData(snapshot.data);
+    }
+    if (snapshot.observedAt) sensor.lastSeenAt = snapshot.observedAt;
   }
 
   function setCameras(nextCameras: Camera[]): void {
@@ -760,6 +809,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     resolveAlarm,
     removeAlarm,
     setSensorDevices,
+    syncSensorSnapshot,
     setCameras,
   };
 });

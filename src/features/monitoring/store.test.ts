@@ -6,8 +6,12 @@ describe("monitoring store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     sessionStorage.removeItem("monitoring-alarms");
+    sessionStorage.removeItem("monitoring-role");
+    sessionStorage.removeItem("monitoring-modules");
     localStorage.removeItem("monitoring-mqtt-settings");
     localStorage.removeItem("monitoring-platform-name");
+    localStorage.removeItem("monitoring-staff-tags");
+    localStorage.removeItem("monitoring-module-schema");
   });
 
   it("only exposes beds from assigned wards", () => {
@@ -158,6 +162,37 @@ describe("monitoring store", () => {
     expect(store.openAlarmCount).toBe(1);
     store.resolveAlarm("alarm-sidebar-01");
     expect(store.openAlarmCount).toBe(0);
+  });
+
+  it("applies the latest Spring sensor snapshot to the bound device", () => {
+    const store = useMonitoringStore();
+
+    store.syncSensorSnapshot("bed-a-01", {
+      status: "ONLINE",
+      data: "ff,aa",
+      observedAt: "2026-11-05T22:00:00+08:00",
+    });
+
+    const sensor = store.bedSummaries.find((item) => item.bed.id === "bed-a-01")?.sensor;
+    expect(sensor).toMatchObject({
+      status: "ONLINE",
+      latestData: "ff,aa",
+      lastSeenAt: "2026-11-05T22:00:00+08:00",
+    });
+  });
+
+  it("migrates manager sessions so new blanket and camera modules stay visible", () => {
+    sessionStorage.setItem("monitoring-role", "ADMIN");
+    sessionStorage.setItem(
+      "monitoring-modules",
+      JSON.stringify(["overview", "beds", "bindings", "organization", "staff", "policy"]),
+    );
+
+    const store = useMonitoringStore();
+
+    expect(store.activeModulePermissions).toEqual(
+      expect.arrayContaining(["blankets", "video"]),
+    );
   });
 
   it("creates and renames a blanket while keeping its MQTT device name in sync", () => {
@@ -433,6 +468,18 @@ describe("monitoring store", () => {
     const restored = useMonitoringStore();
     expect(restored.mqttSettings.clientId).toBe("persisted-client");
     expect(restored.mqttSettings.username).toBe("blanket-device");
+  });
+
+  it("migrates the old alarm topic pattern that could not match a bed", () => {
+    localStorage.setItem(
+      "monitoring-mqtt-settings",
+      JSON.stringify({
+        alarmTopic: "medical-blanket/v1/+/+/+/+/alarm",
+      }),
+    );
+
+    const store = useMonitoringStore();
+    expect(store.mqttSettings.alarmTopic).toBe("medical-blanket/v1/+/+/+/alarm");
   });
 
   it("gives the developer technical visibility beyond hospital administrators", () => {

@@ -144,6 +144,49 @@ export function openSensorDataStream(
   };
 }
 
+export interface PlatformAlarmStreamHandlers {
+  onAlarm?: (alarm: AlarmEnvelope) => void;
+  onStatus?: SensorStreamHandlers["onStatus"];
+  onError?: (error: Error) => void;
+}
+
+export function openPlatformAlarmStream(
+  handlers: PlatformAlarmStreamHandlers = {},
+): SensorStreamController {
+  let socket: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let closed = false;
+
+  const connect = () => {
+    if (closed) return;
+    handlers.onStatus?.("connecting");
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    socket = new WebSocket(`${protocol}//${window.location.host}/ws/alarms`);
+    socket.onopen = () => handlers.onStatus?.("connected");
+    socket.onmessage = (event) => {
+      const alarm = parseAlarmMessage(String(event.data));
+      if (alarm) handlers.onAlarm?.(alarm);
+    };
+    socket.onerror = () => handlers.onError?.(new Error("Alarm WebSocket connection failed"));
+    socket.onclose = () => {
+      if (closed) return;
+      handlers.onStatus?.("reconnecting");
+      reconnectTimer = setTimeout(connect, 3_000);
+    };
+  };
+
+  connect();
+  return {
+    close() {
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      socket?.close();
+      socket = null;
+      handlers.onStatus?.("closed");
+    },
+  };
+}
+
 export async function openCameraPlaybackStream(
   playback: CameraPlayback,
   video: HTMLVideoElement,

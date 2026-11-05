@@ -67,6 +67,12 @@ export interface SensorDevice {
   latestMetrics: SensorMetrics;
 }
 
+export interface SensorSnapshot {
+  status?: SensorStatus;
+  data?: string;
+  observedAt?: string;
+}
+
 export interface CameraPlayback {
   cameraId: string;
   preferredProtocol: PlaybackProtocol;

@@ -155,49 +155,48 @@ export const constantRoutes: RouteRecordRaw[] = [
       },
       {
         path: "admin/management",
-        name: "ManagementCenter",
-        component: () => import("@/features/monitoring/views/ManagementCenterView.vue"),
+        name: "ManagementSettings",
+        redirect: "/admin/wards",
         meta: {
           title: "管理设置",
           icon: "setting",
           roles: ["ADMIN", "DEVELOPER"],
         },
-      },
-      {
-        path: "admin/wards",
-        name: "WardRoomManagement",
-        component: () => import("@/features/monitoring/views/OrganizationView.vue"),
-        meta: {
-          title: "病区与病房",
-          icon: "system",
-          roles: ["ADMIN", "DEVELOPER"],
-          module: "organization",
-          hidden: true,
-        },
-      },
-      {
-        path: "admin/staff",
-        name: "StaffPermissionManagement",
-        component: () => import("@/features/monitoring/views/StaffView.vue"),
-        meta: {
-          title: "人员权限",
-          icon: "role",
-          roles: ["ADMIN", "DEVELOPER"],
-          module: "staff",
-          hidden: true,
-        },
-      },
-      {
-        path: "admin/policy",
-        name: "MonitoringPolicyManagement",
-        component: () => import("@/features/monitoring/views/PolicyView.vue"),
-        meta: {
-          title: "告警与录像策略",
-          icon: "shield",
-          roles: ["ADMIN", "DEVELOPER"],
-          module: "policy",
-          hidden: true,
-        },
+        children: [
+          {
+            path: "/admin/wards",
+            name: "WardRoomManagement",
+            component: () => import("@/features/monitoring/views/OrganizationView.vue"),
+            meta: {
+              title: "病区与病房",
+              icon: "system",
+              roles: ["ADMIN", "DEVELOPER"],
+              module: "organization",
+            },
+          },
+          {
+            path: "/admin/staff",
+            name: "StaffPermissionManagement",
+            component: () => import("@/features/monitoring/views/StaffView.vue"),
+            meta: {
+              title: "人员权限",
+              icon: "role",
+              roles: ["ADMIN", "DEVELOPER"],
+              module: "staff",
+            },
+          },
+          {
+            path: "/admin/policy",
+            name: "MonitoringPolicyManagement",
+            component: () => import("@/features/monitoring/views/PolicyView.vue"),
+            meta: {
+              title: "告警与录像策略",
+              icon: "shield",
+              roles: ["ADMIN", "DEVELOPER"],
+              module: "policy",
+            },
+          },
+        ],
       },
       {
         path: "admin/connections",

@@ -38,6 +38,7 @@
 ## 技术栈
 
 - Vue 3 + Vite + TypeScript
+- Spring Boot 4.0.9 (Java 17)
 - Element Plus
 - Pinia + Vue Router
 - HLS.js + flv.js
@@ -57,6 +58,8 @@
 
 ## 本地运行
 
+前端：
+
 ```bash
 git clone https://github.com/hype341/medical-blanket-monitor.git
 cd medical-blanket-monitor
@@ -66,6 +69,17 @@ pnpm run dev
 ```
 
 访问 `http://localhost:3000`。
+
+Spring Boot 后端：
+
+```powershell
+cd backend
+.\mvnw.cmd test
+.\mvnw.cmd spring-boot:run
+```
+
+后端默认监听 `127.0.0.1:8080`，健康检查为 `/api/health`，实时告警通过
+`/ws/alarms` 推送。MQTT 订阅与下发凭据只放在服务器环境文件中。
 
 ## 主要页面
 

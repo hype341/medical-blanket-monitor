@@ -220,3 +220,38 @@ onMounted(() => {
   syncActiveParentMenus();
 });
 </script>
+
+<style scoped lang="scss">
+:deep(.el-menu-item),
+:deep(.el-sub-menu__title) {
+  margin: 2px 8px;
+  border-radius: 4px;
+}
+
+:deep(.el-menu-item) {
+  height: 40px;
+  font-size: 13px;
+}
+
+:deep(.el-sub-menu__title) {
+  height: 42px;
+  font-size: 13px;
+  font-weight: 620;
+}
+
+:deep(.el-sub-menu .el-menu-item) {
+  min-width: 0;
+  height: 36px;
+  padding-left: 50px !important;
+  font-size: 12px;
+}
+
+:deep(.el-sub-menu .el-menu-item.is-active) {
+  background: rgb(88 155 137 / 14%);
+  box-shadow: inset 3px 0 0 currentcolor;
+}
+
+:deep(.el-sub-menu__icon-arrow) {
+  font-size: 11px;
+}
+</style>
