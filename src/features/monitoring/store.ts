@@ -36,8 +36,8 @@ function loadStoredAlarms(): AlarmEnvelope[] {
 
 const MQTT_SETTINGS_KEY = "monitoring-mqtt-settings";
 const DEFAULT_MQTT_SETTINGS: MqttSettings = {
-  brokerUrl: "mqtt://192.168.86.128:1883",
-  websocketUrl: "ws://192.168.86.128:8083/mqtt",
+  brokerUrl: "mqtt://10.208.236.217:1883",
+  websocketUrl: "ws://10.208.236.217:8083/mqtt",
   clientId: "medical-blanket-platform",
   username: "blanket-service",
   password: "demo-mqtt-secret",
