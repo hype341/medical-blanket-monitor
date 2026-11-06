@@ -7,7 +7,8 @@ import {
 export type SensorFilterType = "NONE" | "MEAN" | "MEDIAN" | "GAUSSIAN";
 
 export interface SensorFilterConfig {
-  enabled: boolean;
+  filterEnabled: boolean;
+  thresholdEnabled: boolean;
   type: SensorFilterType;
   threshold: number;
   windowSize: 3 | 5 | 7;
@@ -23,7 +24,8 @@ export interface SensorFilterResult {
 }
 
 export const DEFAULT_SENSOR_FILTER_CONFIG: SensorFilterConfig = {
-  enabled: false,
+  filterEnabled: false,
+  thresholdEnabled: false,
   type: "NONE",
   threshold: 0,
   windowSize: 3,
@@ -43,7 +45,8 @@ export function loadSensorFilterConfig(): SensorFilterConfig {
         ? parsed.type
         : "NONE";
     return {
-      enabled: parsed.enabled === true,
+      filterEnabled: parsed.filterEnabled === true,
+      thresholdEnabled: parsed.thresholdEnabled === true,
       type,
       threshold: Math.min(255, Math.max(0, Number(parsed.threshold) || 0)),
       windowSize:
@@ -64,7 +67,7 @@ export function applySensorFilter(
   values: readonly number[],
   config: SensorFilterConfig,
 ): SensorFilterResult {
-  if (!config.enabled) {
+  if (!config.filterEnabled && !config.thresholdEnabled) {
     const normalized = values.map((value) =>
       Math.min(255, Math.max(0, Math.round(value))),
     );
@@ -78,7 +81,9 @@ export function applySensorFilter(
       peakValue: normalized.length ? Math.max(...normalized) : 0,
     };
   }
-  const threshold = Math.min(255, Math.max(0, config.threshold));
+  const threshold = config.thresholdEnabled
+    ? Math.min(255, Math.max(0, config.threshold))
+    : 0;
   const grid = Array.from<number>({ length: SENSOR_HEATMAP_COLUMNS * SENSOR_HEATMAP_ROWS }).fill(0);
   const active = Array.from<boolean>({ length: grid.length }).fill(false);
 
@@ -91,7 +96,7 @@ export function applySensorFilter(
     active[gridIndex] = normalized >= threshold;
   });
 
-  const filtered = config.type === "NONE"
+  const filtered = !config.filterEnabled || config.type === "NONE"
     ? grid.map((value, index) => (active[index] ? value : 0))
     : filterGrid(grid, active, config);
   const output = values.map((_, sourceIndex) => {

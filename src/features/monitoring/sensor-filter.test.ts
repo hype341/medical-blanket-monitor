@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import { applySensorFilter, type SensorFilterConfig } from "./sensor-filter";
 
 const baseConfig: SensorFilterConfig = {
-  enabled: true,
+  filterEnabled: false,
+  thresholdEnabled: false,
   type: "NONE",
   threshold: 0,
   windowSize: 3,
 };
 
 describe("sensor filter", () => {
-  it("does not filter or discard points before the developer enables processing", () => {
+  it("shows original data before the developer enables any operation", () => {
     const result = applySensorFilter([1, 5, 10, 20], {
       ...baseConfig,
-      enabled: false,
       threshold: 10,
     });
 
@@ -25,6 +25,7 @@ describe("sensor filter", () => {
   it("drops values below the threshold and excludes them from the mean", () => {
     const result = applySensorFilter([1, 5, 10, 20], {
       ...baseConfig,
+      thresholdEnabled: true,
       threshold: 10,
     });
 
@@ -40,6 +41,7 @@ describe("sensor filter", () => {
 
     const result = applySensorFilter(values, {
       ...baseConfig,
+      filterEnabled: true,
       type: "MEDIAN",
       windowSize: 3,
     });

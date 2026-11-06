@@ -263,8 +263,10 @@ test("only developers can open sensor tuning from the left menu", async ({ page 
   const tuningPanel = page.locator(".sensor-filter-panel");
   await expect(tuningPanel.getByRole("heading", { name: "数据滤波调参" })).toBeVisible();
   await expect(tuningPanel).toContainText("实时平均值");
+  await tuningPanel.getByRole("switch", { name: "开启滤波操作" }).click();
   await tuningPanel.getByLabel("滤波方式").click();
   await page.getByRole("option", { name: "中值滤波" }).click();
+  await tuningPanel.getByRole("switch", { name: "开启阈值操作" }).click();
   await tuningPanel.getByLabel("丢弃阈值").fill("20");
   await expect(tuningPanel).toContainText("有效点");
 });

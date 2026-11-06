@@ -16,21 +16,21 @@
         <span role="columnheader">调整</span>
       </div>
       <div class="sensor-filter-panel__row" role="row">
-        <span role="cell">启用处理</span>
-        <strong role="cell">{{ modelValue.enabled ? "已启用" : "未启用" }}</strong>
+        <span role="cell">滤波操作</span>
+        <strong role="cell">{{ modelValue.filterEnabled ? "已开启" : "已关闭" }}</strong>
         <el-switch
-          :model-value="modelValue.enabled"
-          aria-label="启用滤波处理"
-          @update:model-value="setEnabled"
+          :model-value="modelValue.filterEnabled"
+          aria-label="开启滤波操作"
+          @update:model-value="setFilterEnabled"
         />
       </div>
       <div class="sensor-filter-panel__row" role="row">
         <span role="cell">滤波方式</span>
-        <strong role="cell">{{ modelValue.enabled ? filterLabel : "不处理" }}</strong>
+        <strong role="cell">{{ modelValue.filterEnabled ? filterLabel : "仅原始值" }}</strong>
         <el-select
           :model-value="modelValue.type"
           aria-label="滤波方式"
-          :disabled="!modelValue.enabled"
+          :disabled="!modelValue.filterEnabled"
           @update:model-value="setType"
         >
           <el-option label="不滤波" value="NONE" />
@@ -40,12 +40,23 @@
         </el-select>
       </div>
       <div class="sensor-filter-panel__row" role="row">
-        <span role="cell">丢弃阈值</span>
-        <strong role="cell">&lt; {{ modelValue.threshold }}</strong>
+        <span role="cell">阈值操作</span>
+        <strong role="cell">{{ modelValue.thresholdEnabled ? "已开启" : "已关闭" }}</strong>
+        <el-switch
+          :model-value="modelValue.thresholdEnabled"
+          aria-label="开启阈值操作"
+          @update:model-value="setThresholdEnabled"
+        />
+      </div>
+      <div class="sensor-filter-panel__row" role="row">
+        <span role="cell">显示阈值</span>
+        <strong role="cell">
+          {{ modelValue.thresholdEnabled ? `低于 ${modelValue.threshold}` : "不丢弃" }}
+        </strong>
         <el-input-number
           :model-value="modelValue.threshold"
           aria-label="丢弃阈值"
-          :disabled="!modelValue.enabled"
+          :disabled="!modelValue.thresholdEnabled"
           :min="0"
           :max="255"
           :step="1"
@@ -59,7 +70,7 @@
         <el-select
           :model-value="modelValue.windowSize"
           aria-label="滤波窗口大小"
-          :disabled="!modelValue.enabled || modelValue.type === 'NONE'"
+          :disabled="!modelValue.filterEnabled || modelValue.type === 'NONE'"
           @update:model-value="setWindow"
         >
           <el-option label="3 × 3" :value="3" />
@@ -86,7 +97,8 @@
       </div>
     </div>
     <p class="sensor-filter-panel__notice">
-      原始数据始终保留。关闭“启用处理”时，1792 个点全部按原值显示，不做滤波或阈值丢弃。
+      原始数据始终保留。两个开关默认关闭，此时 1792 个点全部按原值显示；
+      滤波、窗口和阈值只有你手动开启后才生效。
     </p>
   </section>
 </template>
@@ -121,8 +133,18 @@ function setType(value: SensorFilterType): void {
   emit("update:modelValue", { ...props.modelValue, type: value });
 }
 
-function setEnabled(value: string | number | boolean): void {
-  emit("update:modelValue", { ...props.modelValue, enabled: Boolean(value) });
+function setFilterEnabled(value: string | number | boolean): void {
+  emit("update:modelValue", {
+    ...props.modelValue,
+    filterEnabled: Boolean(value),
+  });
+}
+
+function setThresholdEnabled(value: string | number | boolean): void {
+  emit("update:modelValue", {
+    ...props.modelValue,
+    thresholdEnabled: Boolean(value),
+  });
 }
 
 function setThreshold(value: number | undefined): void {
@@ -138,7 +160,8 @@ function setWindow(value: 3 | 5 | 7): void {
 
 function reset(): void {
   emit("update:modelValue", {
-    enabled: false,
+    filterEnabled: false,
+    thresholdEnabled: false,
     type: "NONE",
     threshold: 0,
     windowSize: 3,
