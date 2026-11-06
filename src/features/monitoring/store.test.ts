@@ -109,6 +109,42 @@ describe("monitoring store", () => {
     ]);
   });
 
+  it("lets only administrators delete a bed and removes its device relationships", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("NURSE");
+    expect(() => store.deleteBed("bed-a-02")).toThrow("仅管理员或开发者可以删除床位");
+
+    store.setActiveRole("ADMIN");
+    expect(store.beds.some((bed) => bed.id === "bed-a-02")).toBe(true);
+    expect(store.sensors.some((sensor) => sensor.id === "sensor-bed-a-02")).toBe(true);
+    store.deleteBed("bed-a-02");
+
+    expect(store.beds.some((bed) => bed.id === "bed-a-02")).toBe(false);
+    expect(store.sensors.some((sensor) => sensor.id === "sensor-bed-a-02")).toBe(false);
+    expect(store.bindings.some((binding) => binding.bedId === "bed-a-02")).toBe(false);
+  });
+
+  it("prevents deleting a bed while it still has an unresolved alarm", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+    store.ingestAlarm({
+      alarmId: "delete-bed-warning",
+      code: "SENSOR_STATE_CHANGED",
+      level: "WARNING",
+      status: "OPEN",
+      title: "未处理告警",
+      detail: "需要先解决",
+      bedId: "bed-a-02",
+      wardId: "ward-a",
+      roomId: "room-a-301",
+      sensorKey: "blanket-002",
+      cameraKey: "camera-01",
+      occurredAt: "2026-11-06T10:00:00+08:00",
+    });
+
+    expect(() => store.deleteBed("bed-a-02")).toThrow("请先标记解决");
+  });
+
   it("prevents a nurse from changing device bindings", () => {
     const store = useMonitoringStore();
     store.setActiveRole("NURSE");
@@ -702,5 +738,45 @@ describe("monitoring store", () => {
         status: member.status,
       }),
     ).toThrow("只能授予自己已授权的病区");
+  });
+
+  it("deletes blankets and cameras together with their active bindings", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("DEVELOPER", "developer");
+
+    const sensorId = store.sensors.find((item) => item.id === "sensor-bed-a-02")!.id;
+    store.deleteBlanket(sensorId);
+    expect(store.sensors.some((item) => item.id === sensorId)).toBe(false);
+    expect(store.bindings.some((item) => item.sensorDeviceId === sensorId)).toBe(false);
+
+    store.deleteCamera("camera-01");
+    expect(store.cameras.some((item) => item.id === "camera-01")).toBe(false);
+    expect(store.bindings.some((item) => item.cameraId === "camera-01")).toBe(false);
+  });
+
+  it("deletes lower-level staff, removes tags, and protects non-empty rooms and wards", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("ADMIN");
+    store.addStaffTag("临时标签");
+    const staffId = store.addStaff({
+      username: "temporary-nurse",
+      displayName: "临时护士",
+      role: "NURSE",
+      wardIds: ["ward-a"],
+      status: "ACTIVE",
+      initialPassword: "Nurse@123456",
+      tags: ["临时标签"],
+    });
+    store.deleteStaff(staffId);
+    expect(store.staff.some((item) => item.id === staffId)).toBe(false);
+    store.deleteStaffTag("临时标签");
+    expect(store.staffTags).not.toContain("临时标签");
+
+    expect(() => store.deleteRoom("room-a-301")).toThrow("还有床位");
+    const wardId = store.addWard({ code: "WARD-EMPTY", name: "空病区" });
+    const roomId = store.addRoom({ wardId, roomNo: "001", name: "001 病房" });
+    store.deleteRoom(roomId);
+    store.deleteWard(wardId);
+    expect(store.wards.some((ward) => ward.id === wardId)).toBe(false);
   });
 });

@@ -8,6 +8,7 @@
       </div>
       <div class="admin-page-header__actions">
         <span class="connection-mode">开发环境配置</span>
+        <el-button @click="openBlanketCreator">新建毯子并生成主题</el-button>
         <el-button type="primary" @click="save">保存连接配置</el-button>
       </div>
     </header>
@@ -33,6 +34,43 @@
         <strong>QoS {{ form.qos }}</strong>
         <small>当前订阅级别</small>
       </article>
+    </section>
+
+    <section v-if="createdBlanket" class="created-blanket-panel" aria-live="polite">
+      <header>
+        <div>
+          <span>已生成 MQTT 设备映射</span>
+          <h2>{{ createdBlanket.name }}</h2>
+          <p>{{ createdBlanket.location }}</p>
+        </div>
+        <button type="button" aria-label="关闭新建毯子结果" @click="createdBlanket = null">
+          ×
+        </button>
+      </header>
+      <div class="created-blanket-panel__topics">
+        <div>
+          <span>传感器数据主题</span>
+          <code>{{ createdBlanket.dataTopic }}</code>
+          <el-button
+            text
+            type="primary"
+            @click="copyTopic(createdBlanket.dataTopic, '新建毯子数据主题')"
+          >
+            复制
+          </el-button>
+        </div>
+        <div>
+          <span>床位告警主题</span>
+          <code>{{ createdBlanket.alarmTopic }}</code>
+          <el-button
+            text
+            type="primary"
+            @click="copyTopic(createdBlanket.alarmTopic, '新建毯子告警主题')"
+          >
+            复制
+          </el-button>
+        </div>
+      </div>
     </section>
 
     <section class="device-onboarding" aria-label="设备接入向导">
@@ -480,11 +518,59 @@
       </header>
       <DocumentPreview :content="mqttDocument" />
     </section>
+
+    <el-dialog
+      v-model="blanketCreateDialogVisible"
+      title="新建毯子并生成 MQTT 主题"
+      width="520px"
+      class="mqtt-blanket-dialog"
+      destroy-on-close
+    >
+      <el-form label-position="top">
+        <el-form-item label="毯子名称">
+          <el-input
+            v-model.trim="blanketCreateName"
+            aria-label="新建毯子名称"
+            placeholder="例如：301 床智能监护毯"
+            maxlength="40"
+          />
+        </el-form-item>
+        <el-form-item label="对应床位">
+          <el-select
+            v-model="blanketCreateBedId"
+            filterable
+            aria-label="新建毯子对应床位"
+            placeholder="选择病区、病房和床位"
+            class="w-full"
+          >
+            <el-option
+              v-for="bed in blanketCreateBedOptions"
+              :key="bed.id"
+              :label="bed.label"
+              :value="bed.id"
+            />
+          </el-select>
+        </el-form-item>
+        <p class="mqtt-blanket-dialog__hint">
+          保存后自动生成唯一设备标识、数据主题和床位告警主题；如果床位已有毯子，将替换为这条新毯子。
+        </p>
+      </el-form>
+      <template #footer>
+        <el-button @click="blanketCreateDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :disabled="!blanketCreateName.trim() || !blanketCreateBedId"
+          @click="createBlanketFromMqtt"
+        >
+          保存并生成主题
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import DocumentPreview from "../components/DocumentPreview.vue";
 import { generateMqttDocumentation } from "../documentation";
@@ -509,6 +595,15 @@ const dataPreview = ref("等待传感器数据");
 const rawDataPreview = ref("等待传感器原始帧");
 const fullDataPreview = ref("");
 const activeTopicMode = ref<"data" | "alarm">("data");
+const blanketCreateDialogVisible = ref(false);
+const blanketCreateName = ref("");
+const blanketCreateBedId = ref("");
+const createdBlanket = ref<{
+  name: string;
+  location: string;
+  dataTopic: string;
+  alarmTopic: string;
+} | null>(null);
 const deviceTimeUrl = computed(() => {
   try {
     return `http://${new URL(form.brokerUrl).hostname}/api/public/time`;
@@ -618,9 +713,15 @@ const accessPayload = computed(() =>
     2,
   ),
 );
+const blanketCreateBedOptions = computed(() =>
+  store.bedSummaries.map((summary) => ({
+    id: summary.bed.id,
+    label: `${summary.ward?.name ?? "未分病区"} / ${summary.room?.name ?? "未分病房"} / ${summary.bed.bedNo} 床`,
+  })),
+);
 
 async function loadDataPreviews(): Promise<void> {
-  const bedId = accessBedRows.value[0]?.bedId;
+  const bedId = selectedAccessRow.value?.bedId;
   if (!bedId) return;
   const [hex, raw, full] = await Promise.allSettled([
     getSensorHex(bedId),
@@ -635,6 +736,34 @@ async function loadDataPreviews(): Promise<void> {
 }
 
 onMounted(loadDataPreviews);
+watch(selectedAccessBedId, () => void loadDataPreviews());
+
+function openBlanketCreator(): void {
+  blanketCreateName.value = "";
+  blanketCreateBedId.value = store.bedSummaries[0]?.bed.id ?? "";
+  blanketCreateDialogVisible.value = true;
+}
+
+function createBlanketFromMqtt(): void {
+  try {
+    const name = blanketCreateName.value.trim();
+    if (!name || !blanketCreateBedId.value) throw new Error("请填写毯子名称并选择床位");
+    store.addBlanket({ name, bedId: blanketCreateBedId.value });
+    const summary = store.bedSummaries.find((item) => item.bed.id === blanketCreateBedId.value);
+    if (!summary?.dataTopic || !summary.alarmTopic) throw new Error("MQTT 主题生成失败");
+    selectedAccessBedId.value = summary.bed.id;
+    createdBlanket.value = {
+      name,
+      location: `${summary.ward?.name ?? "未分病区"} / ${summary.room?.name ?? "未分病房"} / ${summary.bed.bedNo} 床`,
+      dataTopic: summary.dataTopic,
+      alarmTopic: summary.alarmTopic,
+    };
+    blanketCreateDialogVisible.value = false;
+    ElMessage.success("毯子已新建，MQTT 数据与告警主题已生成");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "毯子创建失败");
+  }
+}
 
 function save(): void {
   try {
@@ -814,6 +943,85 @@ function downloadText(fileName: string, content: string): void {
     color: #275f53;
     white-space: nowrap;
   }
+}
+
+.created-blanket-panel {
+  padding: 16px;
+  margin-top: 14px;
+  background: #eef8f3;
+  border: 1px solid #cce1d8;
+  border-left: 4px solid #2f806a;
+
+  > header {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    span,
+    p {
+      margin: 0;
+      font-size: 11px;
+      color: #6d837c;
+    }
+
+    h2 {
+      margin: 4px 0;
+      font-size: 18px;
+      color: #245f53;
+    }
+
+    > button {
+      width: 28px;
+      height: 28px;
+      font-size: 19px;
+      color: #5d746d;
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid #bed6ce;
+    }
+  }
+}
+
+.created-blanket-panel__topics {
+  display: grid;
+  gap: 7px;
+  margin-top: 13px;
+
+  > div {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 9px 10px;
+    background: #fff;
+    border: 1px solid #d7e6e0;
+  }
+
+  span {
+    font-size: 10px;
+    font-weight: 650;
+    color: #56746c;
+  }
+
+  code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 10px;
+    color: #285f53;
+    white-space: nowrap;
+  }
+}
+
+.mqtt-blanket-dialog__hint {
+  padding: 10px 12px;
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.65;
+  color: #6d817b;
+  background: #f4f9f7;
+  border-left: 3px solid #7aa898;
 }
 
 .device-onboarding {
@@ -1688,6 +1896,14 @@ function downloadText(fileName: string, content: string): void {
 
   .message-grid {
     grid-template-columns: 1fr;
+  }
+
+  .created-blanket-panel__topics > div {
+    grid-template-columns: 1fr auto;
+
+    span {
+      grid-column: 1 / -1;
+    }
   }
 
   .document-panel > header {

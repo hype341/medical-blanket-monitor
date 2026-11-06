@@ -65,7 +65,10 @@
             </strong>
             <strong v-else class="is-unassigned">未分配床位</strong>
           </div>
-          <el-button text type="primary" @click="openEdit(row.sensor.id)">编辑毯子</el-button>
+          <div class="blanket-row__actions">
+            <el-button text type="primary" @click="openEdit(row.sensor.id)">编辑毯子</el-button>
+            <el-button text type="danger" @click="confirmDelete(row.sensor.id)">删除</el-button>
+          </div>
         </article>
       </div>
       <el-empty v-else description="还没有毯子，先新建一条">
@@ -137,7 +140,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { useMonitoringStore } from "../store";
 import type { SensorStatus } from "../types";
 
@@ -266,6 +269,28 @@ function save(): void {
     ElMessage.success("保存成功，名称已同步到 MQTT");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "毯子保存失败");
+  }
+}
+
+async function confirmDelete(sensorId: string): Promise<void> {
+  const sensor = store.sensors.find((item) => item.id === sensorId);
+  if (!sensor) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定删除“${sensor.name}”吗？对应床位上的毯子绑定会自动解除。`,
+      "删除毯子",
+      {
+        confirmButtonText: "删除毯子",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+    store.deleteBlanket(sensorId);
+    if (editingId.value === sensorId) dialogVisible.value = false;
+    ElMessage.success("毯子已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "毯子删除失败");
   }
 }
 </script>
@@ -444,6 +469,12 @@ function save(): void {
   }
 }
 
+.blanket-row__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
 .blanket-row__location {
   display: grid;
   gap: 3px;
@@ -518,7 +549,7 @@ function save(): void {
   .blanket-row {
     grid-template-columns: 1fr auto;
 
-    > .el-button {
+    > .blanket-row__actions {
       grid-row: 1;
       grid-column: 2;
     }

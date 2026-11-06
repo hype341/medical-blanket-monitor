@@ -57,6 +57,14 @@
     <footer class="bed-card__footer">
       <span>{{ summary.cameras.length }} 路摄像头</span>
       <span>{{ updateLabel }}</span>
+      <button
+        v-if="canDelete"
+        type="button"
+        class="bed-card__delete"
+        @click.stop="emit('delete', summary.bed.id)"
+      >
+        删除床位
+      </button>
     </footer>
   </article>
 </template>
@@ -69,10 +77,12 @@ import type { BedMonitorSummary, SensorStatus } from "../types";
 const props = defineProps<{
   summary: BedMonitorSummary;
   alarms?: AlarmEnvelope[];
+  canDelete?: boolean;
 }>();
 
 const emit = defineEmits<{
   open: [bedId: string];
+  delete: [bedId: string];
 }>();
 
 const statusPresentation: Record<SensorStatus, { label: string; className: string }> = {
@@ -380,8 +390,24 @@ function useDefaultAvatar(event: Event): void {
 }
 
 .bed-card__footer {
+  gap: 8px;
   margin-top: 16px;
   font-size: 11px;
   color: #82918d;
+}
+
+.bed-card__delete {
+  padding: 3px 6px;
+  margin-left: auto;
+  font-size: 10px;
+  color: #a43d34;
+  cursor: pointer;
+  background: #fff7f6;
+  border: 1px solid #e2b8b3;
+
+  &:focus-visible {
+    outline: 2px solid #a43d34;
+    outline-offset: 2px;
+  }
 }
 </style>

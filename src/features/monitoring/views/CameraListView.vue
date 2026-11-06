@@ -60,9 +60,10 @@
           <span>{{ row.playback ? "已签发" : "待接入" }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90">
+      <el-table-column label="操作" width="130">
         <template #default="{ row }">
           <el-button text type="primary" @click="openEditor(row.id)">编辑</el-button>
+          <el-button text type="danger" @click="confirmDeleteCamera(row.id)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -167,7 +168,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import CameraEditorDialog from "../components/CameraEditorDialog.vue";
 import CameraLinkPanel from "../components/CameraLinkPanel.vue";
 import DocumentPreview from "../components/DocumentPreview.vue";
@@ -404,6 +405,27 @@ function saveCamera(input: CameraInput, cameraId: string | null): void {
     ElMessage.success("摄像头已保存");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "摄像头保存失败");
+  }
+}
+
+async function confirmDeleteCamera(cameraId: string): Promise<void> {
+  const camera = store.cameras.find((item) => item.id === cameraId);
+  if (!camera) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定删除“${camera.name}”吗？对应床位的摄像头绑定会自动解除。`,
+      "删除摄像头",
+      {
+        confirmButtonText: "删除摄像头",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+    store.deleteCamera(cameraId);
+    ElMessage.success("摄像头已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "摄像头删除失败");
   }
 }
 

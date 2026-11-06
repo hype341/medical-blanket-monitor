@@ -30,6 +30,7 @@ import type {
 } from "./types";
 import {
   exportStaffCredentials,
+  removeStaffCredential,
   restoreStaffCredentials,
   type StoredCredential,
 } from "./staff-credentials";
@@ -517,6 +518,31 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     room.name = input.name.trim();
   }
 
+  function deleteRoom(roomId: string): void {
+    assertOrganizationAdmin();
+    if (beds.some((bed) => bed.roomId === roomId)) {
+      throw new Error("该病房还有床位，请先删除或迁移床位");
+    }
+    const index = rooms.findIndex((room) => room.id === roomId);
+    if (index < 0) throw new Error("病房不存在");
+    rooms.splice(index, 1);
+  }
+
+  function deleteWard(wardId: string): void {
+    assertOrganizationAdmin();
+    if (
+      rooms.some((room) => room.wardId === wardId) ||
+      beds.some((bed) => bed.wardId === wardId)
+    ) {
+      throw new Error("该病区还有病房或床位，不能直接删除");
+    }
+    const index = wards.findIndex((ward) => ward.id === wardId);
+    if (index < 0) throw new Error("病区不存在");
+    wards.splice(index, 1);
+    currentWardIds.value = currentWardIds.value.filter((id) => id !== wardId);
+    sessionStorage.setItem("monitoring-wards", JSON.stringify(currentWardIds.value));
+  }
+
   function addStaff(input: StaffInput): string {
     if (!canManageStaff.value) {
       throw new Error("仅管理员可以管理人员权限");
@@ -589,6 +615,16 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     }
   }
 
+  function deleteStaff(staffId: string): void {
+    if (!canManageMember(staffId)) {
+      throw new Error("只能删除级别低于自己的账号");
+    }
+    const index = staff.findIndex((item) => item.id === staffId);
+    if (index < 0) throw new Error("人员不存在");
+    staff.splice(index, 1);
+    removeStaffCredential(staffId);
+  }
+
   function addStaffTag(name: string): void {
     if (!canManageStaff.value) throw new Error("仅管理员或开发者可以管理角色标签");
     const normalized = name.trim().replace(/\s+/g, " ");
@@ -597,6 +633,15 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       staffTags.value.push(normalized);
       localStorage.setItem(STAFF_TAGS_KEY, JSON.stringify(staffTags.value));
     }
+  }
+
+  function deleteStaffTag(tag: string): void {
+    if (!canManageStaff.value) throw new Error("仅管理员或开发者可以管理角色标签");
+    staffTags.value = staffTags.value.filter((item) => item !== tag);
+    for (const member of staff) {
+      member.tags = member.tags?.filter((item) => item !== tag);
+    }
+    localStorage.setItem(STAFF_TAGS_KEY, JSON.stringify(staffTags.value));
   }
 
   function normalizeStaffTags(values: string[] | undefined): string[] {
@@ -726,6 +771,18 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     camera.name = input.name.trim();
     camera.vendor = input.vendor?.trim() || undefined;
     camera.model = input.model?.trim() || undefined;
+  }
+
+  function deleteCamera(cameraId: string): void {
+    assertCameraMetadataManager();
+    const index = cameras.findIndex((item) => item.id === cameraId);
+    if (index < 0) throw new Error("摄像头不存在");
+    bindings.splice(
+      0,
+      bindings.length,
+      ...bindings.filter((binding) => binding.cameraId !== cameraId),
+    );
+    cameras.splice(index, 1);
   }
 
   function addCameraBatch(inputs: CameraInput[]): number {
@@ -971,6 +1028,18 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     }
   }
 
+  function deleteBlanket(sensorId: string): void {
+    assertBlanketManager();
+    const index = sensors.findIndex((sensor) => sensor.id === sensorId);
+    if (index < 0) throw new Error("毯子不存在");
+    bindings.splice(
+      0,
+      bindings.length,
+      ...bindings.filter((binding) => binding.sensorDeviceId !== sensorId),
+    );
+    sensors.splice(index, 1);
+  }
+
   function assertBlanketManager(): void {
     if (!canManageBindings.value) {
       throw new Error("仅管理员或开发者可以管理毯子");
@@ -1018,6 +1087,38 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     bed.lastEditedBy = activeRole.value;
     bed.lastEditedAt = new Date().toISOString();
     bed.updatedAt = new Date().toISOString();
+  }
+
+  function deleteBed(bedId: string): void {
+    if (activeRole.value !== "ADMIN" && activeRole.value !== "DEVELOPER") {
+      throw new Error("仅管理员或开发者可以删除床位");
+    }
+    const index = beds.findIndex((bed) => bed.id === bedId);
+    if (index < 0) throw new Error("床位不存在");
+    if (alarms.value.some((alarm) => alarm.bedId === bedId && alarm.status === "OPEN")) {
+      throw new Error("该床位还有未处理告警，请先标记解决");
+    }
+
+    const sensorIds = new Set(
+      bindings
+        .filter((binding) => binding.bedId === bedId)
+        .map((binding) => binding.sensorDeviceId)
+        .filter((sensorId): sensorId is string => Boolean(sensorId)),
+    );
+    beds.splice(index, 1);
+    sensors.splice(
+      0,
+      sensors.length,
+      ...sensors.filter((sensor) => !sensorIds.has(sensor.id)),
+    );
+    bindings.splice(
+      0,
+      bindings.length,
+      ...bindings.filter(
+        (binding) => binding.bedId !== bedId && !sensorIds.has(binding.sensorDeviceId ?? ""),
+      ),
+    );
+    alarms.value = alarms.value.filter((alarm) => alarm.bedId !== bedId);
   }
 
   function ingestAlarm(alarm: AlarmEnvelope): void {
@@ -1141,17 +1242,22 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     canAccessModule,
     addWard,
     updateWard,
+    deleteWard,
     addRoom,
     updateRoom,
+    deleteRoom,
     addStaff,
     addStaffTag,
+    deleteStaffTag,
     updateStaff,
+    deleteStaff,
     canManageMember,
     addCamera,
     addCameraBatch,
     addManagedCamera,
     updateManagedCamera,
     updateCamera,
+    deleteCamera,
     updateMonitoringPolicy,
     updateMqttSettings,
     buildMonitoringBackup,
@@ -1159,7 +1265,9 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     addBed,
     addBlanket,
     updateBlanket,
+    deleteBlanket,
     updatePatient,
+    deleteBed,
     ingestAlarm,
     resolveAlarm,
     removeAlarm,

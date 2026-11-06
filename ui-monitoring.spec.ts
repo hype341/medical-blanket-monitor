@@ -232,6 +232,18 @@ test("administrator can edit bed location and overwrite patient content", async 
   await expect(page.getByText("最后修改：管理员")).toBeVisible();
 });
 
+test("administrator can delete a bed from bed monitoring", async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.goto("/#/beds", { waitUntil: "networkidle" });
+  const before = Number(await page.locator(".bed-list-header__count strong").textContent());
+  const firstCard = page.locator('[data-testid="bed-card"]').first();
+  await firstCard.getByRole("button", { name: "删除床位" }).click();
+  await page.getByRole("button", { name: "删除床位", exact: true }).last().click();
+
+  await expect(page.getByText("床位已删除")).toBeVisible();
+  await expect(page.locator(".bed-list-header__count strong")).toHaveText(String(before - 1));
+});
+
 test("only administrators can manage wards and rooms", async ({ page }) => {
   await loginAsAdmin(page);
   await page.getByText("管理设置", { exact: true }).first().click();
@@ -443,6 +455,25 @@ test("developer can create and rename a blanket and see the name in MQTT", async
 
   await page.getByText("MQTT 管理", { exact: true }).first().click();
   await expect(page.locator(".device-onboarding")).toContainText("测试智能毯");
+});
+
+test("developer can create a custom-named blanket from MQTT management", async ({ page }) => {
+  await loginAs(page, "developer");
+  await page.goto("/#/admin/connections", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "新建毯子并生成主题" }).click();
+
+  const dialog = page.locator(".mqtt-blanket-dialog");
+  await dialog.getByLabel("新建毯子名称").fill("MQTT 新建护理毯");
+  await dialog.locator(".el-select__wrapper").click();
+  await page.getByRole("option").first().click();
+  await dialog.getByRole("button", { name: "保存并生成主题" }).click();
+
+  const result = page.locator(".created-blanket-panel");
+  await expect(result).toContainText("MQTT 新建护理毯");
+  await expect(result).toContainText("blanket-device-100");
+  await expect(result).toContainText("/data");
+  await expect(result).toContainText("/alarm");
+  await expect(page.locator(".device-onboarding")).toContainText("MQTT 新建护理毯");
 });
 
 test("administrator can manage camera names and locations without stream links", async ({

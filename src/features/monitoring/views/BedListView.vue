@@ -103,7 +103,9 @@
             :key="summary.bed.id"
             :summary="summary"
             :alarms="store.alarms.filter((alarm) => alarm.bedId === summary.bed.id)"
+            :can-delete="store.canManageOrganization"
             @open="openBed"
+            @delete="confirmDeleteBed"
           />
         </div>
       </section>
@@ -139,7 +141,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { useRouter } from "vue-router";
 import { copyText } from "@/utils/clipboard";
 import AddBedDialog from "../components/AddBedDialog.vue";
@@ -287,6 +289,28 @@ async function copyShiftSummary(): Promise<void> {
     ElMessage.success("交班摘要已复制");
   } catch {
     ElMessage.error("交班摘要复制失败，请检查浏览器权限");
+  }
+}
+
+async function confirmDeleteBed(bedId: string): Promise<void> {
+  const summary = store.bedSummaries.find((item) => item.bed.id === bedId);
+  if (!summary) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定删除 ${summary.room?.name ?? ""} ${summary.bed.bedNo} 床吗？该床毯子、绑定和已解决告警记录会一并清理。`,
+      "删除床位",
+      {
+        confirmButtonText: "删除床位",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+    store.deleteBed(bedId);
+    if (generatedBedSetup.value?.bed.id === bedId) generatedBedSetup.value = null;
+    ElMessage.success("床位已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "床位删除失败");
   }
 }
 

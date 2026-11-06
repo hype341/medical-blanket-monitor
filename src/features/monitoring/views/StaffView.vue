@@ -22,7 +22,16 @@
         <small>用于标注责任分工、班次或岗位属性，不改变系统权限</small>
       </div>
       <div class="staff-tag-manager__items">
-        <el-tag v-for="tag in store.staffTags" :key="tag" effect="plain" round>{{ tag }}</el-tag>
+        <el-tag
+          v-for="tag in store.staffTags"
+          :key="tag"
+          effect="plain"
+          round
+          closable
+          @close="confirmDeleteTag(tag)"
+        >
+          {{ tag }}
+        </el-tag>
         <el-button
           class="staff-tag-manager__add"
           circle
@@ -72,6 +81,7 @@
             >
               {{ member.status === "ACTIVE" ? "停用" : "启用" }}
             </el-button>
+            <el-button text type="danger" @click="confirmDeleteStaff(member.id)">删除</el-button>
           </template>
           <span v-else class="staff-row__locked" title="不能管理同级或更高级账号">
             不可管理
@@ -205,7 +215,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { defaultModulesForRole, moduleOptions, roleRank } from "../permissions";
 import { useMonitoringStore } from "../store";
 import type { MonitoringRole, StaffInput, StaffStatus } from "../types";
@@ -322,6 +332,42 @@ function toggleStatus(staffId: string): void {
     ElMessage.success("账号状态已更新");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "账号状态更新失败");
+  }
+}
+
+async function confirmDeleteStaff(staffId: string): Promise<void> {
+  const member = store.staff.find((item) => item.id === staffId);
+  if (!member) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定删除账号“${member.displayName}（${member.username}）”吗？删除后该账号将无法登录。`,
+      "删除人员账号",
+      {
+        confirmButtonText: "删除账号",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+    store.deleteStaff(staffId);
+    ElMessage.success("人员账号已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "人员账号删除失败");
+  }
+}
+
+async function confirmDeleteTag(tag: string): Promise<void> {
+  try {
+    await ElMessageBox.confirm(`确定删除角色标签“${tag}”吗？`, "删除角色标签", {
+      confirmButtonText: "删除标签",
+      cancelButtonText: "取消",
+      type: "warning",
+    });
+    store.deleteStaffTag(tag);
+    ElMessage.success("角色标签已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "角色标签删除失败");
   }
 }
 
@@ -483,7 +529,7 @@ function applyRoleDefaults(role: MonitoringRole): void {
 .staff-table__head,
 .staff-row {
   display: grid;
-  grid-template-columns: 1.1fr 1fr 0.8fr 1.6fr 0.6fr 120px;
+  grid-template-columns: 1.1fr 1fr 0.8fr 1.4fr 0.6fr 180px;
   gap: 12px;
   align-items: center;
   min-width: 860px;

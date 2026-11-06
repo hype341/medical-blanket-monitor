@@ -41,6 +41,14 @@
             <el-button :disabled="!selectedWard" @click="openWardEditor(selectedWard?.id)">
               编辑病区
             </el-button>
+            <el-button
+              type="danger"
+              plain
+              :disabled="!selectedWard"
+              @click="selectedWard && confirmDeleteWard(selectedWard.id)"
+            >
+              删除病区
+            </el-button>
             <el-button type="primary" :disabled="!selectedWard" @click="openRoomEditor()">
               新增病房
             </el-button>
@@ -54,7 +62,10 @@
               <strong>{{ room.name }}</strong>
               <span>{{ bedCount(room.id) }} 张床位</span>
             </div>
-            <el-button text type="primary" @click="openRoomEditor(room.id)">编辑病房</el-button>
+            <div class="room-card__actions">
+              <el-button text type="primary" @click="openRoomEditor(room.id)">编辑病房</el-button>
+              <el-button text type="danger" @click="confirmDeleteRoom(room.id)">删除</el-button>
+            </div>
           </article>
           <el-empty v-if="!selectedRooms.length" description="该病区还没有病房" />
         </div>
@@ -109,7 +120,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { useMonitoringStore } from "../store";
 
 const store = useMonitoringStore();
@@ -181,6 +192,49 @@ function saveRoom(): void {
     ElMessage.success("病房已保存");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "病房保存失败");
+  }
+}
+
+async function confirmDeleteRoom(roomId: string): Promise<void> {
+  const room = store.rooms.find((item) => item.id === roomId);
+  if (!room) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定删除“${room.name}”吗？只有没有床位的病房可以删除。`,
+      "删除病房",
+      {
+        confirmButtonText: "删除病房",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+    store.deleteRoom(roomId);
+    ElMessage.success("病房已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "病房删除失败");
+  }
+}
+
+async function confirmDeleteWard(wardId: string): Promise<void> {
+  const ward = store.wards.find((item) => item.id === wardId);
+  if (!ward) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定删除病区“${ward.name}”吗？只有没有病房和床位的病区可以删除。`,
+      "删除病区",
+      {
+        confirmButtonText: "删除病区",
+        cancelButtonText: "取消",
+        type: "warning",
+      },
+    );
+    store.deleteWard(wardId);
+    selectedWardId.value = store.wards[0]?.id ?? "";
+    ElMessage.success("病区已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "病区删除失败");
   }
 }
 </script>
@@ -293,7 +347,9 @@ function saveRoom(): void {
 
 .room-panel__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+  justify-content: flex-end;
 }
 
 .room-list {
@@ -310,6 +366,12 @@ function saveRoom(): void {
   padding: 12px;
   background: #fbfcfb;
   border: 1px solid #e3ebe8;
+}
+
+.room-card__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
 }
 
 .room-card__number {
@@ -354,7 +416,7 @@ function saveRoom(): void {
     grid-template-columns: 54px minmax(0, 1fr);
   }
 
-  .room-card > button {
+  .room-card > .room-card__actions {
     grid-column: 1 / -1;
     justify-self: start;
   }
