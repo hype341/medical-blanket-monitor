@@ -6,7 +6,7 @@ const baseConfig: SensorFilterConfig = {
   thresholdEnabled: false,
   gainEnabled: false,
   gainPower: 1,
-  gainMultiplier: 16,
+  gainMultiplier: 1,
   type: "NONE",
   threshold: 0,
   windowSize: 3,

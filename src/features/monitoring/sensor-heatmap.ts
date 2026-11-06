@@ -90,7 +90,7 @@ export function scaleSensorPoint(
   value: number,
   gainEnabled = false,
   gainPower = 1,
-  gainMultiplier = 16,
+  gainMultiplier = 1,
 ): number {
   const normalized = Math.min(255, Math.max(0, value));
   if (!gainEnabled) return Math.round(normalized);

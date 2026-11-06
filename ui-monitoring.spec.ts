@@ -269,6 +269,10 @@ test("only developers can open sensor tuning from the left menu", async ({ page 
   await expect
     .poll(async () => Number(await activePointRow.locator("strong").textContent()))
     .toBe(1792);
+  await page.screenshot({
+    path: "test-results/monitoring-sensor-tuning-default.png",
+    fullPage: true,
+  });
   await tuningPanel
     .locator(".sensor-filter-panel__row")
     .filter({ hasText: "滤波操作" })
@@ -298,6 +302,10 @@ test("only developers can open sensor tuning from the left menu", async ({ page 
   await tuningPanel.getByLabel("显示倍数").fill("16");
   await expect(tuningPanel).toContainText("^ 2");
   await expect(tuningPanel).toContainText("× 16");
+  await page.screenshot({
+    path: "test-results/monitoring-sensor-tuning.png",
+    fullPage: true,
+  });
 });
 
 test("developer tuning page keeps receiving and recomputing live sensor data", async ({

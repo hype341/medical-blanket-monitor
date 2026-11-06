@@ -65,6 +65,9 @@ describe("sensor heatmap", () => {
     expect([0, 1, 4, 16].map((value) => scaleSensorPoint(value, false, 2, 16))).toEqual([
       0, 1, 4, 16,
     ]);
+    expect([0, 1, 4, 16].map((value) => scaleSensorPoint(value, true, 1, 1))).toEqual([
+      0, 1, 4, 16,
+    ]);
     expect([0, 1, 4, 16].map((value) => scaleSensorPoint(value, true, 2, 16))).toEqual([
       0, 16, 255, 255,
     ]);

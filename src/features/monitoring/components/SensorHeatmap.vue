@@ -122,7 +122,7 @@ const props = withDefaults(
     showTechnicalDetails: false,
     gainEnabled: false,
     gainPower: 1,
-    gainMultiplier: 16,
+    gainMultiplier: 1,
   },
 );
 

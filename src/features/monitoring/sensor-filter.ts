@@ -31,13 +31,13 @@ export const DEFAULT_SENSOR_FILTER_CONFIG: SensorFilterConfig = {
   thresholdEnabled: false,
   gainEnabled: false,
   gainPower: 1,
-  gainMultiplier: 16,
+  gainMultiplier: 1,
   type: "NONE",
   threshold: 0,
   windowSize: 3,
 };
 
-const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v4";
+const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v5";
 
 export function loadSensorFilterConfig(): SensorFilterConfig {
   try {
@@ -57,7 +57,7 @@ export function loadSensorFilterConfig(): SensorFilterConfig {
       gainPower: Math.min(4, Math.max(0.1, Number(parsed.gainPower) || 1)),
       gainMultiplier: Math.min(
         32,
-        Math.max(0.1, Number(parsed.gainMultiplier) || 16),
+        Math.max(0.1, Number(parsed.gainMultiplier) || 1),
       ),
       type,
       threshold: Math.min(255, Math.max(0, Number(parsed.threshold) || 0)),
