@@ -2,12 +2,26 @@ import { describe, expect, it } from "vitest";
 import { applySensorFilter, type SensorFilterConfig } from "./sensor-filter";
 
 const baseConfig: SensorFilterConfig = {
+  enabled: true,
   type: "NONE",
   threshold: 0,
   windowSize: 3,
 };
 
 describe("sensor filter", () => {
+  it("does not filter or discard points before the developer enables processing", () => {
+    const result = applySensorFilter([1, 5, 10, 20], {
+      ...baseConfig,
+      enabled: false,
+      threshold: 10,
+    });
+
+    expect(result.values).toEqual([1, 5, 10, 20]);
+    expect(result.activePoints).toBe(4);
+    expect(result.droppedPoints).toBe(0);
+    expect(result.filteredMean).toBe(9);
+  });
+
   it("drops values below the threshold and excludes them from the mean", () => {
     const result = applySensorFilter([1, 5, 10, 20], {
       ...baseConfig,

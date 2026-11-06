@@ -7,6 +7,7 @@ import {
 export type SensorFilterType = "NONE" | "MEAN" | "MEDIAN" | "GAUSSIAN";
 
 export interface SensorFilterConfig {
+  enabled: boolean;
   type: SensorFilterType;
   threshold: number;
   windowSize: 3 | 5 | 7;
@@ -22,6 +23,7 @@ export interface SensorFilterResult {
 }
 
 export const DEFAULT_SENSOR_FILTER_CONFIG: SensorFilterConfig = {
+  enabled: false,
   type: "NONE",
   threshold: 0,
   windowSize: 3,
@@ -41,6 +43,7 @@ export function loadSensorFilterConfig(): SensorFilterConfig {
         ? parsed.type
         : "NONE";
     return {
+      enabled: parsed.enabled === true,
       type,
       threshold: Math.min(255, Math.max(0, Number(parsed.threshold) || 0)),
       windowSize:
@@ -61,6 +64,20 @@ export function applySensorFilter(
   values: readonly number[],
   config: SensorFilterConfig,
 ): SensorFilterResult {
+  if (!config.enabled) {
+    const normalized = values.map((value) =>
+      Math.min(255, Math.max(0, Math.round(value))),
+    );
+    const rawMean = mean(normalized);
+    return {
+      values: normalized,
+      rawMean,
+      filteredMean: rawMean,
+      activePoints: normalized.length,
+      droppedPoints: 0,
+      peakValue: normalized.length ? Math.max(...normalized) : 0,
+    };
+  }
   const threshold = Math.min(255, Math.max(0, config.threshold));
   const grid = Array.from<number>({ length: SENSOR_HEATMAP_COLUMNS * SENSOR_HEATMAP_ROWS }).fill(0);
   const active = Array.from<boolean>({ length: grid.length }).fill(false);

@@ -16,11 +16,21 @@
         <span role="columnheader">调整</span>
       </div>
       <div class="sensor-filter-panel__row" role="row">
+        <span role="cell">启用处理</span>
+        <strong role="cell">{{ modelValue.enabled ? "已启用" : "未启用" }}</strong>
+        <el-switch
+          :model-value="modelValue.enabled"
+          aria-label="启用滤波处理"
+          @update:model-value="setEnabled"
+        />
+      </div>
+      <div class="sensor-filter-panel__row" role="row">
         <span role="cell">滤波方式</span>
-        <strong role="cell">{{ filterLabel }}</strong>
+        <strong role="cell">{{ modelValue.enabled ? filterLabel : "不处理" }}</strong>
         <el-select
           :model-value="modelValue.type"
           aria-label="滤波方式"
+          :disabled="!modelValue.enabled"
           @update:model-value="setType"
         >
           <el-option label="不滤波" value="NONE" />
@@ -35,6 +45,7 @@
         <el-input-number
           :model-value="modelValue.threshold"
           aria-label="丢弃阈值"
+          :disabled="!modelValue.enabled"
           :min="0"
           :max="255"
           :step="1"
@@ -48,7 +59,7 @@
         <el-select
           :model-value="modelValue.windowSize"
           aria-label="滤波窗口大小"
-          :disabled="modelValue.type === 'NONE'"
+          :disabled="!modelValue.enabled || modelValue.type === 'NONE'"
           @update:model-value="setWindow"
         >
           <el-option label="3 × 3" :value="3" />
@@ -74,6 +85,9 @@
         <small role="cell">原始 0–255</small>
       </div>
     </div>
+    <p class="sensor-filter-panel__notice">
+      原始数据始终保留。关闭“启用处理”时，1792 个点全部按原值显示，不做滤波或阈值丢弃。
+    </p>
   </section>
 </template>
 
@@ -107,6 +121,10 @@ function setType(value: SensorFilterType): void {
   emit("update:modelValue", { ...props.modelValue, type: value });
 }
 
+function setEnabled(value: string | number | boolean): void {
+  emit("update:modelValue", { ...props.modelValue, enabled: Boolean(value) });
+}
+
 function setThreshold(value: number | undefined): void {
   emit("update:modelValue", {
     ...props.modelValue,
@@ -120,6 +138,7 @@ function setWindow(value: 3 | 5 | 7): void {
 
 function reset(): void {
   emit("update:modelValue", {
+    enabled: false,
     type: "NONE",
     threshold: 0,
     windowSize: 3,
@@ -223,6 +242,16 @@ function formatMean(value: number): string {
 
 .sensor-filter-panel__row:last-child {
   border-bottom: 0;
+}
+
+.sensor-filter-panel__notice {
+  padding: 9px 14px;
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.6;
+  color: #687f78;
+  background: #f2f8f5;
+  border-top: 1px solid #e3ece8;
 }
 
 @container sensor-panel (width <= 480px) {
