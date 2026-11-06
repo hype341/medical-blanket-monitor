@@ -13,15 +13,15 @@ describe("sensor heatmap", () => {
     expect(decodeSensorHex("00,40,80,c0,ff")).toEqual([0, 64, 128, 192, 255]);
   });
 
-  it("builds a 28 by 64 RGBA heatmap from 1792 bytes", () => {
+  it("builds a 28-column by 64-row RGBA heatmap from 1792 bytes", () => {
     const values = Array.from({ length: SENSOR_POINT_COUNT }, (_, index) => index % 256);
     const frame = buildSensorHeatmap(
       values.map((value) => value.toString(16).padStart(2, "0")).join(","),
     );
 
     expect(frame.complete).toBe(true);
-    expect(frame.columns).toBe(64);
-    expect(frame.rows).toBe(28);
+    expect(frame.columns).toBe(28);
+    expect(frame.rows).toBe(64);
     expect(frame.peakValue).toBe(255);
     expect(frame.pixels).toHaveLength(SENSOR_POINT_COUNT * 4);
     expect(frame.pixels[3]).toBe(255);

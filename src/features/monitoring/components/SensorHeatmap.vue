@@ -20,10 +20,10 @@
     <div class="sensor-heatmap__canvas-wrap">
       <canvas
         ref="canvasRef"
-        width="512"
-        height="224"
+        :width="SENSOR_HEATMAP_COLUMNS * 8"
+        :height="SENSOR_HEATMAP_ROWS * 8"
         role="img"
-        aria-label="28 行 64 列毯面传感器压力热力图"
+        aria-label="28 列 64 行毯面传感器压力热力图"
       />
       <div v-if="!pointCount" class="sensor-heatmap__empty">
         <strong>等待毯面数据</strong>
@@ -189,7 +189,9 @@ onBeforeUnmount(() => {
 
 .sensor-heatmap__canvas-wrap {
   position: relative;
+  width: min(100%, 220px);
   min-height: 168px;
+  margin-inline: auto;
   overflow: hidden;
   background: #eef3f1;
   border: 1px solid #c9dad4;
@@ -197,7 +199,7 @@ onBeforeUnmount(() => {
   canvas {
     display: block;
     width: 100%;
-    height: 224px;
+    height: auto;
     image-rendering: pixelated;
   }
 }
@@ -244,8 +246,12 @@ onBeforeUnmount(() => {
 }
 
 @media (width <= 700px) {
+  .sensor-heatmap__canvas-wrap {
+    width: min(100%, 190px);
+  }
+
   .sensor-heatmap__canvas-wrap canvas {
-    height: 178px;
+    height: auto;
   }
 }
 </style>

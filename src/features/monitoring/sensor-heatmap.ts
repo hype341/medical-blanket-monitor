@@ -1,5 +1,5 @@
-export const SENSOR_HEATMAP_COLUMNS = 64;
-export const SENSOR_HEATMAP_ROWS = 28;
+export const SENSOR_HEATMAP_COLUMNS = 28;
+export const SENSOR_HEATMAP_ROWS = 64;
 export const SENSOR_POINT_COUNT = SENSOR_HEATMAP_COLUMNS * SENSOR_HEATMAP_ROWS;
 
 export interface SensorHeatmapFrame {
