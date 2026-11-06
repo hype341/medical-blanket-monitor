@@ -262,7 +262,29 @@
                 <span>床位独立数据通道</span>
                 <strong>{{ dataTopicCount }} 个数据主题</strong>
               </div>
-              <small>{{ bedTopicRows.length - dataTopicCount }} 张床位待绑定传感器</small>
+              <div class="topic-view-switch" role="group" aria-label="床位数据链接视图">
+                <button
+                  type="button"
+                  :class="{ 'is-active': dataDisplayMode === 'data' }"
+                  @click="dataDisplayMode = 'data'"
+                >
+                  1792 字节
+                </button>
+                <button
+                  type="button"
+                  :class="{ 'is-active': dataDisplayMode === 'raw' }"
+                  @click="dataDisplayMode = 'raw'"
+                >
+                  原始帧
+                </button>
+                <button
+                  type="button"
+                  :class="{ 'is-active': dataDisplayMode === 'full' }"
+                  @click="dataDisplayMode = 'full'"
+                >
+                  完整报文
+                </button>
+              </div>
             </header>
             <div class="room-topic-cards">
               <article v-for="row in bedTopicRows" :key="row.bedId">
@@ -274,7 +296,7 @@
                   <code :title="row.dataTopic || '绑定传感器后生成'">
                     {{ row.dataTopic || "绑定传感器后生成" }}
                   </code>
-                  <small>{{ row.dataApiPath || "数据链接待生成" }}</small>
+                  <small>{{ row.activeDataApiPath || "数据链接待生成" }}</small>
                 </div>
                 <div class="topic-row-actions">
                   <el-button
@@ -288,8 +310,8 @@
                   <el-button
                     text
                     type="primary"
-                    :disabled="!row.dataApiPath"
-                    @click="row.dataApiPath && copySensorLink(row.dataApiPath)"
+                    :disabled="!row.activeDataApiPath"
+                    @click="row.activeDataApiPath && copySensorLink(row.activeDataApiPath)"
                   >
                     复制链接
                   </el-button>
@@ -357,11 +379,48 @@
           <span>传感器数据</span>
           <h2>传感器数据报文</h2>
           <p>只上报设备、时间、状态和扩展容器，图形由状态字段驱动。</p>
+          <div class="message-card__switch" role="group" aria-label="数据报文显示方式">
+            <button
+              type="button"
+              :class="{ 'is-active': dataDisplayMode === 'data' }"
+              @click="dataDisplayMode = 'data'"
+            >
+              1792 字节数据
+            </button>
+            <button
+              type="button"
+              :class="{ 'is-active': dataDisplayMode === 'raw' }"
+              @click="dataDisplayMode = 'raw'"
+            >
+              原始帧
+            </button>
+            <button
+              type="button"
+              :class="{ 'is-active': dataDisplayMode === 'full' }"
+              @click="dataDisplayMode = 'full'"
+            >
+              完整报文
+            </button>
+          </div>
         </header>
-        <pre>{{ sensorDataTemplate }}</pre>
+        <pre>{{
+          dataDisplayMode === "data"
+            ? dataPreview
+            : dataDisplayMode === "raw"
+              ? rawDataPreview
+              : fullDataPreview || sensorDataTemplate
+        }}</pre>
         <footer>
-          <code>status</code>
-          <span>ONLINE / STALE / OFFLINE / ALARM</span>
+          <code>{{ dataDisplayMode === "full" ? "status" : dataDisplayMode }}</code>
+          <span>
+            {{
+              dataDisplayMode === "data"
+                ? "1792 字节 · 小写十六进制 · 逗号分隔"
+                : dataDisplayMode === "raw"
+                  ? "完整原始帧 · 含帧头、类型和校验"
+                : "ONLINE / STALE / OFFLINE / ALARM"
+            }}
+          </span>
         </footer>
       </article>
       <article class="message-card message-card--alarm">
@@ -425,7 +484,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import DocumentPreview from "../components/DocumentPreview.vue";
 import { generateMqttDocumentation } from "../documentation";
@@ -435,14 +494,20 @@ import { copyText } from "@/utils/clipboard";
 import {
   buildMqttTopicUrl,
   buildSensorDataApiPath,
+  buildSensorHexApiPath,
   SENSOR_DATA_TOPIC,
   SYSTEM_TIME_TOPIC,
 } from "../messaging";
 import { printMarkdownDocument } from "@/utils/document-export";
+import { getSensorHex, getSensorRawHex } from "../stream-api";
 
 const store = useMonitoringStore();
 const form = reactive<MqttSettings>({ ...store.mqttSettings });
 const showPassword = ref(false);
+const dataDisplayMode = ref<"data" | "raw" | "full">("data");
+const dataPreview = ref("等待传感器数据");
+const rawDataPreview = ref("等待传感器原始帧");
+const fullDataPreview = ref("");
 const activeTopicMode = ref<"data" | "alarm">("data");
 const deviceTimeUrl = computed(() => {
   try {
@@ -497,6 +562,22 @@ const bedTopicRows = computed(() =>
     bedId: summary.bed.id,
     dataTopic: summary.dataTopic,
     dataApiPath: summary.dataTopic ? buildSensorDataApiPath(summary.bed.id) : null,
+    dataHexApiPath: summary.dataTopic ? buildSensorHexApiPath(summary.bed.id) : null,
+    dataRawHexApiPath: summary.dataTopic
+      ? `/api/public/sensors/${encodeURIComponent(summary.bed.id)}/raw-hex`
+      : null,
+    activeDataApiPath:
+      dataDisplayMode.value === "full"
+        ? summary.dataTopic
+          ? buildSensorDataApiPath(summary.bed.id)
+          : null
+        : dataDisplayMode.value === "raw"
+          ? summary.dataTopic
+            ? `/api/public/sensors/${encodeURIComponent(summary.bed.id)}/raw-hex`
+            : null
+          : summary.dataTopic
+            ? buildSensorHexApiPath(summary.bed.id)
+            : null,
     mqttLink: summary.dataTopic ? buildMqttTopicUrl(form.brokerUrl, summary.dataTopic) : null,
     alarmTopic: summary.alarmTopic,
     wardName: summary.ward?.name ?? "未分病区",
@@ -537,6 +618,23 @@ const accessPayload = computed(() =>
     2,
   ),
 );
+
+async function loadDataPreviews(): Promise<void> {
+  const bedId = accessBedRows.value[0]?.bedId;
+  if (!bedId) return;
+  const [hex, raw, full] = await Promise.allSettled([
+    getSensorHex(bedId),
+    getSensorRawHex(bedId),
+    fetch(`/api/public/sensors/${encodeURIComponent(bedId)}`, { cache: "no-store" }).then(
+      async (response) => (response.ok ? JSON.stringify(await response.json(), null, 2) : ""),
+    ),
+  ]);
+  if (hex.status === "fulfilled" && hex.value) dataPreview.value = hex.value;
+  if (raw.status === "fulfilled" && raw.value) rawDataPreview.value = raw.value;
+  if (full.status === "fulfilled" && full.value) fullDataPreview.value = full.value;
+}
+
+onMounted(loadDataPreviews);
 
 function save(): void {
   try {
@@ -1177,6 +1275,35 @@ function downloadText(fileName: string, content: string): void {
   }
 }
 
+.room-topic-panel > header .topic-view-switch {
+  display: flex;
+  flex-shrink: 0;
+  gap: 3px;
+  padding: 3px;
+  background: #edf4f1;
+  border: 1px solid #d7e4df;
+
+  button {
+    padding: 5px 7px;
+    font-size: 9px;
+    color: #5f746e;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+
+    &.is-active {
+      font-weight: 700;
+      color: #fff;
+      background: #2f806a;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #174e46;
+      outline-offset: 2px;
+    }
+  }
+}
+
 .room-topic-cards {
   display: grid;
   gap: 6px;
@@ -1291,6 +1418,35 @@ function downloadText(fileName: string, content: string): void {
       font-size: 10px;
       line-height: 1.6;
       color: #7d8d88;
+    }
+  }
+
+  &__switch {
+    display: inline-flex;
+    gap: 3px;
+    padding: 3px;
+    margin-top: 10px;
+    background: #edf4f1;
+    border: 1px solid #d9e5e0;
+
+    button {
+      padding: 5px 8px;
+      font-size: 10px;
+      color: #5c716b;
+      cursor: pointer;
+      background: transparent;
+      border: 0;
+
+      &.is-active {
+        font-weight: 700;
+        color: #fff;
+        background: #2f806a;
+      }
+
+      &:focus-visible {
+        outline: 2px solid #174e46;
+        outline-offset: 2px;
+      }
     }
   }
 

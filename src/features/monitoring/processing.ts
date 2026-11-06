@@ -74,13 +74,43 @@ export function parseSensorPayload(payload: string): SensorTelemetryEnvelope | n
   try {
     const parsed = JSON.parse(payload) as SensorTelemetryEnvelope;
     if (!parsed || typeof parsed !== "object") return null;
+    const rawFrame = parsed.metrics?.rawFrame;
+    const pressure = parsed.metrics?.pressure;
+    const derivedData =
+      parsed.data === undefined
+        ? Array.isArray(rawFrame)
+          ? extractRawFrameSensorHex(rawFrame)
+          : Array.isArray(pressure)
+            ? bytesToHex(pressure)
+            : undefined
+        : undefined;
     return {
       ...parsed,
-      ...(parsed.data === undefined ? {} : { data: normalizeHexData(parsed.data) }),
+      ...(parsed.data === undefined
+        ? derivedData
+          ? { data: derivedData }
+          : {}
+        : { data: normalizeHexData(parsed.data) }),
     };
   } catch {
     return null;
   }
+}
+
+export function extractRawFrameSensorHex(rawFrame: readonly MetricValue[]): string {
+  const start = rawFrame.length >= 1799 ? 6 : rawFrame.length >= 1798 ? 5 : 0;
+  return bytesToHex(rawFrame.slice(start, Math.min(start + 1792, rawFrame.length)));
+}
+
+export function extractFullRawFrameHex(rawFrame: readonly MetricValue[]): string {
+  return bytesToHex(rawFrame);
+}
+
+function bytesToHex(bytes: readonly MetricValue[]): string {
+  return bytes
+    .filter((value): value is number => typeof value === "number")
+    .map((value) => (Math.trunc(value) & 0xff).toString(16).padStart(2, "0"))
+    .join(",");
 }
 
 export async function runSensorProcessors(

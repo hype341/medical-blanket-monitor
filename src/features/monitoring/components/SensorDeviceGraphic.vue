@@ -25,8 +25,8 @@
 
     <div class="sensor-graphic__meta">
       <div v-if="sensor?.latestData" class="sensor-graphic__raw-data">
-        <span>原始数据</span>
-        <code>{{ sensor.latestData }}</code>
+        <span>{{ dataByteCount }} 字节数据</span>
+        <code :title="sensor.latestData">{{ sensor.latestData }}</code>
       </div>
 
       <div class="sensor-graphic__state">
@@ -54,6 +54,10 @@ const statusLabel = computed(() => {
   };
   return labels[props.sensor?.status ?? "OFFLINE"];
 });
+
+const dataByteCount = computed(
+  () => props.sensor?.latestData?.split(",").filter(Boolean).length ?? 0,
+);
 </script>
 
 <style scoped lang="scss">

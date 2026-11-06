@@ -14,7 +14,9 @@
       <div class="universal-player__signal" :class="{ 'is-loading': state === 'loading' }" />
       <strong>{{ stateCopy.title }}</strong>
       <p>{{ stateCopy.detail }}</p>
-      <button v-if="state === 'error'" type="button" @click="preparePlayback">重试视频线路</button>
+      <button v-if="state === 'error'" type="button" @click="preparePlayback(true)">
+        立即重试视频线路
+      </button>
     </div>
 
     <div class="universal-player__chrome">
@@ -61,6 +63,9 @@ const state = ref<PlayerState>("empty");
 const activeProtocol = ref<PlaybackProtocol | null>(null);
 let generation = 0;
 let stopActiveMedia: (() => void) | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempt = 0;
+const reconnectDelay = ref(0);
 
 const activeProtocolLabel = computed(() => {
   if (state.value === "loading") return "正在连接";
@@ -82,9 +87,11 @@ const stateCopy = computed(() => {
     return {
       title: "视频线路暂时不可用",
       detail:
-        props.cameraStatus === "OFFLINE"
-          ? "摄像头当前离线，请检查供电和网络。"
-          : "播放地址连接失败，请稍后重试或检查媒体服务。",
+        reconnectDelay.value > 0
+          ? `连接中断，系统将在 ${reconnectDelay.value} 秒后自动重试。`
+          : props.cameraStatus === "OFFLINE"
+            ? "摄像头当前离线，请检查供电和网络。"
+            : "播放地址连接失败，请稍后重试或检查媒体服务。",
     };
   }
   return {
@@ -103,6 +110,25 @@ function releaseMedia(): void {
   video.srcObject = null;
   video.removeAttribute("src");
   video.load();
+}
+
+function clearReconnect(): void {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  reconnectDelay.value = 0;
+}
+
+function scheduleReconnect(): void {
+  clearReconnect();
+  if (document.visibilityState !== "visible" || !props.playback) return;
+  const delay = Math.min(30_000, 2_000 * 2 ** Math.min(reconnectAttempt, 4));
+  reconnectAttempt += 1;
+  reconnectDelay.value = Math.ceil(delay / 1_000);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    reconnectDelay.value = 0;
+    void preparePlayback();
+  }, delay);
 }
 
 async function playWebRtc(url: string, isCurrent: () => boolean): Promise<void> {
@@ -203,7 +229,11 @@ function scheduleNextCandidate(): void {
 
 async function tryCandidate(token: number): Promise<void> {
   if (token !== generation || !candidates[candidateIndex]) {
-    if (token === generation) state.value = "error";
+    if (token === generation) {
+      state.value = "error";
+      emit("status", "OFFLINE");
+      scheduleReconnect();
+    }
     return;
   }
 
@@ -219,18 +249,21 @@ async function tryCandidate(token: number): Promise<void> {
     if (candidate.protocol === "hls") await playHls(candidate.url, isCurrent);
     if (candidate.protocol === "flv") await playFlv(candidate.url, isCurrent);
     if (isCurrent()) {
+      reconnectAttempt = 0;
+      clearReconnect();
       state.value = "playing";
       emit("status", "ONLINE");
     }
   } catch {
-    if (isCurrent()) {
-      emit("status", "OFFLINE");
-      scheduleNextCandidate();
-    }
+    if (isCurrent()) scheduleNextCandidate();
   }
 }
 
-async function preparePlayback(): Promise<void> {
+async function preparePlayback(resetReconnect = false): Promise<void> {
+  if (resetReconnect) {
+    reconnectAttempt = 0;
+    clearReconnect();
+  }
   const token = ++generation;
   releaseMedia();
   activeProtocol.value = null;
@@ -256,18 +289,39 @@ async function preparePlayback(): Promise<void> {
 }
 
 onMounted(() => {
+  document.addEventListener("visibilitychange", handleVisibility);
   void preparePlayback();
 });
 
 watch(
-  [() => props.playback, () => props.cameraStatus],
+  () => props.playback,
   () => {
-    void preparePlayback();
+    reconnectAttempt = 0;
+    void preparePlayback(true);
   },
 );
 
+watch(
+  () => props.cameraStatus,
+  (status) => {
+    if (status === "ONLINE" && state.value === "error") {
+      void preparePlayback(true);
+    }
+  },
+);
+
+function handleVisibility(): void {
+  if (document.visibilityState === "visible") {
+    if (state.value === "error") void preparePlayback();
+  } else {
+    clearReconnect();
+  }
+}
+
 onBeforeUnmount(() => {
   generation += 1;
+  clearReconnect();
+  document.removeEventListener("visibilitychange", handleVisibility);
   releaseMedia();
 });
 </script>

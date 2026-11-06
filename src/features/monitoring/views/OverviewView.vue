@@ -194,7 +194,9 @@ async function refreshOverviewCameraHealth(): Promise<void> {
   cameraHealthController?.abort();
   cameraHealthController = new AbortController();
   try {
-    const results = await probeCameraHealth(cameras, cameraHealthController.signal);
+    const results = await probeCameraHealth(cameras, cameraHealthController.signal, {
+      browserFallback: false,
+    });
     results.forEach((result) => store.syncCameraStatus(result.cameraId, result.status));
   } catch {
     // Keep the last known camera state until the probe endpoint recovers.

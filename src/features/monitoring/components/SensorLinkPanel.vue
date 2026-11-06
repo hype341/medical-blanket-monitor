@@ -8,15 +8,40 @@
       <small>链接可直接交给页面或第三方服务</small>
     </header>
 
-    <div v-if="summary?.dataTopic" class="sensor-links__list">
-      <article v-for="link in links" :key="link.label" :data-primary="link.primary">
+    <div class="sensor-links__view-switch" aria-label="传感器数据链接显示方式">
+      <span>数据视图</span>
+      <button
+        type="button"
+        :class="{ 'is-active': viewMode === 'data' }"
+        @click="viewMode = 'data'"
+      >
+        1792 字节数据
+      </button>
+      <button
+        type="button"
+        :class="{ 'is-active': viewMode === 'raw' }"
+        @click="viewMode = 'raw'"
+      >
+        原始帧
+      </button>
+      <button
+        type="button"
+        :class="{ 'is-active': viewMode === 'full' }"
+        @click="viewMode = 'full'"
+      >
+        完整报文
+      </button>
+    </div>
+
+    <div v-if="summary?.dataTopic && activeLink" class="sensor-links__list">
+      <article data-primary="true">
         <div>
-          <span>{{ link.label }}</span>
-          <code :title="link.url">{{ link.url }}</code>
+          <span>{{ activeLink.label }}</span>
+          <code :title="activeLink.url">{{ activeLink.url }}</code>
         </div>
         <div class="sensor-links__actions">
-          <el-button v-if="link.openable" text @click="openLink(link.url)">打开</el-button>
-          <el-button text type="primary" @click="copyLink(link)">复制</el-button>
+          <el-button text @click="openLink(activeLink.url)">打开</el-button>
+          <el-button text type="primary" @click="copyLink(activeLink)">复制</el-button>
         </div>
       </article>
     </div>
@@ -26,10 +51,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { copyText } from "@/utils/clipboard";
-import { buildMqttTopicUrl, buildSensorDataApiPath } from "../messaging";
+import {
+  buildSensorDataApiPath,
+  buildSensorHexApiPath,
+} from "../messaging";
 import type { BedMonitorSummary, MqttSettings } from "../types";
 
 interface SensorLink {
@@ -49,30 +77,34 @@ const props = withDefaults(
     compact: false,
   },
 );
+const viewMode = ref<"data" | "raw" | "full">("data");
 
-const links = computed<SensorLink[]>(() => {
-  if (!props.summary?.dataTopic) return [];
+const activeLink = computed<SensorLink | null>(() => {
+  if (!props.summary?.dataTopic) return null;
   const origin = window.location.origin;
-  return [
-    {
-      label: "传感器数据接口",
+  if (viewMode.value === "raw") {
+    return {
+      label: "传感器原始帧",
+      url: `${origin}/api/public/sensors/${encodeURIComponent(props.summary.bed.id)}/raw-hex`,
+    };
+  }
+  if (viewMode.value === "full") {
+    return {
+      label: "传感器完整报文",
       url: `${origin}${buildSensorDataApiPath(props.summary.bed.id)}`,
-      primary: true,
-      openable: true,
-    },
-    {
-      label: "传感器页面",
-      url: `${origin}/#/beds/${encodeURIComponent(props.summary.bed.id)}`,
-      openable: true,
-    },
-    {
-      label: "MQTT 数据链接",
-      url: buildMqttTopicUrl(props.settings.brokerUrl, props.summary.dataTopic),
-    },
-  ];
+    };
+  }
+  return {
+    label: "传感器 1792 字节数据",
+    url: `${origin}${buildSensorHexApiPath(props.summary.bed.id)}`,
+  };
 });
 
 function openLink(url: string): void {
+  if (new URL(url, window.location.origin).origin === window.location.origin) {
+    window.location.assign(url);
+    return;
+  }
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
@@ -154,6 +186,44 @@ async function copyLink(link: SensorLink): Promise<void> {
     font-size: 9px;
     color: #32695c;
     white-space: nowrap;
+  }
+}
+
+.sensor-links__view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding: 8px 10px;
+  margin-top: 9px;
+  background: #f6faf8;
+  border: 1px solid #dfe9e5;
+
+  > span {
+    margin-right: 4px;
+    font-size: 10px;
+    color: #70837c;
+  }
+
+  button {
+    padding: 5px 8px;
+    font-size: 10px;
+    color: #55716a;
+    cursor: pointer;
+    background: #fff;
+    border: 1px solid #d1dfda;
+
+    &.is-active {
+      font-weight: 700;
+      color: #fff;
+      background: #2f806a;
+      border-color: #2f806a;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #2f806a;
+      outline-offset: 2px;
+    }
   }
 }
 

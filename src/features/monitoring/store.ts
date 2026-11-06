@@ -617,11 +617,15 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     if (cameras.some((item) => item.cameraKey === input.cameraKey.trim())) {
       throw new Error("摄像头标识已存在");
     }
+    if (cameras.some((item) => item.mediaPath === input.mediaPath.trim())) {
+      throw new Error("媒体路径已存在");
+    }
     const cameraId = `camera-${cameraSequence++}`;
     cameras.push({
       id: cameraId,
       cameraKey: input.cameraKey.trim(),
       mediaPath: input.mediaPath.trim(),
+      mediaServerUrl: normalizeMediaServerUrl(input.mediaServerUrl),
       name: input.name.trim(),
       vendor: input.vendor?.trim() || undefined,
       model: input.model?.trim() || undefined,
@@ -702,11 +706,64 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     }
     const camera = cameras.find((item) => item.id === cameraId);
     if (!camera) throw new Error("摄像头不存在");
+    if (
+      cameras.some(
+        (item) => item.id !== cameraId && item.cameraKey === input.cameraKey.trim(),
+      )
+    ) {
+      throw new Error("摄像头标识已存在");
+    }
+    if (
+      cameras.some(
+        (item) => item.id !== cameraId && item.mediaPath === input.mediaPath.trim(),
+      )
+    ) {
+      throw new Error("媒体路径已存在");
+    }
     camera.cameraKey = input.cameraKey.trim();
     camera.mediaPath = input.mediaPath.trim();
+    camera.mediaServerUrl = normalizeMediaServerUrl(input.mediaServerUrl);
     camera.name = input.name.trim();
     camera.vendor = input.vendor?.trim() || undefined;
     camera.model = input.model?.trim() || undefined;
+  }
+
+  function addCameraBatch(inputs: CameraInput[]): number {
+    if (!canManageCameras.value) throw new Error("仅开发者可以批量导入摄像头");
+    if (!inputs.length) throw new Error("没有可导入的摄像头");
+    if (inputs.length > 10_000) throw new Error("单次最多导入 10000 台摄像头");
+
+    const cameraKeys = new Set(cameras.map((camera) => camera.cameraKey));
+    const mediaPaths = new Set(cameras.map((camera) => camera.mediaPath).filter(Boolean));
+    const pending: Camera[] = [];
+    for (const input of inputs) {
+      const cameraKey = input.cameraKey.trim();
+      const mediaPath = input.mediaPath.trim();
+      const name = input.name.trim();
+      if (!cameraKey || !mediaPath || !name) throw new Error("名称、设备标识和媒体路径不能为空");
+      if (cameraKeys.has(cameraKey)) throw new Error(`摄像头标识重复：${cameraKey}`);
+      if (mediaPaths.has(mediaPath)) throw new Error(`媒体路径重复：${mediaPath}`);
+      cameraKeys.add(cameraKey);
+      mediaPaths.add(mediaPath);
+      pending.push({
+        id: `camera-${cameraSequence++}`,
+        cameraKey,
+        mediaPath,
+        mediaServerUrl: normalizeMediaServerUrl(input.mediaServerUrl),
+        name,
+        vendor: input.vendor?.trim() || undefined,
+        model: input.model?.trim() || undefined,
+        status: "OFFLINE",
+        playback: null,
+      });
+    }
+    cameras.push(...pending);
+    return pending.length;
+  }
+
+  function normalizeMediaServerUrl(value: string | undefined): string | undefined {
+    const normalized = value?.trim().replace(/\/+$/, "");
+    return normalized || undefined;
   }
 
   function canManageMember(memberId: string): boolean {
@@ -1091,6 +1148,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     updateStaff,
     canManageMember,
     addCamera,
+    addCameraBatch,
     addManagedCamera,
     updateManagedCamera,
     updateCamera,

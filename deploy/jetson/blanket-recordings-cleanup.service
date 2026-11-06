@@ -1,0 +1,7 @@
+[Unit]
+Description=Remove empty MediaMTX recordings that break playback indexes
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mediamtx-recordings-cleanup.sh

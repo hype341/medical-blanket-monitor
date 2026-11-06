@@ -15,6 +15,7 @@ export interface CameraMediaEndpoints {
   webRtcUrl: string;
   hlsUrl: string;
   rtspUrl: string;
+  rtmpUrl: string;
   playbackApiBaseUrl: string;
 }
 
@@ -24,14 +25,15 @@ export interface CameraMediaEndpoints {
  */
 export function getCameraMediaEndpoints(camera: Camera): CameraMediaEndpoints {
   const mediaPath = camera.mediaPath ?? camera.cameraKey;
-  const webRtcUrl = camera.playback?.webrtcUrl ?? `${trimSlash(DEFAULT_WEBRTC_BASE)}/${mediaPath}/whep`;
+  const node = getMediaNodeBases(camera.mediaServerUrl);
+  const webRtcUrl = camera.playback?.webrtcUrl ?? `${node.webRtcBase}/${mediaPath}/whep`;
   const hlsUrl =
-    camera.playback?.hlsUrl ?? `${trimSlash(DEFAULT_HLS_BASE)}/${mediaPath}/index.m3u8`;
+    camera.playback?.hlsUrl ?? `${node.hlsBase}/${mediaPath}/index.m3u8`;
   const webRtcViewUrl = webRtcUrl.replace(/\/whep\/?$/i, "");
   const rtspUrl =
     camera.playback?.hlsUrl || camera.playback?.webrtcUrl
       ? `${deriveRtspBase(webRtcUrl)}/${mediaPath}`
-      : `${trimSlash(DEFAULT_RTSP_BASE)}/${mediaPath}`;
+      : `${node.rtspBase}/${mediaPath}`;
 
   return {
     mediaPath,
@@ -39,8 +41,13 @@ export function getCameraMediaEndpoints(camera: Camera): CameraMediaEndpoints {
     webRtcUrl,
     hlsUrl,
     rtspUrl,
-    playbackApiBaseUrl: derivePlaybackApiBase(camera.playback?.webrtcUrl),
+    rtmpUrl: `${node.rtmpBase}/${mediaPath}`,
+    playbackApiBaseUrl: derivePlaybackApiBase(camera.playback?.webrtcUrl, node.playbackBase),
   };
+}
+
+export function getCameraPublishUrl(camera: Camera): string {
+  return getCameraMediaEndpoints(camera).rtspUrl;
 }
 
 function deriveRtspBase(webRtcUrl: string): string {
@@ -52,16 +59,50 @@ function deriveRtspBase(webRtcUrl: string): string {
   }
 }
 
-function derivePlaybackApiBase(webRtcUrl: string | null | undefined): string {
+function derivePlaybackApiBase(
+  webRtcUrl: string | null | undefined,
+  nodePlaybackBase: string,
+): string {
   const configured = import.meta.env.VITE_MEDIA_PLAYBACK_API_BASE_URL;
   if (configured) return trimSlash(configured);
-  if (!webRtcUrl) return trimSlash(DEFAULT_PLAYBACK_API_BASE);
+  if (!webRtcUrl) return nodePlaybackBase;
   try {
     const url = new URL(webRtcUrl);
     const protocol = url.protocol === "https:" ? "https:" : "http:";
     return `${protocol}//${url.hostname}:9996`;
   } catch {
     return trimSlash(DEFAULT_PLAYBACK_API_BASE);
+  }
+}
+
+function getMediaNodeBases(mediaServerUrl: string | undefined) {
+  if (!mediaServerUrl?.trim()) {
+    return {
+      webRtcBase: trimSlash(DEFAULT_WEBRTC_BASE),
+      hlsBase: trimSlash(DEFAULT_HLS_BASE),
+      rtspBase: trimSlash(DEFAULT_RTSP_BASE),
+      rtmpBase: `rtmp://${new URL(DEFAULT_RTSP_BASE).hostname}:1935`,
+      playbackBase: trimSlash(DEFAULT_PLAYBACK_API_BASE),
+    };
+  }
+  try {
+    const url = new URL(mediaServerUrl);
+    const host = url.hostname;
+    const httpProtocol = url.protocol === "https:" ? "https:" : "http:";
+    return {
+      webRtcBase: `${httpProtocol}//${host}:8889`,
+      hlsBase: `${httpProtocol}//${host}:8888`,
+      rtspBase: `rtsp://${host}:8554`,
+      rtmpBase: `rtmp://${host}:1935`,
+      playbackBase: `${httpProtocol}//${host}:9996`,
+    };
+  } catch {
+    return {
+      webRtcBase: trimSlash(DEFAULT_WEBRTC_BASE),
+      hlsBase: trimSlash(DEFAULT_HLS_BASE),
+      rtspBase: trimSlash(DEFAULT_RTSP_BASE),
+      playbackBase: trimSlash(DEFAULT_PLAYBACK_API_BASE),
+    };
   }
 }
 

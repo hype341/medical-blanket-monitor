@@ -3,9 +3,21 @@
     <header>
       <div>
         <h3>录像回放</h3>
-        <p>滚动保留最近 {{ retentionMinutes }} 分钟，旧片段到期后自动清理。</p>
+        <p>
+          滚动保留最近 {{ retentionMinutes }} 分钟；当前录像最多约 15 秒后进入回放。
+        </p>
       </div>
       <div class="recording-timeline__controls">
+        <button
+          v-for="minutes in availableWindows"
+          :key="minutes"
+          type="button"
+          :class="{ 'is-active': timelineWindowMinutes === minutes }"
+          @click="timelineWindowMinutes = minutes"
+        >
+          {{ windowLabel(minutes) }}
+        </button>
+        <span class="recording-timeline__divider" />
         <button
           type="button"
           aria-label="向前回看 10 秒"
@@ -59,9 +71,9 @@
         class="recording-timeline__segment"
         :style="{ left: `${segment.left}%`, width: `${segment.width}%` }"
         :title="`${formatTime(segment.startAt)} - ${formatTime(segment.endAt)}`"
-        :data-start-at="segment.startAt"
+        :data-start-at="segment.visibleStartAt"
         :data-end-at="segment.endAt"
-        @click="emit('seek', segment.startAt)"
+        @click="emit('seek', segment.visibleStartAt)"
       />
       <button
         v-for="alarm in positionedAlarms"
@@ -135,12 +147,21 @@ const isScrubbing = ref(false);
 const jumpDirty = ref(false);
 const jumpValue = ref(toDateTimeLocal(Date.now()));
 const jumpError = ref("");
+const timelineWindowMinutes = ref(Math.min(60, props.retentionMinutes));
 let clockTimer: ReturnType<typeof setInterval> | null = null;
 
-const windowStart = computed(() => now.value - props.retentionMinutes * 60_000);
+const availableWindows = computed(() =>
+  [15, 60, 360, 1_440].filter((minutes) => minutes <= props.retentionMinutes),
+);
+const retentionStart = computed(() => now.value - props.retentionMinutes * 60_000);
+const windowStart = computed(() => now.value - timelineWindowMinutes.value * 60_000);
 const windowSpan = computed(() => now.value - windowStart.value);
 const visibleSegments = computed(() =>
-  pruneExpiredSegments(props.segments, new Date(now.value).toISOString(), props.retentionMinutes),
+  pruneExpiredSegments(
+    props.segments,
+    new Date(now.value).toISOString(),
+    props.retentionMinutes,
+  ).filter((segment) => new Date(segment.endAt).getTime() >= windowStart.value),
 );
 const visibleAlarms = computed(() =>
   props.alarms.filter((alarm) => new Date(alarm.occurredAt).getTime() >= windowStart.value),
@@ -151,7 +172,7 @@ const cursorTime = computed(() =>
 );
 const windowStartLabel = computed(() => formatTime(new Date(windowStart.value).toISOString()));
 const windowEndLabel = computed(() => formatTime(new Date(now.value).toISOString()));
-const jumpMin = computed(() => toDateTimeLocal(windowStart.value));
+const jumpMin = computed(() => toDateTimeLocal(retentionStart.value));
 const jumpMax = computed(() => toDateTimeLocal(now.value));
 
 const positionedSegments = computed(() =>
@@ -160,6 +181,7 @@ const positionedSegments = computed(() =>
     const end = Math.min(new Date(segment.endAt).getTime(), now.value);
     return {
       ...segment,
+      visibleStartAt: new Date(start).toISOString(),
       left: ((start - windowStart.value) / windowSpan.value) * 100,
       width: Math.max(((end - start) / windowSpan.value) * 100, 0.3),
     };
@@ -189,6 +211,12 @@ function formatDateTime(value: Date): string {
     second: "2-digit",
     hour12: false,
   }).format(value);
+}
+
+function windowLabel(minutes: number): string {
+  if (minutes < 60) return `${minutes} 分钟`;
+  if (minutes < 1_440) return `${minutes / 60} 小时`;
+  return "24 小时";
 }
 
 function shiftCursor(seconds: number): void {
@@ -228,16 +256,19 @@ function seekToInputTime(): void {
     jumpError.value = "请输入有效的日期和时间";
     return;
   }
-  if (target < windowStart.value || target > now.value) {
+  if (target < retentionStart.value || target > now.value) {
     jumpError.value = "该时间不在当前录像保留范围内";
     return;
   }
   const targetAt = new Date(target).toISOString();
-  if (!findPlaybackSegment(visibleSegments.value, targetAt, 2_000)) {
+  if (!findPlaybackSegment(props.segments, targetAt, 2_000)) {
     jumpError.value = "该时间没有对应录像片段，请换个时间";
     return;
   }
 
+  if (target < windowStart.value) {
+    timelineWindowMinutes.value = props.retentionMinutes;
+  }
   jumpError.value = "";
   cursorPercent.value = ((target - windowStart.value) / windowSpan.value) * 100;
   jumpDirty.value = false;
@@ -320,7 +351,21 @@ onBeforeUnmount(() => {
       outline: 2px solid #2f806a;
       outline-offset: 2px;
     }
+
+    &.is-active {
+      color: #fff;
+      background: #2f806a;
+      border-color: #2f806a;
+    }
   }
+}
+
+.recording-timeline__divider {
+  width: 1px;
+  height: 17px;
+  padding: 0 !important;
+  margin: 0 2px;
+  background: #d6e3de;
 }
 
 .recording-timeline__jump {

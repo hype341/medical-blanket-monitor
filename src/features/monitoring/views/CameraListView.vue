@@ -12,7 +12,11 @@
           }}
         </p>
       </div>
-      <el-button type="primary" @click="openEditor()">新增摄像头</el-button>
+      <div class="camera-page__header-actions">
+        <el-button v-if="isDeveloper" @click="downloadCameraTemplate">下载模板</el-button>
+        <el-button v-if="isDeveloper" @click="bulkDialogVisible = true">批量导入</el-button>
+        <el-button type="primary" @click="openEditor()">新增摄像头</el-button>
+      </div>
     </header>
 
     <section v-if="isDeveloper" class="camera-guidance">
@@ -126,6 +130,38 @@
       :camera="editorCamera"
       @save="saveManagedCamera"
     />
+
+    <el-dialog v-model="bulkDialogVisible" title="批量导入摄像头" width="720px">
+      <div class="camera-bulk-import">
+        <p>
+          CSV 每行一台摄像头，字段顺序为：名称、设备标识、媒体路径、流媒体节点地址、厂商、型号。
+          媒体路径可留空，系统会根据设备标识自动生成。
+        </p>
+        <div class="camera-bulk-import__actions">
+          <el-button @click="cameraImportInput?.click()">选择 CSV 文件</el-button>
+          <span>单次最多 10000 台</span>
+        </div>
+        <el-input
+          v-model="cameraImportText"
+          type="textarea"
+          :rows="10"
+          placeholder="摄像头名称,设备标识,媒体路径,流媒体节点地址,厂商,型号"
+        />
+        <input
+          ref="cameraImportInput"
+          class="visually-hidden"
+          type="file"
+          accept=".csv,text/csv,text/plain"
+          @change="loadCameraImportFile"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="bulkDialogVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!cameraImportText.trim()" @click="importCameras">
+          导入摄像头
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -152,6 +188,9 @@ const statusFilter = ref<"ALL" | CameraStatus>("ALL");
 const currentPage = ref(1);
 const pageSize = ref(12);
 const showVideoDocument = ref(false);
+const bulkDialogVisible = ref(false);
+const cameraImportText = ref("");
+const cameraImportInput = ref<HTMLInputElement>();
 let healthTimer: ReturnType<typeof setInterval> | null = null;
 let healthController: AbortController | null = null;
 const generatedAt = ref(new Date().toLocaleString("zh-CN", { hour12: false }));
@@ -270,6 +309,90 @@ function openEditor(cameraId?: string): void {
   editorVisible.value = true;
 }
 
+function downloadCameraTemplate(): void {
+  const content =
+    "name,cameraKey,mediaPath,mediaServerUrl,vendor,model\n" +
+    "301病房摄像头,camera-301,camera-301,http://10.208.236.131,通用,IMX219\n";
+  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "camera-import-template.csv";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+async function loadCameraImportFile(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  cameraImportText.value = await file.text();
+}
+
+function importCameras(): void {
+  try {
+    const rows = parseCameraCsv(cameraImportText.value);
+    const imported = store.addCameraBatch(rows);
+    cameraImportText.value = "";
+    bulkDialogVisible.value = false;
+    ElMessage.success(`已导入 ${imported} 台摄像头`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "摄像头批量导入失败");
+  }
+}
+
+function parseCameraCsv(content: string): CameraInput[] {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) throw new Error("CSV 内容为空");
+  const first = splitCsvLine(lines[0]);
+  if (first[0]?.toLowerCase() === "name" || first[0] === "名称") lines.shift();
+
+  return lines.map((line) => {
+    const [name = "", cameraKey = "", mediaPath = "", mediaServerUrl = "", vendor = "", model = ""] =
+      splitCsvLine(line);
+    const normalizedKey = cameraKey.trim();
+    const generatedPath = normalizedKey
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return {
+      name: name.trim(),
+      cameraKey: normalizedKey,
+      mediaPath: mediaPath.trim() || generatedPath,
+      mediaServerUrl: mediaServerUrl.trim() || undefined,
+      vendor: vendor.trim() || undefined,
+      model: model.trim() || undefined,
+    };
+  });
+}
+
+function splitCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "," && !quoted) {
+      cells.push(current);
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+  cells.push(current);
+  return cells;
+}
+
 function saveCamera(input: CameraInput, cameraId: string | null): void {
   try {
     if (cameraId) {
@@ -359,6 +482,13 @@ function exportVideoPdf(): void {
   }
 }
 
+.camera-page__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .camera-guidance {
   display: flex;
   gap: 18px;
@@ -383,6 +513,41 @@ function exportVideoPdf(): void {
 .camera-table {
   margin-top: 16px;
   border: 1px solid #dbe6e2;
+}
+
+.camera-bulk-import {
+  display: grid;
+  gap: 12px;
+
+  p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #657a73;
+  }
+}
+
+.camera-bulk-import__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+
+  span {
+    font-size: 11px;
+    color: #7b8c87;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip-path: inset(50%);
 }
 
 .camera-status-tag {

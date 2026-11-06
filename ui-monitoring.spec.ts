@@ -108,8 +108,10 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await page.locator('[data-testid="bed-card"]').first().click();
   await expect(page).toHaveURL(/#\/beds\/bed-/);
   await expect(page.getByTestId("sensor-graphic")).toBeVisible();
-  await expect(page.getByText("原始数据", { exact: true })).toBeVisible();
-  await expect(page.getByText("ff,aa", { exact: true })).toBeVisible();
+  await expect(page.getByText("1792 字节数据", { exact: true })).toBeVisible();
+  await expect(page.locator(".sensor-graphic__raw-data code")).toHaveText(
+    /^[0-9a-f]{2}(,[0-9a-f]{2})+/,
+  );
   await expect(page.getByText("传感器数据接口", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/medical-blanket\/v1\//)).toHaveCount(0);
   await expect(page.getByText(/\/api\/public\/sensors\/bed-a-01/)).toHaveCount(0);
@@ -339,14 +341,23 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
     .first()
     .click();
   await expect(page.getByText("传感器数据链接已复制")).toBeVisible();
+  const bedDataLink = page.locator(".topic-panel--data .data-topic-value small").first();
+  await expect(bedDataLink).toContainText("/hex");
+  await page.locator(".topic-view-switch").getByRole("button", { name: "原始帧" }).click();
+  await expect(bedDataLink).toContainText("/raw-hex");
+  await page.locator(".topic-view-switch").getByRole("button", { name: "完整报文" }).click();
+  await expect(bedDataLink).not.toContainText("/hex");
   await page.getByRole("tab", { name: /床位告警/ }).click();
   await expect(page.getByText("10 个床位告警主题")).toBeVisible();
   await page.locator(".topic-panel--alarm").getByRole("button", { name: "复制" }).first().click();
   await expect(page.getByText("床位告警主题已复制")).toBeVisible();
-  await expect(
-    page.locator(".message-card--data").getByRole("heading", { name: "传感器数据报文" }),
-  ).toBeVisible();
-  await expect(page.locator(".message-card--data pre")).toContainText('"metrics": {}');
+  const dataMessageCard = page.locator(".message-card--data");
+  await expect(dataMessageCard.getByRole("heading", { name: "传感器数据报文" })).toBeVisible();
+  await expect(dataMessageCard.locator("pre")).not.toContainText("等待传感器数据");
+  await dataMessageCard.getByRole("button", { name: "原始帧" }).click();
+  await expect(dataMessageCard.locator("pre")).toContainText("ff,aa");
+  await dataMessageCard.getByRole("button", { name: "完整报文" }).click();
+  await expect(dataMessageCard.locator("pre")).toContainText('"metrics"');
   await expect(page.getByText("MQTT 原始报文")).toBeVisible();
   await expect(page.getByRole("heading", { name: "MQTT 连接文档", exact: true })).toBeVisible();
   await expect(page.locator(".document-panel .document-preview")).toContainText(
@@ -389,6 +400,19 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await expect(page.locator(".camera-document .document-preview")).toContainText(
     "http://10.208.236.131:8889/camera-01/whep",
   );
+
+  await page.getByRole("button", { name: "批量导入", exact: true }).click();
+  const csvRows = Array.from(
+    { length: 24 },
+    (_, index) =>
+      `批量摄像头${index + 1},camera-bulk-${index + 1},camera-bulk-${index + 1},http://10.208.236.131,通用,IMX219`,
+  );
+  await page
+    .locator(".camera-bulk-import textarea")
+    .fill(["name,cameraKey,mediaPath,mediaServerUrl,vendor,model", ...csvRows].join("\n"));
+  await page.getByRole("button", { name: "导入摄像头", exact: true }).click();
+  await expect(page.getByText("已导入 24 台摄像头")).toBeVisible();
+  await expect(page.locator(".camera-filters > span")).toContainText("26 / 26");
 });
 
 test("developer can create and rename a blanket and see the name in MQTT", async ({ page }) => {
@@ -440,27 +464,35 @@ test("administrator can manage camera names and locations without stream links",
   await expect(page.getByText(/A 病区 · 外科 \/ 302 病房 \/ 01 床/).first()).toBeVisible();
 });
 
-test("camera status matches the real media health probe", async ({ page, request }) => {
-  const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
-  test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
-
-  const probe = await request.post(`${liveOrigin}/api/public/camera-status`, {
-    data: [
-      {
-        cameraId: "camera-01",
-        baseUrl: "http://10.208.236.131:8888",
-        path: "camera-01",
-      },
-    ],
-  });
-  expect(probe.ok()).toBe(true);
-  const [result] = (await probe.json()) as Array<{ status: "ONLINE" | "OFFLINE" }>;
+test("camera status matches browser media reachability", async ({ page, request }) => {
+  const mediaResponse = await request.get(
+    "http://10.208.236.131:8888/camera-01/index.m3u8?cookieCheck=1",
+  );
 
   await loginAsAdmin(page);
   await openDevicePage(page, "摄像头管理");
   const cameraRow = page.locator(".el-table__row").filter({ hasText: "301 病房摄像头" }).first();
-  await expect(cameraRow).toContainText(result.status === "ONLINE" ? "在线" : "离线");
+  await expect(cameraRow).toContainText(mediaResponse.ok() ? "在线" : "离线");
   await page.screenshot({ path: "test-results/monitoring-camera-status.png", fullPage: true });
+});
+
+test("recorded video plays and advances when the camera node is online", async ({ page }) => {
+  const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
+  test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+
+  await loginAs(page, "nurse");
+  await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+  const segment = page.locator(".recording-timeline__segment").first();
+  await expect(segment).toBeVisible({ timeout: 20_000 });
+  await segment.click();
+
+  const player = page.locator(".recording-player");
+  await expect(player).toHaveAttribute("data-state", "playing", { timeout: 20_000 });
+  const timeLabel = player.locator(".recording-player__chrome strong");
+  const before = await timeLabel.textContent();
+  await page.waitForTimeout(2_500);
+  await expect(timeLabel).not.toHaveText(before ?? "");
+  await page.screenshot({ path: "test-results/monitoring-playback-live.png", fullPage: true });
 });
 
 test("developer can still see technical MQTT and camera links in bed detail", async ({ page }) => {
@@ -473,6 +505,12 @@ test("developer can still see technical MQTT and camera links in bed detail", as
     page.getByText("medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data").first(),
   ).toBeVisible();
   await expect(page.getByText("本床位独立告警 Topic")).toBeVisible();
+  await expect(page.locator(".sensor-links__list code").first()).toContainText("/hex");
+  await page.getByRole("button", { name: "原始帧", exact: true }).click();
+  await expect(page.locator(".sensor-links__list code").first()).toContainText("/raw-hex");
+  await page.getByRole("button", { name: "完整报文", exact: true }).click();
+  await expect(page.locator(".sensor-links__list code").first()).toContainText("/api/public/sensors/");
+  await expect(page.locator(".sensor-links__list code").first()).not.toContainText("/hex");
 });
 
 test("developer can rename the platform brand", async ({ page }) => {

@@ -24,6 +24,7 @@ export interface RecordingSegment {
   endAt: string;
   playbackUrl: string;
   thumbnailUrl?: string;
+  contentOffsetSeconds?: number;
 }
 
 export interface ClipWindow {
@@ -58,7 +59,7 @@ export function mapMediaMtxPlaybackItems(
   cameraKey: string,
   playbackOrigin: string,
 ): RecordingSegment[] {
-  return items.map((item, index) => {
+  const mapped = items.map((item, index) => {
     const startMs = new Date(item.start).getTime();
     return {
       id: `${cameraKey}-${startMs}-${index}`,
@@ -68,6 +69,40 @@ export function mapMediaMtxPlaybackItems(
       playbackUrl: item.url.replace(/^https?:\/\/[^/]+/, playbackOrigin),
     };
   });
+  return normalizePlaybackSegments(mapped);
+}
+
+export function normalizePlaybackSegments(
+  segments: readonly RecordingSegment[],
+): RecordingSegment[] {
+  const sorted = [...segments].sort(
+    (left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime(),
+  );
+  const normalized: RecordingSegment[] = [];
+  for (const segment of sorted) {
+    const last = normalized.at(-1);
+    const start = new Date(segment.startAt).getTime();
+    const end = new Date(segment.endAt).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    if (!last) {
+      normalized.push({ ...segment });
+      continue;
+    }
+
+    const lastEnd = new Date(last.endAt).getTime();
+    if (start >= lastEnd) {
+      normalized.push({ ...segment });
+      continue;
+    }
+    if (end <= lastEnd) continue;
+
+    normalized.push({
+      ...segment,
+      startAt: new Date(lastEnd).toISOString(),
+      contentOffsetSeconds: (lastEnd - start) / 1000,
+    });
+  }
+  return normalized;
 }
 
 const alarmLevels = new Set<AlarmLevel>(["INFO", "WARNING", "CRITICAL"]);

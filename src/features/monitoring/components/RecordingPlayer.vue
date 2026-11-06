@@ -36,7 +36,7 @@
     <div v-if="mediaState === 'empty' || mediaState === 'error'" class="recording-player__empty">
       <span class="recording-player__empty-signal" aria-hidden="true" />
       <strong>{{ errorMessage || "没有可播放的录像片段" }}</strong>
-      <p>录像列表每 15 秒刷新一次，新片段会自动加入连续回放。</p>
+      <p>录像索引每 5 秒刷新，正在录制的片段最多约 15 秒后进入连续回放。</p>
     </div>
 
     <div class="recording-player__chrome">
@@ -146,7 +146,14 @@ function offsetSeconds(
   const segmentStart = new Date(segment.startAt).getTime();
   const target = new Date(targetAt).getTime();
   const duration = Number.isFinite(video.duration) ? video.duration : 0;
-  return Math.max(0, Math.min(duration || Number.MAX_SAFE_INTEGER, (target - segmentStart) / 1000));
+  const contentOffset = segment.contentOffsetSeconds ?? 0;
+  return Math.max(
+    0,
+    Math.min(
+      duration || Number.MAX_SAFE_INTEGER,
+      contentOffset + (target - segmentStart) / 1000,
+    ),
+  );
 }
 
 async function waitForMetadata(video: HTMLVideoElement, generation: number): Promise<void> {
@@ -265,7 +272,10 @@ async function switchToNext(slot: Slot): Promise<void> {
       await loadSegment(nextSlot, next, next.startAt, false);
     }
     if (!nextVideo) return;
-    nextVideo.currentTime = 0;
+    nextVideo.currentTime = Math.min(
+      next.contentOffsetSeconds ?? 0,
+      Number.isFinite(nextVideo.duration) ? nextVideo.duration : Number.MAX_SAFE_INTEGER,
+    );
     await nextVideo.play();
     const previous = getVideo(slot);
     previous?.pause();

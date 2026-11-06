@@ -4,11 +4,16 @@ import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
+import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,7 +40,6 @@ public class MediaHealthService {
 
     private record CachedResult(ProbeResult result, Instant expiresAt) {}
 
-    private final HttpClient httpClient;
     private final long timeoutMs;
     private final long cacheTtlMs;
     private final Set<String> allowedBaseUrls;
@@ -56,10 +60,6 @@ public class MediaHealthService {
                 .map(this::normalizeBaseUrl)
                 .filter(value -> !value.isBlank())
                 .collect(Collectors.toUnmodifiableSet());
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofMillis(this.timeoutMs))
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .build();
     }
 
     public List<ProbeResult> probeBatch(List<ProbeRequest> requests) {
@@ -102,23 +102,15 @@ public class MediaHealthService {
 
         long startedAt = System.nanoTime();
         try {
-            URI uri = URI.create(baseUrl + "/" + path + "/index.m3u8");
-            HttpRequest requestValue = HttpRequest.newBuilder(uri)
-                    .timeout(Duration.ofMillis(timeoutMs))
-                    .header("Cache-Control", "no-cache")
-                    .GET()
-                    .build();
-            HttpResponse<Void> response = httpClient.send(
-                    requestValue,
-                    HttpResponse.BodyHandlers.discarding()
-            );
+            URI uri = URI.create(baseUrl + "/" + path + "/index.m3u8?cookieCheck=1");
+            int statusCode = requestStatus(uri);
             int latency = elapsedMillis(startedAt);
-            boolean online = response.statusCode() >= 200 && response.statusCode() < 400;
+            boolean online = statusCode >= 200 && statusCode < 400;
             ProbeResult result = new ProbeResult(
                     cameraId,
                     online ? "ONLINE" : "OFFLINE",
                     latency,
-                    online ? "HLS 流可用" : "HLS 返回 HTTP " + response.statusCode(),
+                    online ? "HLS 流可用" : "HLS 返回 HTTP " + statusCode,
                     Instant.now().toString()
             );
             cache.put(cacheKey, new CachedResult(result, Instant.now().plusMillis(cacheTtlMs)));
@@ -133,6 +125,45 @@ public class MediaHealthService {
             );
             cache.put(cacheKey, new CachedResult(result, Instant.now().plusMillis(cacheTtlMs)));
             return result;
+        }
+    }
+
+    private int requestStatus(URI uri) throws Exception {
+        String scheme = uri.getScheme() == null ? "http" : uri.getScheme().toLowerCase();
+        String host = uri.getHost();
+        int port = uri.getPort() > 0 ? uri.getPort() : ("https".equals(scheme) ? 443 : 80);
+        if (host == null) throw new IllegalArgumentException("媒体节点地址无效");
+
+        Socket socket = new Socket();
+        try {
+            socket.connect(new InetSocketAddress(host, port), (int) timeoutMs);
+            socket.setSoTimeout((int) timeoutMs);
+            if ("https".equals(scheme)) {
+                SSLSocket sslSocket = (SSLSocket) ((SSLSocketFactory) SSLSocketFactory.getDefault())
+                        .createSocket(socket, host, port, true);
+                sslSocket.startHandshake();
+                socket = sslSocket;
+            }
+            String path = uri.getRawPath() + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery());
+            BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.US_ASCII)
+            );
+            writer.write("GET " + path + " HTTP/1.1\r\n");
+            writer.write("Host: " + uri.getHost() + ":" + port + "\r\n");
+            writer.write("Connection: close\r\n");
+            writer.write("Cache-Control: no-cache\r\n\r\n");
+            writer.flush();
+
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII)
+            );
+            String statusLine = reader.readLine();
+            if (statusLine == null) throw new IllegalStateException("媒体节点未返回状态");
+            String[] parts = statusLine.split(" ");
+            if (parts.length < 2) throw new IllegalStateException("媒体节点状态格式无效");
+            return Integer.parseInt(parts[1]);
+        } finally {
+            socket.close();
         }
     }
 

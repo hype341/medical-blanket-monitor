@@ -181,6 +181,8 @@ import SensorLinkPanel from "../components/SensorLinkPanel.vue";
 import {
   findPlaybackSegment,
   mapMediaMtxPlaybackItems,
+  normalizePlaybackSegments,
+  pruneExpiredSegments,
   type AlarmEnvelope,
   type MediaMtxPlaybackItem,
   type RecordingSegment,
@@ -251,6 +253,8 @@ let sensorTimer: ReturnType<typeof setInterval> | null = null;
 let cameraHealthTimer: ReturnType<typeof setInterval> | null = null;
 let sensorFetching = false;
 let cameraHealthController: AbortController | null = null;
+let playbackConfirmedOnline = false;
+let lastFullRecordingRefreshAt = 0;
 const alarms = computed(() => store.alarms.filter((alarm) => alarm.bedId === route.params.bedId));
 
 function openRecordingAt(targetAt: string): boolean {
@@ -269,7 +273,9 @@ function returnToLive(): void {
 }
 
 function syncPlaybackCameraStatus(status: "ONLINE" | "OFFLINE" | "STALE"): void {
-  if (selectedCamera.value) store.syncCameraStatus(selectedCamera.value.id, status);
+  if (!selectedCamera.value) return;
+  playbackConfirmedOnline = status === "ONLINE";
+  store.syncCameraStatus(selectedCamera.value.id, status);
 }
 
 function seekRecording(targetAt: string): void {
@@ -345,11 +351,16 @@ function useDefaultAvatar(event: Event): void {
   image.src = "/images/avatars/default.svg";
 }
 
-async function refreshRecordings(): Promise<void> {
+async function refreshRecordings(forceFull = false): Promise<void> {
   if (document.visibilityState !== "visible") return;
   if (!selectedCamera.value) return;
-  const start = new Date(Date.now() - store.monitoringPolicy.recordingRetentionMinutes * 60_000);
-  const end = new Date(Date.now() + 60_000);
+  const now = Date.now();
+  const fullRange = forceFull || now - lastFullRecordingRefreshAt > 60_000;
+  const lookbackMinutes = fullRange
+    ? store.monitoringPolicy.recordingRetentionMinutes
+    : 10;
+  const start = new Date(now - lookbackMinutes * 60_000);
+  const end = new Date(now + 60_000);
   const mediaPath = selectedCamera.value.mediaPath ?? selectedCamera.value.cameraKey;
   const endpoints = getCameraMediaEndpoints(selectedCamera.value);
   const query = new URLSearchParams({
@@ -362,11 +373,24 @@ async function refreshRecordings(): Promise<void> {
     const response = await fetch(`${endpoints.playbackApiBaseUrl}/list?${query}`);
     if (!response.ok) return;
     const items = (await response.json()) as MediaMtxPlaybackItem[];
-    recordingSegments.value = mapMediaMtxPlaybackItems(
+    if (!Array.isArray(items)) return;
+    const fetchedSegments = mapMediaMtxPlaybackItems(
       items,
       mediaPath,
       endpoints.playbackApiBaseUrl,
     );
+    const merged = new Map(
+      [...recordingSegments.value, ...fetchedSegments].map((segment) => [
+        segment.playbackUrl,
+        segment,
+      ]),
+    );
+    recordingSegments.value = pruneExpiredSegments(
+      normalizePlaybackSegments([...merged.values()]),
+      new Date(now + 60_000).toISOString(),
+      store.monitoringPolicy.recordingRetentionMinutes,
+    );
+    if (fullRange) lastFullRecordingRefreshAt = now;
   } catch {
     // Keep the latest successful recording index during temporary media-server outages.
   }
@@ -403,7 +427,10 @@ async function refreshCameraHealth(): Promise<void> {
       [selectedCamera.value],
       cameraHealthController.signal,
     );
-    results.forEach((result) => store.syncCameraStatus(result.cameraId, result.status));
+    results.forEach((result) => {
+      if (result.status !== "ONLINE" && playbackConfirmedOnline) return;
+      store.syncCameraStatus(result.cameraId, result.status);
+    });
   } catch {
     // Keep the previous state until the status service is available again.
   }
@@ -414,7 +441,8 @@ onMounted(() => {
   void refreshRecordings();
   void refreshSensorSnapshot();
   void refreshCameraHealth();
-  recordingTimer = setInterval(() => void refreshRecordings(), 15_000);
+  lastFullRecordingRefreshAt = Date.now();
+  recordingTimer = setInterval(() => void refreshRecordings(), 5_000);
   sensorTimer = setInterval(() => void refreshSensorSnapshot(), 1_000);
   cameraHealthTimer = setInterval(() => void refreshCameraHealth(), 20_000);
 });

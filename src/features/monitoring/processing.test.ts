@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  extractFullRawFrameHex,
+  extractRawFrameSensorHex,
   normalizeHexData,
   parseSensorPayload,
   runSensorProcessors,
@@ -37,6 +39,50 @@ describe("sensor processor extension point", () => {
       data: "ff,aa",
       metrics: { motionState: "STILL" },
     });
+  });
+
+  it("derives hex data from the real pressure byte array", () => {
+    const readingWithPressure = parseSensorPayload(
+      JSON.stringify({
+        ...reading,
+        metrics: { pressure: [255, 170, 0] },
+      }),
+    );
+
+    expect(readingWithPressure?.data).toBe("ff,aa,00");
+    expect(readingWithPressure?.metrics.pressure).toEqual([255, 170, 0]);
+  });
+
+  it("derives hex data from the ESP32 rawFrame byte array", () => {
+    const readingWithRawFrame = parseSensorPayload(
+      JSON.stringify({
+        ...reading,
+        metrics: { rawFrame: [255, 170, 7] },
+      }),
+    );
+
+    expect(readingWithRawFrame?.data).toBe("ff,aa,07");
+    expect(readingWithRawFrame?.metrics.rawFrame).toEqual([255, 170, 7]);
+  });
+
+  it("extracts exactly 1792 sensor bytes from a complete 1799-byte frame", () => {
+    const rawFrame = [
+      255,
+      170,
+      7,
+      7,
+      1,
+      1,
+      ...Array.from({ length: 1792 }, (_, index) => index % 256),
+      250,
+    ];
+    const extracted = extractRawFrameSensorHex(rawFrame).split(",");
+
+    expect(rawFrame).toHaveLength(1799);
+    expect(extracted).toHaveLength(1792);
+    expect(extracted[0]).toBe("00");
+    expect(extracted[1791]).toBe("ff");
+    expect(extractFullRawFrameHex(rawFrame).split(",")).toHaveLength(1799);
   });
 
   it("runs every registered processor against normalized telemetry", async () => {

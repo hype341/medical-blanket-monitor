@@ -4,7 +4,9 @@ import tools.jackson.databind.node.ObjectNode;
 import com.medicalblanket.service.AlarmStore;
 import com.medicalblanket.service.MqttBridgeService;
 import com.medicalblanket.service.SensorStore;
+import com.medicalblanket.mqtt.HexDataNormalizer;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -74,6 +76,24 @@ public class PublicApiController {
     public ResponseEntity<ObjectNode> processedSensor(@PathVariable String bedId) {
         return sensorStore.processed(bedId)
                 .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping(value = "/public/sensors/{bedId}/hex", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> sensorHex(@PathVariable String bedId) {
+        return sensorStore.latest(bedId)
+                .map(payload -> ResponseEntity.ok()
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .body(payload.path("data").asText("")))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping(value = "/public/sensors/{bedId}/raw-hex", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> sensorRawHex(@PathVariable String bedId) {
+        return sensorStore.latest(bedId)
+                .map(payload -> ResponseEntity.ok()
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .body(HexDataNormalizer.rawHex(payload)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 

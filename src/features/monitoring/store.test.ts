@@ -422,6 +422,46 @@ describe("monitoring store", () => {
     expect(store.cameras.length).toBe(before + 2);
   });
 
+  it("batch imports cameras atomically with node addresses and unique stream paths", () => {
+    const store = useMonitoringStore();
+    store.setActiveRole("DEVELOPER");
+    const before = store.cameras.length;
+
+    expect(
+      store.addCameraBatch([
+        {
+          name: "批量摄像头 A",
+          cameraKey: "camera-batch-a",
+          mediaPath: "camera-batch-a",
+          mediaServerUrl: "http://10.208.236.140",
+        },
+        {
+          name: "批量摄像头 B",
+          cameraKey: "camera-batch-b",
+          mediaPath: "camera-batch-b",
+          mediaServerUrl: "http://10.208.236.141",
+        },
+      ]),
+    ).toBe(2);
+    expect(store.cameras).toHaveLength(before + 2);
+
+    expect(() =>
+      store.addCameraBatch([
+        {
+          name: "唯一摄像头",
+          cameraKey: "camera-unique",
+          mediaPath: "camera-unique",
+        },
+        {
+          name: "重复路径",
+          cameraKey: "camera-other",
+          mediaPath: "camera-unique",
+        },
+      ]),
+    ).toThrow("媒体路径重复");
+    expect(store.cameras).toHaveLength(before + 2);
+  });
+
   it("lets only an administrator change alert and recording policy", () => {
     const store = useMonitoringStore();
     store.setActiveRole("ADMIN");

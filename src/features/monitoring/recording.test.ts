@@ -3,6 +3,7 @@ import {
   buildClipWindow,
   findPlaybackSegment,
   mapMediaMtxPlaybackItems,
+  normalizePlaybackSegments,
   parseAlarmMessage,
   pruneExpiredSegments,
 } from "./recording";
@@ -113,6 +114,32 @@ describe("rolling recording timeline", () => {
       endAt: "2026-11-04T10:25:19.000Z",
       playbackUrl: "http://10.208.236.131:9996/get?path=camera-01&start=10%3A24%3A19Z",
     });
+  });
+
+  it("removes contained overlaps and offsets partially overlapping recordings", () => {
+    const normalized = normalizePlaybackSegments([
+      {
+        ...segments[0],
+        startAt: "2026-11-04T17:00:00.000Z",
+        endAt: "2026-11-04T17:05:00.000Z",
+      },
+      {
+        ...segments[1],
+        id: "contained",
+        startAt: "2026-11-04T17:04:00.000Z",
+        endAt: "2026-11-04T17:04:30.000Z",
+      },
+      {
+        ...segments[1],
+        id: "extended",
+        startAt: "2026-11-04T17:04:30.000Z",
+        endAt: "2026-11-04T17:10:00.000Z",
+      },
+    ]);
+
+    expect(normalized.map((segment) => segment.id)).toEqual(["segment-01", "extended"]);
+    expect(normalized[1].startAt).toBe("2026-11-04T17:05:00.000Z");
+    expect(normalized[1].contentOffsetSeconds).toBe(30);
   });
 
   it("removes segments outside the server retention window", () => {

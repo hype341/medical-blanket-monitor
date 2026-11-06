@@ -168,6 +168,56 @@ const sensorStream = openSensorDataStream(
 sensorStream.close();
 \`\`\`
 
+## 纯十六进制数据函数
+
+第三方只需要原始十六进制字符串时，直接调用下面三个接口，不必再解析完整报文：
+
+\`\`\`ts
+import {
+  extractFullRawFrameHex,
+  extractSensorHexData,
+  getSensorHex,
+  getSensorRawHex,
+  openSensorHexStream,
+  openSensorRawHexStream,
+} from "@/features/monitoring/stream-api";
+
+// 1. HTTP 读取当前床位，只返回中间 1792 字节数据
+const hex = await getSensorHex("${sampleBedId}");
+
+// 2. MQTT 实时订阅，onHex 只收到 1792 字节十六进制
+const stream = openSensorHexStream(
+  settings,
+  "${sampleDataTopic}",
+  {
+    onHex(hex) {
+      console.log("纯十六进制数据", hex);
+    },
+  },
+);
+
+// 3. 读取包含帧头、类型和校验的原始整帧
+const rawHex = await getSensorRawHex("${sampleBedId}");
+const rawStream = openSensorRawHexStream(settings, "${sampleDataTopic}", {
+  onHex(value) {
+    console.log("原始帧", value);
+  },
+});
+
+// 4. 已有 reading 对象时，直接提取 1792 字节数据或完整原始帧
+const sameHex = extractSensorHexData(reading);
+const sameRawHex = extractFullRawFrameHex(reading.metrics.rawFrame ?? []);
+
+stream.close();
+rawStream.close();
+\`\`\`
+
+纯数据 HTTP 地址：\`/api/public/sensors/{bedId}/hex\`。响应内容类型为
+\`text/plain\`，只返回去掉 \`FF AA 07 07\`、类型字节和末尾校验后的 1792 字节数据。
+原始整帧地址：\`/api/public/sensors/{bedId}/raw-hex\`，返回完整帧，包括帧头、类型和校验。
+当前床位纯数据：\`/api/public/sensors/${sampleBedId}/hex\`；原始帧：
+\`/api/public/sensors/${sampleBedId}/raw-hex\`。
+
 ## 床位数据与告警 Topic
 
 每张床位分别拥有独立的数据 Topic 和告警 Topic。

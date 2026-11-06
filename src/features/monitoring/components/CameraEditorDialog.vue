@@ -10,10 +10,25 @@
         <el-input v-model.trim="form.name" placeholder="摄像头名称" maxlength="40" />
       </el-form-item>
       <el-form-item label="设备标识">
-        <el-input v-model.trim="form.cameraKey" placeholder="设备标识" maxlength="60" />
+        <el-input
+          v-model.trim="form.cameraKey"
+          placeholder="设备标识"
+          maxlength="60"
+          @input="suggestMediaPath"
+        />
       </el-form-item>
       <el-form-item label="MediaMTX 路径">
         <el-input v-model.trim="form.mediaPath" placeholder="媒体路径" maxlength="60" />
+      </el-form-item>
+      <el-form-item label="流媒体节点地址（可选）">
+        <el-input
+          v-model.trim="form.mediaServerUrl"
+          placeholder="http://10.208.236.131，留空使用默认节点"
+          maxlength="160"
+        />
+        <small class="camera-editor__field-hint">
+          多节点部署时填写该摄像头所属的 MediaMTX 节点，系统会生成对应观看与回放地址。
+        </small>
       </el-form-item>
       <div class="camera-editor__row">
         <el-form-item label="厂商（可选）">
@@ -27,6 +42,11 @@
         <span>接入协议</span>
         <strong>RTSP / RTMP / SRT</strong>
         <small>资源地址和凭证由后端保存，不在浏览器展示。</small>
+      </div>
+      <div class="camera-editor__push">
+        <span>设备 RTMP 推流地址</span>
+        <code>{{ publishUrl }}</code>
+        <small>也支持 RTSP 推流；断流后 Jetson 与前端会自动重连。</small>
       </div>
     </el-form>
     <template #footer>
@@ -45,6 +65,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue";
 import type { Camera, CameraInput } from "../types";
+import { getCameraMediaEndpoints } from "../media-endpoints";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -65,6 +86,7 @@ const cameraId = computed(() => props.camera?.id ?? null);
 const form = reactive<CameraInput>({
   cameraKey: "",
   mediaPath: "",
+  mediaServerUrl: "",
   name: "",
   vendor: "",
   model: "",
@@ -77,12 +99,39 @@ watch(
     Object.assign(form, {
       cameraKey: props.camera?.cameraKey ?? "",
       mediaPath: props.camera?.mediaPath ?? "",
+      mediaServerUrl: props.camera?.mediaServerUrl ?? "",
       name: props.camera?.name ?? "",
       vendor: props.camera?.vendor ?? "",
       model: props.camera?.model ?? "",
     });
   },
 );
+
+let previousSuggestedPath = "";
+const publishUrl = computed(() => {
+  const camera: Camera = {
+    id: props.camera?.id ?? "preview",
+    cameraKey: form.cameraKey.trim() || "camera-key",
+    mediaPath: form.mediaPath.trim() || "camera-path",
+    mediaServerUrl: form.mediaServerUrl?.trim() || undefined,
+    name: form.name.trim() || "摄像头",
+    status: "OFFLINE",
+    playback: props.camera?.playback ?? null,
+  };
+  return getCameraMediaEndpoints(camera).rtmpUrl;
+});
+
+function suggestMediaPath(): void {
+  const suggested = form.cameraKey
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!form.mediaPath || form.mediaPath === previousSuggestedPath) {
+    form.mediaPath = suggested;
+  }
+  previousSuggestedPath = suggested;
+}
 
 function save(): void {
   emit("save", { ...form }, cameraId.value);
@@ -117,6 +166,36 @@ function save(): void {
 
   small {
     grid-column: 1 / -1;
+  }
+}
+
+.camera-editor__field-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 10px;
+  line-height: 1.55;
+  color: #7b8e87;
+}
+
+.camera-editor__push {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  margin-top: 10px;
+  background: #f7fbf9;
+  border-left: 3px solid #6da18f;
+
+  span,
+  small {
+    font-size: 10px;
+    color: #71837d;
+  }
+
+  code {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 10px;
+    color: #275f53;
+    overflow-wrap: anywhere;
   }
 }
 

@@ -19,7 +19,7 @@ export type PermissionModule =
 export type BindingRole = "PRIMARY_SENSOR" | "PRIMARY_CAMERA";
 export type BindingStatus = "ACTIVE" | "INACTIVE";
 export type PlaybackProtocol = "webrtc" | "hls" | "flv";
-export type MetricValue = number | string | boolean;
+export type MetricValue = number | string | boolean | number[] | string[];
 export type SensorMetrics = Record<string, MetricValue>;
 
 export interface Hospital {
@@ -87,6 +87,7 @@ export interface Camera {
   id: string;
   cameraKey: string;
   mediaPath?: string;
+  mediaServerUrl?: string;
   name: string;
   vendor?: string;
   model?: string;
@@ -215,6 +216,7 @@ export interface StaffInput {
 export interface CameraInput {
   cameraKey: string;
   mediaPath: string;
+  mediaServerUrl?: string;
   name: string;
   vendor?: string;
   model?: string;

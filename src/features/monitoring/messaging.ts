@@ -41,6 +41,10 @@ export function buildSensorDataApiPath(bedId: string): string {
   return `/api/public/sensors/${encodeURIComponent(bedId)}`;
 }
 
+export function buildSensorHexApiPath(bedId: string): string {
+  return `/api/public/sensors/${encodeURIComponent(bedId)}/hex`;
+}
+
 export function buildMqttTopicUrl(brokerUrl: string, topic: string): string {
   return `${brokerUrl.replace(/\/+$/, "")}/${topic.replace(/^\/+/, "")}`;
 }

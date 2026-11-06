@@ -1,6 +1,10 @@
 import mqtt, { type MqttClient } from "mqtt";
 import type { CameraPlayback, MqttSettings } from "./types";
-import { parseSensorPayload, type SensorTelemetryEnvelope } from "./processing";
+import {
+  extractFullRawFrameHex,
+  parseSensorPayload,
+  type SensorTelemetryEnvelope,
+} from "./processing";
 import { parseAlarmMessage, type AlarmEnvelope } from "./recording";
 import { LEGACY_SENSOR_EVENT_TOPIC, SENSOR_DATA_TOPIC } from "./messaging";
 import { getPlaybackCandidates } from "@/components/UniversalVideoPlayer/usePlayback";
@@ -18,6 +22,12 @@ export interface SensorStreamController {
 
 export interface SensorDataStreamHandlers {
   onData?: (reading: SensorTelemetryEnvelope) => void;
+  onStatus?: SensorStreamHandlers["onStatus"];
+  onError?: (error: Error) => void;
+}
+
+export interface SensorHexStreamHandlers {
+  onHex?: (hex: string) => void;
   onStatus?: SensorStreamHandlers["onStatus"];
   onError?: (error: Error) => void;
 }
@@ -142,6 +152,63 @@ export function openSensorDataStream(
       handlers.onStatus?.("closed");
     },
   };
+}
+
+/**
+ * Subscribe to one bed and receive only its normalized hexadecimal data.
+ */
+export function openSensorHexStream(
+  settings: MqttSettings,
+  dataTopic: string,
+  handlers: SensorHexStreamHandlers = {},
+): SensorStreamController {
+  return openSensorDataStream(settings, dataTopic, {
+    onData: (reading) => handlers.onHex?.(reading.data ?? ""),
+    onStatus: handlers.onStatus,
+    onError: handlers.onError,
+  });
+}
+
+export function openSensorRawHexStream(
+  settings: MqttSettings,
+  dataTopic: string,
+  handlers: SensorHexStreamHandlers = {},
+): SensorStreamController {
+  return openSensorDataStream(settings, dataTopic, {
+    onData: (reading) => {
+      const rawFrame = reading.metrics.rawFrame;
+      handlers.onHex?.(
+        Array.isArray(rawFrame) ? extractFullRawFrameHex(rawFrame) : reading.data ?? "",
+      );
+    },
+    onStatus: handlers.onStatus,
+    onError: handlers.onError,
+  });
+}
+
+export function extractSensorHexData(reading: SensorTelemetryEnvelope): string {
+  return reading.data ?? "";
+}
+
+export async function getSensorHex(bedId: string): Promise<string> {
+  const response = await fetch(`/api/public/sensors/${encodeURIComponent(bedId)}/hex`, {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`读取十六进制数据失败：HTTP ${response.status}`);
+  }
+  return (await response.text()).trim();
+}
+
+export async function getSensorRawHex(bedId: string): Promise<string> {
+  const response = await fetch(
+    `/api/public/sensors/${encodeURIComponent(bedId)}/raw-hex`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) {
+    throw new Error(`读取原始帧数据失败：HTTP ${response.status}`);
+  }
+  return (await response.text()).trim();
 }
 
 export interface PlatformAlarmStreamHandlers {

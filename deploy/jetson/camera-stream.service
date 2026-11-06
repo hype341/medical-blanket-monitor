@@ -8,11 +8,13 @@ Requires=docker.service
 Type=simple
 User=lg
 Group=video
+EnvironmentFile=-/etc/blanket/camera-stream.env
 Environment=GST_DEBUG=0
 ExecStart=/usr/local/bin/camera-stream.sh
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=0
+StartLimitBurst=0
 
 [Install]
 WantedBy=multi-user.target

@@ -38,6 +38,12 @@ describe("online documentation", () => {
     expect(document).toContain("A 病区 · 外科");
     expect(document).toContain("openMqttSensorStream");
     expect(document).toContain("openSensorDataStream");
+    expect(document).toContain("openSensorHexStream");
+    expect(document).toContain("openSensorRawHexStream");
+    expect(document).toContain("getSensorHex");
+    expect(document).toContain("getSensorRawHex");
+    expect(document).toContain("/api/public/sensors/bed-a-01/hex");
+    expect(document).toContain("/api/public/sensors/bed-a-01/raw-hex");
     expect(document).toContain("runSensorProcessors");
     expect(document).toContain("SensorDataProcessor");
     expect(document).toContain("PUBACK");

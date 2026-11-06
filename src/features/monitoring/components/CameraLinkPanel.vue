@@ -73,7 +73,11 @@ const links = computed<CameraLink[]>(() => {
     },
     { label: "HLS", url: endpoints.value.hlsUrl, openable: true },
     {
-      label: "RTSP",
+      label: "摄像头推流地址",
+      url: endpoints.value.rtmpUrl,
+    },
+    {
+      label: "RTSP 流",
       url: endpoints.value.rtspUrl,
     },
     {
