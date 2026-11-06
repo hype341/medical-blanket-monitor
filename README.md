@@ -278,13 +278,20 @@ npx skills add https://github.com/youlaitech/youlai-skills --skill vue3-element-
 
 ## 项目部署
 
-当前本地服务器已经配置专用 SSH 部署密钥、受限发布命令和自动备份。直接执行：
+当前本地服务器已经配置专用 SSH 部署密钥、受限发布命令和自动备份。直接双击
+`deploy.cmd` 或在项目根目录执行：
 
 ```powershell
-pnpm run deploy
+.\deploy.cmd
 ```
 
 该命令会完成类型检查、生产构建、上传、备份、Nginx 校验和失败自动回滚。
+只上传已构建文件、不重新构建：
+
+```powershell
+.\deploy.cmd -SkipBuild
+```
+
 部署说明见 [docs/one-click-deploy.md](docs/one-click-deploy.md)。
 
 只生成构建文件时执行：

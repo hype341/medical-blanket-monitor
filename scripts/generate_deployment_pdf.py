@@ -11,6 +11,7 @@ from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
     KeepTogether,
+    PageBreak,
     PageTemplate,
     Paragraph,
     Spacer,
@@ -223,7 +224,7 @@ def build_pdf():
         Spacer(1, 5 * mm),
         config_table(styles),
         Spacer(1, 9 * mm),
-        code_box("pnpm run deploy", styles),
+        code_box(".\\deploy.cmd", styles),
         Spacer(1, 7 * mm),
         Paragraph(
             "当前部署已完成：GitHub 已推送、专用部署密钥已安装、服务器发布命令已配置、"
@@ -237,10 +238,10 @@ def build_pdf():
     story += [
         Paragraph("日常部署", styles["h1"]),
         Paragraph(
-            "在 D:\\codex\\blanket 目录打开 PowerShell，执行以下任一命令：",
+            "在 D:\\codex\\blanket 目录双击 deploy.cmd，或执行以下命令：",
             styles["body"],
         ),
-        code_box("pnpm run deploy\n\n# 或\npowershell -ExecutionPolicy Bypass -File .\\deploy\\deploy.ps1", styles),
+        code_box(".\\deploy.cmd", styles),
         Spacer(1, 4 * mm),
         Paragraph("一键脚本执行的八步", styles["h2"]),
         Paragraph(
@@ -257,9 +258,9 @@ def build_pdf():
         Paragraph("可选参数", styles["h1"]),
         code_box(
             "# 不重新构建，只上传现有 dist\n"
-            "powershell -ExecutionPolicy Bypass -File .\\deploy\\deploy.ps1 -SkipBuild\n\n"
+            ".\\deploy.cmd -SkipBuild\n\n"
             "# 部署到同结构服务器\n"
-            "powershell -ExecutionPolicy Bypass -File .\\deploy\\deploy.ps1 `\n"
+            ".\\deploy.cmd `\n"
             "  -ServerHost 192.168.86.200 -ServerUser h `\n"
             "  -KeyPath \"$env:USERPROFILE\\.ssh\\blanket_deploy_ed25519\"",
             styles,
@@ -285,6 +286,7 @@ def build_pdf():
             "sudo systemctl reload nginx",
             styles,
         ),
+        PageBreak(),
         Paragraph("更换服务器时补充什么", styles["h1"]),
         Paragraph(
             "1. 将 blanket_deploy_ed25519.pub 加入目标服务器用户的 authorized_keys。<br/>"

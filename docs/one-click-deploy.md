@@ -17,17 +17,13 @@
 
 ## 日常一键部署
 
-在项目根目录执行：
+在项目根目录双击 `deploy.cmd`，或执行：
 
 ```powershell
-pnpm run deploy
+.\deploy.cmd
 ```
 
 也可以直接运行 PowerShell 脚本：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy\deploy.ps1
-```
 
 脚本会依次完成：
 
@@ -45,13 +41,13 @@ powershell -ExecutionPolicy Bypass -File .\deploy\deploy.ps1
 只上传已经构建好的 dist，不重新构建：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy\deploy.ps1 -SkipBuild
+.\deploy.cmd -SkipBuild
 ```
 
 部署到另一台同结构服务器：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\deploy\deploy.ps1 `
+.\deploy.cmd `
   -ServerHost 192.168.86.200 `
   -ServerUser h `
   -KeyPath "$env:USERPROFILE\.ssh\blanket_deploy_ed25519"
