@@ -21,6 +21,42 @@ export interface SensorFilterResult {
   peakValue: number;
 }
 
+export const DEFAULT_SENSOR_FILTER_CONFIG: SensorFilterConfig = {
+  type: "NONE",
+  threshold: 0,
+  windowSize: 3,
+};
+
+const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v1";
+
+export function loadSensorFilterConfig(): SensorFilterConfig {
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(SENSOR_FILTER_STORAGE_KEY) ?? "{}",
+    ) as Partial<SensorFilterConfig>;
+    const type =
+      parsed.type === "MEAN" ||
+      parsed.type === "MEDIAN" ||
+      parsed.type === "GAUSSIAN"
+        ? parsed.type
+        : "NONE";
+    return {
+      type,
+      threshold: Math.min(255, Math.max(0, Number(parsed.threshold) || 0)),
+      windowSize:
+        parsed.windowSize === 5 || parsed.windowSize === 7
+          ? parsed.windowSize
+          : 3,
+    };
+  } catch {
+    return { ...DEFAULT_SENSOR_FILTER_CONFIG };
+  }
+}
+
+export function saveSensorFilterConfig(config: SensorFilterConfig): void {
+  window.localStorage.setItem(SENSOR_FILTER_STORAGE_KEY, JSON.stringify(config));
+}
+
 export function applySensorFilter(
   values: readonly number[],
   config: SensorFilterConfig,

@@ -221,6 +221,17 @@ export const constantRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: "admin/tuning",
+        name: "SensorTuning",
+        component: () => import("@/features/monitoring/views/SensorTuningView.vue"),
+        meta: {
+          title: "调参设置",
+          icon: "setting",
+          roles: ["DEVELOPER"],
+          module: "developer",
+        },
+      },
+      {
         path: "admin/maintenance",
         name: "DeveloperMaintenance",
         component: () => import("@/features/monitoring/views/MaintenanceView.vue"),

@@ -215,13 +215,6 @@ test("developer receives sensor MQTT data and controls heatmap frame rate", asyn
   await expect(heatmap).toContainText("28 点/列 · 64 列");
   await expect(heatmap).toContainText("1792 / 1792");
   await expect(heatmap).toHaveAttribute("data-rendered-points", "1792");
-  const tuningPanel = page.locator(".sensor-filter-panel");
-  await expect(tuningPanel.getByRole("heading", { name: "数据滤波调参" })).toBeVisible();
-  await expect(tuningPanel).toContainText("实时平均值");
-  await tuningPanel.getByLabel("滤波方式").click();
-  await page.getByRole("option", { name: "中值滤波" }).click();
-  await tuningPanel.getByLabel("丢弃阈值").fill("20");
-  await expect(tuningPanel).toContainText("有效点");
   const coloredPixels = await heatmap.locator("canvas").evaluate((canvas: HTMLCanvasElement) => {
     const context = canvas.getContext("2d");
     if (!context) return 0;
@@ -254,6 +247,26 @@ test("developer receives sensor MQTT data and controls heatmap frame rate", asyn
   await expect
     .poll(() => mqttSockets.some((url) => url.includes(":8083/mqtt")), { timeout: 15_000 })
     .toBe(true);
+});
+
+test("only developers can open sensor tuning from the left menu", async ({ page }) => {
+  await loginAs(page, "nurse");
+  await expect(page.getByText("调参设置", { exact: true })).toHaveCount(0);
+
+  await logoutFromUi(page);
+  await loginAs(page, "developer");
+  const tuningMenu = page.getByText("调参设置", { exact: true });
+  await expect(tuningMenu).toBeVisible();
+  await tuningMenu.click();
+
+  await expect(page.getByRole("heading", { name: "毯面数据调参" })).toBeVisible();
+  const tuningPanel = page.locator(".sensor-filter-panel");
+  await expect(tuningPanel.getByRole("heading", { name: "数据滤波调参" })).toBeVisible();
+  await expect(tuningPanel).toContainText("实时平均值");
+  await tuningPanel.getByLabel("滤波方式").click();
+  await page.getByRole("option", { name: "中值滤波" }).click();
+  await tuningPanel.getByLabel("丢弃阈值").fill("20");
+  await expect(tuningPanel).toContainText("有效点");
 });
 
 test("bed monitor stays usable on a narrow screen", async ({ page }) => {
