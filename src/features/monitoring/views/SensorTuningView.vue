@@ -21,22 +21,54 @@
           </div>
           <strong>{{ rows.length }}</strong>
         </header>
-        <button
+        <div class="tuning-bed-toolbar">
+          <el-button size="small" @click="toggleSelectAll">
+            {{ allBedsSelected ? "取消全选" : "全选" }}
+          </el-button>
+          <span>已选 {{ selectedBedIds.length }} 张</span>
+        </div>
+        <div
           v-for="row in rows"
           :key="row.bed.id"
-          type="button"
+          class="tuning-bed-item"
           :class="{ 'is-active': row.bed.id === selectedBedId }"
-          @click="selectedBedId = row.bed.id"
         >
-          <span>{{ row.wardName }} / {{ row.roomName }}</span>
-          <strong>{{ row.bed.bedNo }} 床</strong>
-          <small>{{ row.sensorName }}</small>
-          <em>均值 {{ row.result.filteredMean.toFixed(1) }}</em>
-        </button>
+          <el-checkbox
+            :model-value="selectedBedIds.includes(row.bed.id)"
+            :aria-label="`选择 ${row.wardName} ${row.roomName} ${row.bed.bedNo} 床`"
+            @change="(checked) => toggleBedSelection(row.bed.id, checked)"
+          />
+          <button type="button" @click="selectedBedId = row.bed.id">
+            <span>{{ row.wardName }} / {{ row.roomName }}</span>
+            <strong>{{ row.bed.bedNo }} 床</strong>
+            <small>{{ row.sensorName }}</small>
+            <em>均值 {{ row.result.filteredMean.toFixed(1) }}</em>
+          </button>
+        </div>
         <el-empty v-if="!rows.length" description="暂无可调参的毯子传感器" />
       </aside>
 
       <main class="tuning-workspace">
+        <section class="tuning-apply-bar">
+          <div>
+            <span>批量应用</span>
+            <strong>{{ selectedRow?.sensorName ?? "当前参数" }}</strong>
+          </div>
+          <el-button
+            :disabled="!selectedBedIds.length"
+            @click="applyCurrentConfig(selectedBedIds, '选中床位')"
+          >
+            应用到选中床位
+          </el-button>
+          <el-button
+            type="primary"
+            :disabled="!rows.length"
+            @click="applyCurrentConfig(rows.map((row) => row.bed.id), '全部床位')"
+          >
+            应用到全部床位
+          </el-button>
+        </section>
+
         <SensorFilterPanel
           v-model="filterConfig"
           :result="selectedResult"
@@ -75,6 +107,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { ElMessage } from "element-plus";
 import SensorDeviceGraphic from "../components/SensorDeviceGraphic.vue";
 import SensorFilterPanel from "../components/SensorFilterPanel.vue";
 import { decodeSensorHex } from "../sensor-heatmap";
@@ -94,6 +127,8 @@ import { useMonitoringStore } from "../store";
 const store = useMonitoringStore();
 const filterConfig = ref<SensorFilterConfig>(loadSensorFilterConfig());
 const selectedBedId = ref("");
+const selectedBedIds = ref<string[]>([]);
+const configRevision = ref(0);
 const streamStatus = ref<"connecting" | "connected" | "reconnecting" | "closed">("closed");
 let streamController: SensorStreamController | null = null;
 let streamGeneration = 0;
@@ -103,18 +138,25 @@ let snapshotFetching = false;
 const rows = computed(() =>
   store.bedSummaries
     .filter((summary) => summary.sensor)
-    .map((summary) => ({
-      bed: summary.bed,
-      sensor: summary.sensor!,
-      sensorName: summary.sensor?.name ?? "未命名传感器",
-      wardName: summary.ward?.name ?? "未分病区",
-      roomName: summary.room?.name ?? "未分病房",
-      location: `${summary.ward?.name ?? ""} · ${summary.room?.name ?? ""} · ${summary.bed.bedNo} 床`,
-      result: applySensorFilter(
-        decodeSensorHex(summary.sensor?.latestData ?? ""),
-        filterConfig.value,
-      ),
-    })),
+    .map((summary) => {
+      void configRevision.value;
+      const bedConfig =
+        summary.bed.id === selectedBedId.value
+          ? filterConfig.value
+          : loadSensorFilterConfig(summary.bed.id);
+      return {
+        bed: summary.bed,
+        sensor: summary.sensor!,
+        sensorName: summary.sensor?.name ?? "未命名传感器",
+        wardName: summary.ward?.name ?? "未分病区",
+        roomName: summary.room?.name ?? "未分病房",
+        location: `${summary.ward?.name ?? ""} · ${summary.room?.name ?? ""} · ${summary.bed.bedNo} 床`,
+        result: applySensorFilter(
+          decodeSensorHex(summary.sensor?.latestData ?? ""),
+          bedConfig,
+        ),
+      };
+    }),
 );
 
 const selectedRow = computed(
@@ -129,18 +171,36 @@ const filteredSensorHex = computed(() =>
     .map((value) => value.toString(16).padStart(2, "0"))
     .join(","),
 );
+const allBedsSelected = computed(
+  () => rows.value.length > 0 && selectedBedIds.value.length === rows.value.length,
+);
 
 watch(
   rows,
   (nextRows) => {
-    if (!selectedBedId.value && nextRows[0]) selectedBedId.value = nextRows[0].bed.id;
+    if (!selectedBedId.value && nextRows[0]) {
+      selectedBedId.value = nextRows[0].bed.id;
+      selectedBedIds.value = [nextRows[0].bed.id];
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  selectedBedId,
+  (bedId) => {
+    if (bedId) filterConfig.value = loadSensorFilterConfig(bedId);
   },
   { immediate: true },
 );
 
 watch(
   filterConfig,
-  (config) => saveSensorFilterConfig(config),
+  (config) => {
+    if (!selectedBedId.value) return;
+    saveSensorFilterConfig(selectedBedId.value, config);
+    configRevision.value += 1;
+  },
   { deep: true },
 );
 
@@ -161,6 +221,26 @@ onBeforeUnmount(() => {
   disconnectSensorStream();
   if (snapshotTimer) clearInterval(snapshotTimer);
 });
+
+function toggleBedSelection(bedId: string, checked: string | number | boolean): void {
+  const set = new Set(selectedBedIds.value);
+  if (Boolean(checked)) set.add(bedId);
+  else set.delete(bedId);
+  selectedBedIds.value = [...set];
+}
+
+function toggleSelectAll(): void {
+  selectedBedIds.value = allBedsSelected.value
+    ? []
+    : rows.value.map((row) => row.bed.id);
+}
+
+function applyCurrentConfig(targets: readonly string[], label: string): void {
+  if (!targets.length) return;
+  targets.forEach((bedId) => saveSensorFilterConfig(bedId, filterConfig.value));
+  configRevision.value += 1;
+  ElMessage.success(`参数已应用到${label}，共 ${targets.length} 张床位`);
+}
 
 function connectSensorStream(): void {
   const generation = ++streamGeneration;
@@ -324,6 +404,42 @@ async function refreshSelectedSensorSnapshot(): Promise<void> {
     }
   }
 
+}
+
+.tuning-bed-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f5faf7;
+  border-bottom: 1px solid #e2ece8;
+
+  span {
+    font-size: 9px;
+    color: #6f847d;
+  }
+}
+
+.tuning-bed-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  border-bottom: 1px solid #edf2f0;
+
+  &.is-active {
+    background: #edf8f3;
+    box-shadow: inset 3px 0 #2f806a;
+
+    > button {
+      background: #edf8f3;
+    }
+  }
+
+  :deep(.el-checkbox) {
+    margin-left: 12px;
+  }
+
   > button {
     display: grid;
     gap: 3px;
@@ -333,7 +449,6 @@ async function refreshSelectedSensorSnapshot(): Promise<void> {
     cursor: pointer;
     background: #fff;
     border: 0;
-    border-bottom: 1px solid #edf2f0;
 
     span,
     small {
@@ -353,9 +468,8 @@ async function refreshSelectedSensorSnapshot(): Promise<void> {
       color: #9a792c;
     }
 
-    &.is-active {
-      background: #edf8f3;
-      box-shadow: inset 3px 0 #2f806a;
+    &:hover {
+      background: #f7fbf9;
     }
   }
 }
@@ -363,6 +477,31 @@ async function refreshSelectedSensorSnapshot(): Promise<void> {
 .tuning-workspace {
   display: grid;
   gap: 14px;
+}
+
+.tuning-apply-bar {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 10px 12px;
+  background: linear-gradient(90deg, #edf8f3, #f9fcfb);
+  border: 1px solid #cfe3db;
+
+  > div {
+    display: grid;
+    gap: 3px;
+    margin-right: auto;
+  }
+
+  span {
+    font-size: 9px;
+    color: #72877f;
+  }
+
+  strong {
+    font-size: 11px;
+    color: #285f52;
+  }
 }
 
 .tuning-preview {

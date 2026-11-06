@@ -224,7 +224,9 @@ const router = useRouter();
 const store = useMonitoringStore();
 const sensorRefreshRates = [1, 2, 5, 10];
 const sensorRefreshRate = ref(1);
-const sensorFilterConfig = ref<SensorFilterConfig>(loadSensorFilterConfig());
+const sensorFilterConfig = ref<SensorFilterConfig>(
+  loadSensorFilterConfig(String(route.params.bedId ?? "")),
+);
 const patientEditorVisible = ref(false);
 
 const summary = computed(() =>
@@ -526,9 +528,16 @@ onMounted(() => {
 watch(
   sensorFilterConfig,
   (config) => {
-    saveSensorFilterConfig(config);
+    saveSensorFilterConfig(String(route.params.bedId ?? ""), config);
   },
   { deep: true },
+);
+
+watch(
+  () => String(route.params.bedId ?? ""),
+  (bedId) => {
+    sensorFilterConfig.value = loadSensorFilterConfig(bedId);
+  },
 );
 
 onBeforeUnmount(() => {

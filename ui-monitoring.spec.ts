@@ -302,6 +302,31 @@ test("only developers can open sensor tuning from the left menu", async ({ page 
   await tuningPanel.getByLabel("显示倍数").fill("16");
   await expect(tuningPanel).toContainText("^ 2");
   await expect(tuningPanel).toContainText("× 16");
+  await page
+    .locator(".tuning-bed-item")
+    .nth(1)
+    .locator(".el-checkbox")
+    .click();
+  await page.getByRole("button", { name: "应用到选中床位" }).click();
+  await expect(page.getByText("参数已应用到选中床位，共 2 张床位")).toBeVisible();
+  await page.getByRole("button", { name: "应用到全部床位" }).click();
+  await expect(page.getByText("参数已应用到全部床位，共 9 张床位")).toBeVisible();
+  const savedFilterConfigs = await page.evaluate(() => {
+    const stored = window.localStorage.getItem("monitoring-sensor-filter-config-v6");
+    return stored ? (JSON.parse(stored) as Record<string, Record<string, unknown>>) : {};
+  });
+  expect(Object.keys(savedFilterConfigs)).toHaveLength(9);
+  for (const config of Object.values(savedFilterConfigs)) {
+    expect(config).toMatchObject({
+      filterEnabled: true,
+      thresholdEnabled: true,
+      type: "MEDIAN",
+      threshold: 20,
+      gainEnabled: true,
+      gainPower: 2,
+      gainMultiplier: 16,
+    });
+  }
   await page.screenshot({
     path: "test-results/monitoring-sensor-tuning.png",
     fullPage: true,

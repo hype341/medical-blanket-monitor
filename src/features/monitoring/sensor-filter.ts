@@ -37,13 +37,14 @@ export const DEFAULT_SENSOR_FILTER_CONFIG: SensorFilterConfig = {
   windowSize: 3,
 };
 
-const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v5";
+const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v6";
 
-export function loadSensorFilterConfig(): SensorFilterConfig {
+export function loadSensorFilterConfig(bedId = ""): SensorFilterConfig {
   try {
-    const parsed = JSON.parse(
+    const stored = JSON.parse(
       window.localStorage.getItem(SENSOR_FILTER_STORAGE_KEY) ?? "{}",
-    ) as Partial<SensorFilterConfig>;
+    ) as Record<string, Partial<SensorFilterConfig>>;
+    const parsed = stored[bedId] ?? {};
     const type =
       parsed.type === "MEAN" ||
       parsed.type === "MEDIAN" ||
@@ -71,8 +72,21 @@ export function loadSensorFilterConfig(): SensorFilterConfig {
   }
 }
 
-export function saveSensorFilterConfig(config: SensorFilterConfig): void {
-  window.localStorage.setItem(SENSOR_FILTER_STORAGE_KEY, JSON.stringify(config));
+export function saveSensorFilterConfig(
+  bedId: string,
+  config: SensorFilterConfig,
+): void {
+  if (!bedId) return;
+  let stored: Record<string, SensorFilterConfig> = {};
+  try {
+    stored = JSON.parse(
+      window.localStorage.getItem(SENSOR_FILTER_STORAGE_KEY) ?? "{}",
+    ) as Record<string, SensorFilterConfig>;
+  } catch {
+    stored = {};
+  }
+  stored[bedId] = { ...config };
+  window.localStorage.setItem(SENSOR_FILTER_STORAGE_KEY, JSON.stringify(stored));
 }
 
 export function applySensorFilter(
