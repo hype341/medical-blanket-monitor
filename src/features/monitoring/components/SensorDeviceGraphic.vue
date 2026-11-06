@@ -6,7 +6,7 @@
   >
     <SensorHeatmap
       class="sensor-graphic__heatmap"
-      :hex-data="sensor?.latestData"
+      :hex-data="displayData ?? sensor?.latestData"
       :status="sensor?.status"
       :refresh-rate-hz="refreshRateHz"
       :stream-status="streamStatus"
@@ -43,6 +43,7 @@ const props = withDefaults(
     refreshRateHz?: number;
     streamStatus?: "connecting" | "connected" | "reconnecting" | "closed";
     showRawData?: boolean;
+    displayData?: string;
   }>(),
   {
     refreshRateHz: 1,

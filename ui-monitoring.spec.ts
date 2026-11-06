@@ -177,6 +177,7 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(page.getByLabel("传感器图形帧率")).toHaveCount(0);
   await expect(page.getByText("热力图刷新帧率")).toHaveCount(0);
   await expect(page.getByText(/帧\/秒/)).toHaveCount(0);
+  await expect(page.getByText("数据滤波调参")).toHaveCount(0);
   await expect(page.getByText("智能识别扩展")).toBeVisible();
   await expect(page.getByText("录像回放").first()).toBeVisible();
   await expect(page.getByText("床位告警").first()).toBeVisible();
@@ -214,6 +215,13 @@ test("developer receives sensor MQTT data and controls heatmap frame rate", asyn
   await expect(heatmap).toContainText("28 点/列 · 64 列");
   await expect(heatmap).toContainText("1792 / 1792");
   await expect(heatmap).toHaveAttribute("data-rendered-points", "1792");
+  const tuningPanel = page.locator(".sensor-filter-panel");
+  await expect(tuningPanel.getByRole("heading", { name: "数据滤波调参" })).toBeVisible();
+  await expect(tuningPanel).toContainText("实时平均值");
+  await tuningPanel.getByLabel("滤波方式").click();
+  await page.getByRole("option", { name: "中值滤波" }).click();
+  await tuningPanel.getByLabel("丢弃阈值").fill("20");
+  await expect(tuningPanel).toContainText("有效点");
   const coloredPixels = await heatmap.locator("canvas").evaluate((canvas: HTMLCanvasElement) => {
     const context = canvas.getContext("2d");
     if (!context) return 0;

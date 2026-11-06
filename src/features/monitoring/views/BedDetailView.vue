@@ -129,11 +129,19 @@
             </div>
           </div>
         </div>
+
+        <SensorFilterPanel
+          v-if="store.activeRole === 'DEVELOPER'"
+          v-model="sensorFilterConfig"
+          :result="filteredSensor"
+        />
+
         <SensorDeviceGraphic
           :sensor="summary.sensor"
           :refresh-rate-hz="sensorRefreshRate"
           :stream-status="sensorStreamStatus"
           :show-raw-data="store.activeRole === 'DEVELOPER'"
+          :display-data="filteredSensorHex"
         />
         <SensorLinkPanel
           v-if="store.activeRole === 'DEVELOPER'"
@@ -181,6 +189,7 @@ import PatientEditor from "../components/PatientEditor.vue";
 import RecordingPlayer from "../components/RecordingPlayer.vue";
 import RecordingTimeline from "../components/RecordingTimeline.vue";
 import SensorDeviceGraphic from "../components/SensorDeviceGraphic.vue";
+import SensorFilterPanel from "../components/SensorFilterPanel.vue";
 import SensorLinkPanel from "../components/SensorLinkPanel.vue";
 import {
   findPlaybackSegment,
@@ -195,6 +204,11 @@ import { useMonitoringStore } from "../store";
 import type { PatientUpdateInput } from "../types";
 import { getCameraMediaEndpoints } from "../media-endpoints";
 import { probeCameraHealth } from "../camera-health";
+import { decodeSensorHex } from "../sensor-heatmap";
+import {
+  applySensorFilter,
+  type SensorFilterConfig,
+} from "../sensor-filter";
 import {
   extractSensorHexData,
   openSensorDataStream,
@@ -206,6 +220,8 @@ const router = useRouter();
 const store = useMonitoringStore();
 const sensorRefreshRates = [1, 2, 5, 10];
 const sensorRefreshRate = ref(1);
+const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v1";
+const sensorFilterConfig = ref<SensorFilterConfig>(loadSensorFilterConfig());
 const patientEditorVisible = ref(false);
 
 const summary = computed(() =>
@@ -213,6 +229,17 @@ const summary = computed(() =>
 );
 
 const selectedCamera = computed(() => summary.value?.cameras[0] ?? null);
+const filteredSensor = computed(() =>
+  applySensorFilter(
+    decodeSensorHex(summary.value?.sensor?.latestData ?? ""),
+    sensorFilterConfig.value,
+  ),
+);
+const filteredSensorHex = computed(() =>
+  filteredSensor.value.values
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join(","),
+);
 
 const sensorStatusLabel = computed(() => {
   const labels = {
@@ -356,6 +383,30 @@ function normalizeRefreshRate(): void {
   sensorRefreshRate.value = Number.isFinite(value) ? Math.min(10, Math.max(0.1, value)) : 1;
 }
 
+function loadSensorFilterConfig(): SensorFilterConfig {
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(SENSOR_FILTER_STORAGE_KEY) ?? "{}",
+    ) as Partial<SensorFilterConfig>;
+    const type =
+      parsed.type === "MEAN" ||
+      parsed.type === "MEDIAN" ||
+      parsed.type === "GAUSSIAN"
+        ? parsed.type
+        : "NONE";
+    return {
+      type,
+      threshold: Math.min(255, Math.max(0, Number(parsed.threshold) || 0)),
+      windowSize:
+        parsed.windowSize === 5 || parsed.windowSize === 7
+          ? parsed.windowSize
+          : 3,
+    };
+  } catch {
+    return { type: "NONE", threshold: 0, windowSize: 3 };
+  }
+}
+
 function connectSensorDataStream(): void {
   const generation = ++sensorStreamGeneration;
   sensorStreamController?.close();
@@ -492,6 +543,14 @@ onMounted(() => {
   sensorTimer = setInterval(() => void refreshSensorSnapshot(), 1_000);
   cameraHealthTimer = setInterval(() => void refreshCameraHealth(), 20_000);
 });
+
+watch(
+  sensorFilterConfig,
+  (config) => {
+    window.localStorage.setItem(SENSOR_FILTER_STORAGE_KEY, JSON.stringify(config));
+  },
+  { deep: true },
+);
 
 onBeforeUnmount(() => {
   document.removeEventListener("visibilitychange", handleVisibility);
