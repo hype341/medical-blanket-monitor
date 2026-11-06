@@ -409,7 +409,8 @@ onBeforeUnmount(() => {
 .recording-player {
   position: relative;
   width: 100%;
-  min-height: 440px;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
   margin-top: 16px;
   overflow: hidden;
   color: #e8f3ef;
@@ -511,7 +512,8 @@ onBeforeUnmount(() => {
 
 @media (width <= 640px) {
   .recording-player {
-    min-height: 280px;
+    min-height: 0;
+    aspect-ratio: 16 / 9;
   }
 }
 

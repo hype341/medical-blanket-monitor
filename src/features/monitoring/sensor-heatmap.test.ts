@@ -5,6 +5,8 @@ import {
   SENSOR_POINT_COUNT,
   buildSensorHeatmap,
   decodeSensorHex,
+  getSensorPointPosition,
+  scaleSensorPoint,
 } from "./sensor-heatmap";
 
 describe("sensor heatmap", () => {
@@ -13,15 +15,15 @@ describe("sensor heatmap", () => {
     expect(decodeSensorHex("00,40,80,c0,ff")).toEqual([0, 64, 128, 192, 255]);
   });
 
-  it("builds a 28-column by 64-row RGBA heatmap from 1792 bytes", () => {
+  it("builds 64 columns from consecutive 28-point column groups", () => {
     const values = Array.from({ length: SENSOR_POINT_COUNT }, (_, index) => index % 256);
     const frame = buildSensorHeatmap(
       values.map((value) => value.toString(16).padStart(2, "0")).join(","),
     );
 
     expect(frame.complete).toBe(true);
-    expect(frame.columns).toBe(28);
-    expect(frame.rows).toBe(64);
+    expect(frame.columns).toBe(64);
+    expect(frame.rows).toBe(28);
     expect(frame.peakValue).toBe(255);
     expect(frame.pixels).toHaveLength(SENSOR_POINT_COUNT * 4);
     expect(frame.pixels[3]).toBe(255);
@@ -48,8 +50,20 @@ describe("sensor heatmap", () => {
     expect(frame.pixels[0]).toBeGreaterThan(235);
     expect(frame.pixels[1]).toBeGreaterThan(235);
     expect(frame.pixels[2]).toBeGreaterThan(235);
-    expect(frame.pixels[4]).toBeGreaterThan(170);
-    expect(frame.pixels[5]).toBeLessThan(80);
-    expect(frame.pixels[6]).toBeLessThan(80);
+    expect(frame.pixels[64 * 4]).toBeGreaterThan(170);
+    expect(frame.pixels[64 * 4 + 1]).toBeLessThan(80);
+    expect(frame.pixels[64 * 4 + 2]).toBeLessThan(80);
+  });
+
+  it("maps every point linearly without enhancement", () => {
+    expect([0, 1, 4, 100, 255].map(scaleSensorPoint)).toEqual([0, 1, 4, 100, 255]);
+  });
+
+  it("maps every 28-byte group to one top-to-bottom column", () => {
+    expect(getSensorPointPosition(0)).toEqual({ row: 0, column: 0 });
+    expect(getSensorPointPosition(1)).toEqual({ row: 1, column: 0 });
+    expect(getSensorPointPosition(27)).toEqual({ row: 27, column: 0 });
+    expect(getSensorPointPosition(28)).toEqual({ row: 0, column: 1 });
+    expect(getSensorPointPosition(1791)).toEqual({ row: 27, column: 63 });
   });
 });

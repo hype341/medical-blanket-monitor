@@ -19,7 +19,7 @@
     </div>
 
     <div class="sensor-graphic__meta">
-      <div v-if="sensor?.latestData" class="sensor-graphic__raw-data">
+      <div v-if="showRawData && sensor?.latestData" class="sensor-graphic__raw-data">
         <span>{{ dataByteCount }} 字节数据</span>
         <code :title="sensor.latestData">{{ sensor.latestData }}</code>
       </div>
@@ -42,10 +42,12 @@ const props = withDefaults(
     sensor: SensorDevice | null;
     refreshRateHz?: number;
     streamStatus?: "connecting" | "connected" | "reconnecting" | "closed";
+    showRawData?: boolean;
   }>(),
   {
     refreshRateHz: 1,
     streamStatus: "closed",
+    showRawData: false,
   },
 );
 

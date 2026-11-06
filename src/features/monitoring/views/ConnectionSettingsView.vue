@@ -13,6 +13,40 @@
       </div>
     </header>
 
+    <section class="external-subscription" aria-label="毯子 MQTT 外部订阅入口">
+      <header>
+        <div>
+          <span>外部系统直接订阅</span>
+          <h2>毯子数据订阅主题</h2>
+          <p>其他系统使用 Broker 或 WebSocket 连接后，订阅下列床位主题即可读取实时数据。</p>
+        </div>
+        <el-button type="primary" @click="copySubscriptionTopics">
+          复制全部订阅主题
+        </el-button>
+      </header>
+      <div class="external-subscription__endpoint">
+        <span>Broker <code>{{ form.brokerUrl }}</code></span>
+        <span>WebSocket <code>{{ form.websocketUrl }}</code></span>
+        <span>账号 <code>{{ form.username }}</code></span>
+      </div>
+      <div class="external-subscription__list">
+        <article v-for="row in accessBedRows" :key="`subscribe-${row.bedId}`">
+          <div>
+            <strong>{{ row.wardName }} / {{ row.roomName }} / {{ row.bedNo }} 床</strong>
+            <span>{{ row.sensorName }} · {{ row.sensorKey }}</span>
+          </div>
+          <code>{{ row.dataTopic }}</code>
+          <el-button
+            text
+            type="primary"
+            @click="copyTopic(row.dataTopic, '毯子数据订阅主题')"
+          >
+            复制
+          </el-button>
+        </article>
+      </div>
+    </section>
+
     <section class="connection-summary" aria-label="MQTT 配置概览">
       <article>
         <span>Broker</span>
@@ -775,13 +809,24 @@ function save(): void {
   }
 }
 
-async function copyTopic(topic: string, label = "主题"): Promise<void> {
+async function copyTopic(topic: string | null, label = "主题"): Promise<void> {
+  if (!topic) return;
   try {
     await copyText(topic);
     ElMessage.success(`${label}已复制`);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "主题复制失败");
   }
+}
+
+async function copySubscriptionTopics(): Promise<void> {
+  const content = accessBedRows.value
+    .map(
+      (row) =>
+        `${row.wardName} / ${row.roomName} / ${row.bedNo} 床\n${row.dataTopic}`,
+    )
+    .join("\n\n");
+  await copyTopic(content, "毯子订阅主题");
 }
 
 async function copySensorLink(path: string): Promise<void> {
@@ -906,6 +951,109 @@ function downloadText(fileName: string, content: string): void {
   color: #2d6d5e !important;
   background: #edf7f2;
   border: 1px solid #c4ddd5;
+}
+
+.external-subscription {
+  margin-top: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(120deg, rgb(238 249 244 / 92%), rgb(255 255 255 / 95%)),
+    #fff;
+  border: 1px solid #cfe4dc;
+
+  > header {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+
+    span {
+      font-size: 9px;
+      font-weight: 650;
+      color: #417768;
+    }
+
+    h2 {
+      margin: 4px 0;
+      font-size: 17px;
+      font-weight: 680;
+    }
+
+    p {
+      margin: 0;
+      font-size: 11px;
+      color: #728780;
+    }
+  }
+}
+
+.external-subscription__endpoint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 10px 18px;
+  background: #f7fbf9;
+  border-block: 1px solid #dce9e4;
+
+  span {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 9px;
+    color: #71857f;
+  }
+
+  code {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 10px;
+    color: #245e51;
+  }
+}
+
+.external-subscription__list {
+  display: grid;
+  max-height: 254px;
+  overflow: auto;
+
+  article {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.7fr) minmax(240px, 1.3fr) auto;
+    gap: 14px;
+    align-items: center;
+    padding: 10px 18px;
+    border-bottom: 1px solid #edf2f0;
+
+    &:last-child {
+      border-bottom: 0;
+    }
+
+    > div {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    strong {
+      font-size: 10px;
+      font-weight: 650;
+      color: #315e53;
+    }
+
+    span {
+      font-size: 9px;
+      color: #81918c;
+    }
+
+    code {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 10px;
+      color: #296759;
+      white-space: nowrap;
+    }
+  }
 }
 
 .connection-summary {
@@ -1916,6 +2064,21 @@ function downloadText(fileName: string, content: string): void {
 }
 
 @media (width <= 520px) {
+  .external-subscription > header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .external-subscription__list article {
+    grid-template-columns: 1fr auto;
+
+    code {
+      grid-column: 1 / -1;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+  }
+
   .device-onboarding {
     padding: 14px;
   }

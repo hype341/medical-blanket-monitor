@@ -9,12 +9,22 @@
     <header>
       <div>
         <span>毯面感应热力图</span>
-        <strong>28 × 64</strong>
+        <strong>28 点/列 · 64 列</strong>
       </div>
-      <small>
-        <i />
-        {{ streamStatus === "connected" ? "MQTT 实时" : "快照同步" }}
-      </small>
+      <div class="sensor-heatmap__actions">
+        <small>
+          <i />
+          {{ streamStatus === "connected" ? "MQTT 实时" : "快照同步" }}
+        </small>
+        <button
+          type="button"
+          aria-label="放大热力图"
+          :disabled="!pointCount"
+          @click="zoomed = true"
+        >
+          放大
+        </button>
+      </div>
     </header>
 
     <div class="sensor-heatmap__canvas-wrap">
@@ -23,7 +33,7 @@
         :width="SENSOR_HEATMAP_COLUMNS * 8"
         :height="SENSOR_HEATMAP_ROWS * 8"
         role="img"
-        aria-label="28 列 64 行毯面传感器压力热力图"
+        aria-label="64 列 28 行毯面传感器压力热力图"
       />
       <div v-if="!pointCount" class="sensor-heatmap__empty">
         <strong>等待毯面数据</strong>
@@ -33,8 +43,26 @@
 
     <footer>
       <span>{{ pointCount }} / {{ SENSOR_POINT_COUNT }} 点 · 峰值 {{ peakValue }}</span>
-      <span class="sensor-heatmap__scale">低 <i /> 高</span>
+      <span class="sensor-heatmap__scale">白 <i /> 红</span>
     </footer>
+
+    <el-dialog
+      v-model="zoomed"
+      title="毯面感应热力图"
+      width="min(960px, 92vw)"
+      destroy-on-close
+    >
+      <div class="sensor-heatmap__zoom">
+        <img :src="snapshotUrl" alt="放大的 64 列 28 行毯面感应热力图" />
+        <div>
+          <span>28 点/列 × 64 列 · 共 1792 点</span>
+          <span>原始峰值 {{ peakValue }} · 显示值按 0–255 线性映射</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="zoomed = false">关闭热力图</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -65,6 +93,8 @@ const props = withDefaults(
 
 const canvasRef = ref<HTMLCanvasElement>();
 const renderedPointCount = ref(0);
+const zoomed = ref(false);
+const snapshotUrl = ref("");
 const sourceCanvas = document.createElement("canvas");
 sourceCanvas.width = SENSOR_HEATMAP_COLUMNS;
 sourceCanvas.height = SENSOR_HEATMAP_ROWS;
@@ -108,6 +138,7 @@ function drawHeatmap(): void {
     );
   }
   renderedPointCount.value = frame.values.length;
+  snapshotUrl.value = canvas.toDataURL("image/png");
   lastRenderedAt = performance.now();
 }
 
@@ -187,10 +218,30 @@ onBeforeUnmount(() => {
   }
 }
 
+.sensor-heatmap__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+
+  button {
+    padding: 4px 8px;
+    font-size: 9px;
+    color: #326b5e;
+    cursor: zoom-in;
+    background: #fff;
+    border: 1px solid #c9ddd5;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+  }
+}
+
 .sensor-heatmap__canvas-wrap {
   position: relative;
-  width: min(100%, 220px);
-  min-height: 168px;
+  width: min(100%, 520px);
+  aspect-ratio: 64 / 28;
   margin-inline: auto;
   overflow: hidden;
   background: #eef3f1;
@@ -199,7 +250,7 @@ onBeforeUnmount(() => {
   canvas {
     display: block;
     width: 100%;
-    height: auto;
+    height: 100%;
     image-rendering: pixelated;
   }
 }
@@ -245,13 +296,37 @@ onBeforeUnmount(() => {
   border-color: #e2aaa5;
 }
 
-@media (width <= 700px) {
-  .sensor-heatmap__canvas-wrap {
-    width: min(100%, 190px);
+.sensor-heatmap__zoom {
+  display: grid;
+  gap: 10px;
+
+  img {
+    display: block;
+    width: 100%;
+    max-height: 66vh;
+    object-fit: contain;
+    image-rendering: pixelated;
+    background: #f3f7f5;
+    border: 1px solid #d3e2dc;
   }
 
-  .sensor-heatmap__canvas-wrap canvas {
-    height: auto;
+  > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    justify-content: space-between;
+    font-size: 10px;
+    color: #688078;
+  }
+}
+
+@media (width <= 700px) {
+  .sensor-heatmap__canvas-wrap {
+    width: 100%;
+  }
+
+  .sensor-heatmap__actions {
+    gap: 5px;
   }
 }
 </style>

@@ -218,11 +218,11 @@ rawStream.close();
 当前床位纯数据：\`/api/public/sensors/${sampleBedId}/hex\`；原始帧：
 \`/api/public/sensors/${sampleBedId}/raw-hex\`。
 
-### 28 × 64 热力图
+### 28 点/列 × 64 列热力图
 
 1792 个压力点按行优先排列，每点 1 字节，取值范围 \`00\`–\`ff\`。
-前端按 28 列、64 行绘制：最低值显示白色，压力升高依次过渡为黄色、橙色，
-最高值显示红色。
+每 28 个字节组成一列，共 64 列，因此前端按 64 列、28 行绘制。最低值显示白色，压力升高依次过渡为黄色、橙色，
+最高值显示红色。每个原始点按 0–255 直接线性映射，原始 8 位数据不会被修改。
 
 \`\`\`ts
 import { buildSensorHeatmap } from "@/features/monitoring/sensor-heatmap";

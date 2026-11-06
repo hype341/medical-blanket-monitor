@@ -129,18 +129,11 @@
             </div>
           </div>
         </div>
-        <div v-else class="sensor-refresh sensor-refresh--readonly">
-          <div>
-            <strong>实时毯面热力图</strong>
-            <small>按 28 × 64 点阵显示，每个感应点对应 1 字节。</small>
-          </div>
-          <span>{{ sensorRefreshRate }} 帧/秒</span>
-        </div>
-
         <SensorDeviceGraphic
           :sensor="summary.sensor"
           :refresh-rate-hz="sensorRefreshRate"
           :stream-status="sensorStreamStatus"
+          :show-raw-data="store.activeRole === 'DEVELOPER'"
         />
         <SensorLinkPanel
           v-if="store.activeRole === 'DEVELOPER'"
@@ -701,7 +694,8 @@ function handleVisibility(): void {
 }
 
 .detail-player {
-  min-height: 440px;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
   margin-top: 16px;
 }
 
@@ -775,21 +769,6 @@ function handleVisibility(): void {
   small {
     font-size: 11px;
     color: #81918c;
-  }
-}
-
-.sensor-refresh--readonly {
-  background: linear-gradient(90deg, #f4faf7, #fbfcfb);
-  border-color: #d3e5dd;
-
-  > span {
-    padding: 6px 9px;
-    font-family: "Avenir Next", sans-serif;
-    font-size: 10px;
-    font-weight: 650;
-    color: #2e6c5c;
-    background: #eaf5f0;
-    border: 1px solid #c6ded6;
   }
 }
 
@@ -904,7 +883,8 @@ function handleVisibility(): void {
   }
 
   .detail-player {
-    min-height: 280px;
+    min-height: 0;
+    aspect-ratio: 16 / 9;
   }
 }
 </style>

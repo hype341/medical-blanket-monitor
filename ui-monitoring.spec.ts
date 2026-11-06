@@ -160,12 +160,13 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await page.locator('[data-testid="bed-card"]').first().click();
   await expect(page).toHaveURL(/#\/beds\/bed-/);
   await expect(page.getByTestId("sensor-graphic")).toBeVisible();
-  await expect(page.getByTestId("sensor-heatmap")).toContainText("28 × 64");
+  const livePlayerBounds = await page.locator(".detail-player").boundingBox();
+  expect(livePlayerBounds).not.toBeNull();
+  expect(livePlayerBounds!.width / livePlayerBounds!.height).toBeGreaterThan(1.5);
+  await expect(page.getByTestId("sensor-heatmap")).toContainText("28 点/列 · 64 列");
   await expect(page.getByTestId("sensor-heatmap")).toContainText("1792 / 1792");
-  await expect(page.getByText("1792 字节数据", { exact: true })).toBeVisible();
-  await expect(page.locator(".sensor-graphic__raw-data code")).toHaveText(
-    /^[0-9a-f]{2}(,[0-9a-f]{2})+/,
-  );
+  await expect(page.getByText("1792 字节数据", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".sensor-graphic__raw-data")).toHaveCount(0);
   await expect(page.getByText("传感器数据接口", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/medical-blanket\/v1\//)).toHaveCount(0);
   await expect(page.getByText(/\/api\/public\/sensors\/bed-a-01/)).toHaveCount(0);
@@ -174,6 +175,8 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(page.getByText("毯面温度")).toHaveCount(0);
   await expect(page.getByText("设备电量")).toHaveCount(0);
   await expect(page.getByLabel("传感器图形帧率")).toHaveCount(0);
+  await expect(page.getByText("热力图刷新帧率")).toHaveCount(0);
+  await expect(page.getByText(/帧\/秒/)).toHaveCount(0);
   await expect(page.getByText("智能识别扩展")).toBeVisible();
   await expect(page.getByText("录像回放").first()).toBeVisible();
   await expect(page.getByText("床位告警").first()).toBeVisible();
@@ -208,7 +211,7 @@ test("developer receives sensor MQTT data and controls heatmap frame rate", asyn
 
   const heatmap = page.getByTestId("sensor-heatmap");
   await expect(heatmap).toBeVisible();
-  await expect(heatmap).toContainText("28 × 64");
+  await expect(heatmap).toContainText("28 点/列 · 64 列");
   await expect(heatmap).toContainText("1792 / 1792");
   await expect(heatmap).toHaveAttribute("data-rendered-points", "1792");
   const coloredPixels = await heatmap.locator("canvas").evaluate((canvas: HTMLCanvasElement) => {
@@ -222,6 +225,15 @@ test("developer receives sensor MQTT data and controls heatmap frame rate", asyn
     return colored;
   });
   expect(coloredPixels).toBeGreaterThan(25_000);
+  await expect(page.locator(".sensor-graphic__raw-data code")).toHaveText(
+    /^[0-9a-f]{2}(,[0-9a-f]{2})+/,
+  );
+  await heatmap.getByRole("button", { name: "放大热力图" }).click();
+  const heatmapDialog = page.getByRole("dialog", { name: "毯面感应热力图" });
+  await expect(heatmapDialog).toBeVisible();
+  await expect(heatmapDialog.locator("img")).toBeVisible();
+  await heatmapDialog.getByRole("button", { name: "关闭热力图" }).click();
+  await expect(heatmapDialog).toHaveCount(0);
   await page.locator(".sensor-panel").screenshot({
     path: "test-results/monitoring-sensor-heatmap.png",
   });
@@ -444,6 +456,18 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
 
   await page.getByText("MQTT 管理", { exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "系统连接与 MQTT" })).toBeVisible();
+  const subscriptionPanel = page.locator(".external-subscription");
+  await expect(
+    subscriptionPanel.getByRole("heading", { name: "毯子数据订阅主题" }),
+  ).toBeVisible();
+  await expect(subscriptionPanel).toContainText(
+    "medical-blanket/v1/H001/WARD-A/301-01/sensor/blanket-001/data",
+  );
+  await subscriptionPanel.getByRole("button", { name: "复制全部订阅主题" }).click();
+  await expect(page.getByText("毯子订阅主题已复制")).toBeVisible();
+  await subscriptionPanel.screenshot({
+    path: "test-results/monitoring-mqtt-subscriptions.png",
+  });
   await expect(page.getByText("EMQX 接入")).toBeVisible();
   await expect(page.getByRole("heading", { name: "床位数据与告警", exact: true })).toBeVisible();
   const deviceGuide = page.locator(".device-onboarding");
@@ -638,6 +662,7 @@ test("camera status matches browser media reachability", async ({ page, request 
 test("recorded video plays and advances when the camera node is online", async ({ page }) => {
   const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
   test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+  test.skip(process.env.PLAYWRIGHT_LIVE_MEDIA !== "1", "run with PLAYWRIGHT_LIVE_MEDIA=1");
   test.skip(!(await isCameraNodeOnline()), "camera node is offline");
 
   await loginAs(page, "nurse");
@@ -648,6 +673,9 @@ test("recorded video plays and advances when the camera node is online", async (
 
   const player = page.locator(".recording-player");
   await expect(player).toHaveAttribute("data-state", "playing", { timeout: 20_000 });
+  const playbackBounds = await player.boundingBox();
+  expect(playbackBounds).not.toBeNull();
+  expect(playbackBounds!.width / playbackBounds!.height).toBeGreaterThan(1.5);
   const timeLabel = player.locator(".recording-player__chrome strong");
   const before = await timeLabel.textContent();
   await page.waitForTimeout(2_500);
@@ -660,6 +688,7 @@ test("recording seeks quickly and switches to another timestamp without stale lo
 }) => {
   const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
   test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+  test.skip(process.env.PLAYWRIGHT_LIVE_MEDIA !== "1", "run with PLAYWRIGHT_LIVE_MEDIA=1");
   test.skip(!(await isCameraNodeOnline()), "camera node is offline");
 
   await loginAs(page, "nurse");
@@ -703,6 +732,7 @@ test("recorded playback keeps advancing without long visible freezes", async ({
 }) => {
   const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
   test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+  test.skip(process.env.PLAYWRIGHT_LIVE_MEDIA !== "1", "run with PLAYWRIGHT_LIVE_MEDIA=1");
   test.skip(!(await isCameraNodeOnline()), "camera node is offline");
 
   await loginAs(page, "nurse");

@@ -1,5 +1,5 @@
-export const SENSOR_HEATMAP_COLUMNS = 28;
-export const SENSOR_HEATMAP_ROWS = 64;
+export const SENSOR_HEATMAP_COLUMNS = 64;
+export const SENSOR_HEATMAP_ROWS = 28;
 export const SENSOR_POINT_COUNT = SENSOR_HEATMAP_COLUMNS * SENSOR_HEATMAP_ROWS;
 
 export interface SensorHeatmapFrame {
@@ -40,11 +40,11 @@ export function buildSensorHeatmap(
   const pixels = new Uint8ClampedArray(columns * rows * 4);
   const peakValue = Math.max(0, ...values);
 
-  values.forEach((value, index) => {
-    const displayValue =
-      peakValue > 0 ? Math.round((value / peakValue) ** 0.22 * 255) : 0;
+  values.forEach((value, sourceIndex) => {
+    const displayValue = scaleSensorPoint(value);
     const [red, green, blue] = sensorValueColor(displayValue);
-    const offset = index * 4;
+    const { row, column } = getSensorPointPosition(sourceIndex);
+    const offset = (row * columns + column) * 4;
     pixels[offset] = red;
     pixels[offset + 1] = green;
     pixels[offset + 2] = blue;
@@ -59,6 +59,20 @@ export function buildSensorHeatmap(
     complete: values.length === SENSOR_POINT_COUNT,
     peakValue,
   };
+}
+
+export function getSensorPointPosition(sourceIndex: number): {
+  row: number;
+  column: number;
+} {
+  return {
+    row: sourceIndex % SENSOR_HEATMAP_ROWS,
+    column: Math.floor(sourceIndex / SENSOR_HEATMAP_ROWS),
+  };
+}
+
+export function scaleSensorPoint(value: number): number {
+  return Math.min(255, Math.max(0, Math.round(value)));
 }
 
 function sensorValueColor(value: number): readonly [number, number, number] {

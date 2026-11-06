@@ -332,7 +332,8 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   width: 100%;
-  min-height: 240px;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   color: #eaf3f0;
   background:
