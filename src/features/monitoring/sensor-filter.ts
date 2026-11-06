@@ -31,7 +31,7 @@ export const DEFAULT_SENSOR_FILTER_CONFIG: SensorFilterConfig = {
   windowSize: 3,
 };
 
-const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v1";
+const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v2";
 
 export function loadSensorFilterConfig(): SensorFilterConfig {
   try {

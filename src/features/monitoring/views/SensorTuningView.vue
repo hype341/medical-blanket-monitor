@@ -57,6 +57,12 @@
             :stream-status="streamStatus"
             :show-raw-data="true"
             :display-data="filteredSensorHex"
+            :show-technical-details="true"
+            :processing-mode="
+              filterConfig.filterEnabled || filterConfig.thresholdEnabled
+                ? 'PROCESSED'
+                : 'RAW'
+            "
           />
         </section>
       </main>

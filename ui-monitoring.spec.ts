@@ -163,8 +163,8 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   const livePlayerBounds = await page.locator(".detail-player").boundingBox();
   expect(livePlayerBounds).not.toBeNull();
   expect(livePlayerBounds!.width / livePlayerBounds!.height).toBeGreaterThan(1.5);
-  await expect(page.getByTestId("sensor-heatmap")).toContainText("28 点/列 · 64 列");
-  await expect(page.getByTestId("sensor-heatmap")).toContainText("1792 / 1792");
+  await expect(page.getByTestId("sensor-heatmap")).not.toContainText("28 点/列 · 64 列");
+  await expect(page.getByTestId("sensor-heatmap")).not.toContainText("1792 / 1792");
   await expect(page.getByText("1792 字节数据", { exact: true })).toHaveCount(0);
   await expect(page.locator(".sensor-graphic__raw-data")).toHaveCount(0);
   await expect(page.getByText("传感器数据接口", { exact: true })).toHaveCount(0);

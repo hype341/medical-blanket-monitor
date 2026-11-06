@@ -5,16 +5,23 @@
     :data-status="status"
     :data-stream-status="streamStatus"
     :data-rendered-points="renderedPointCount"
+    :data-processing-mode="processingMode"
   >
     <header>
       <div>
         <span>毯面感应热力图</span>
-        <strong>28 点/列 · 64 列</strong>
+        <strong>{{ showTechnicalDetails ? "28 点/列 · 64 列" : "实时热力图" }}</strong>
       </div>
       <div class="sensor-heatmap__actions">
         <small>
           <i />
-          {{ streamStatus === "connected" ? "MQTT 实时" : "快照同步" }}
+          {{
+            showTechnicalDetails
+              ? streamStatus === "connected"
+                ? "MQTT 实时"
+                : "快照同步"
+              : "实时毯面"
+          }}
         </small>
         <button
           type="button"
@@ -42,8 +49,16 @@
     </div>
 
     <footer>
-      <span>{{ pointCount }} / {{ SENSOR_POINT_COUNT }} 点 · 峰值 {{ peakValue }}</span>
-      <span class="sensor-heatmap__scale">白 <i /> 红</span>
+      <span v-if="showTechnicalDetails">
+        {{ pointCount }} / {{ SENSOR_POINT_COUNT }} 点 · 峰值 {{ peakValue }}
+      </span>
+      <span v-else>毯面压力分布</span>
+      <span class="sensor-heatmap__footer-meta">
+        <b v-if="showTechnicalDetails">
+          {{ processingMode === "RAW" ? "仅原始数据" : "已启用处理" }}
+        </b>
+        <span class="sensor-heatmap__scale">白 <i /> 红</span>
+      </span>
     </footer>
 
     <el-dialog
@@ -54,7 +69,7 @@
     >
       <div class="sensor-heatmap__zoom">
         <img :src="snapshotUrl" alt="放大的 64 列 28 行毯面感应热力图" />
-        <div>
+        <div v-if="showTechnicalDetails">
           <span>28 点/列 × 64 列 · 共 1792 点</span>
           <span>原始峰值 {{ peakValue }} · 显示值按 0–255 线性映射</span>
         </div>
@@ -82,12 +97,16 @@ const props = withDefaults(
     status?: SensorStatus;
     refreshRateHz?: number;
     streamStatus?: "connecting" | "connected" | "reconnecting" | "closed";
+    processingMode?: "RAW" | "PROCESSED";
+    showTechnicalDetails?: boolean;
   }>(),
   {
     hexData: "",
     status: "OFFLINE",
     refreshRateHz: 1,
     streamStatus: "closed",
+    processingMode: "RAW",
+    showTechnicalDetails: false,
   },
 );
 
@@ -284,6 +303,18 @@ onBeforeUnmount(() => {
     width: 66px;
     height: 5px;
     background: linear-gradient(90deg, #f8faf9, #ffeec7, #ffcc66, #f49137, #e04d2d, #c22422);
+  }
+}
+
+.sensor-heatmap__footer-meta {
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
+
+  b {
+    font-size: 8px;
+    font-weight: 650;
+    color: #2c6b5c;
   }
 }
 

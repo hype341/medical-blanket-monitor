@@ -136,6 +136,12 @@
           :stream-status="sensorStreamStatus"
           :show-raw-data="store.activeRole === 'DEVELOPER'"
           :display-data="filteredSensorHex"
+          :show-technical-details="store.activeRole === 'DEVELOPER'"
+          :processing-mode="
+            sensorFilterConfig.filterEnabled || sensorFilterConfig.thresholdEnabled
+              ? 'PROCESSED'
+              : 'RAW'
+          "
         />
         <SensorLinkPanel
           v-if="store.activeRole === 'DEVELOPER'"

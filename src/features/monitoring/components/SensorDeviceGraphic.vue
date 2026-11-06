@@ -10,6 +10,8 @@
       :status="sensor?.status"
       :refresh-rate-hz="refreshRateHz"
       :stream-status="streamStatus"
+      :processing-mode="processingMode"
+      :show-technical-details="showTechnicalDetails"
     />
 
     <div class="sensor-graphic__identity">
@@ -44,11 +46,15 @@ const props = withDefaults(
     streamStatus?: "connecting" | "connected" | "reconnecting" | "closed";
     showRawData?: boolean;
     displayData?: string;
+    processingMode?: "RAW" | "PROCESSED";
+    showTechnicalDetails?: boolean;
   }>(),
   {
     refreshRateHz: 1,
     streamStatus: "closed",
     showRawData: false,
+    processingMode: "RAW",
+    showTechnicalDetails: false,
   },
 );
 
