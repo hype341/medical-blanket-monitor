@@ -278,13 +278,20 @@ npx skills add https://github.com/youlaitech/youlai-skills --skill vue3-element-
 
 ## 项目部署
 
-执行 `pnpm run build` 打包生成 `dist` 目录，上传至服务器并配置 Nginx 反向代理。
+当前本地服务器已经配置专用 SSH 部署密钥、受限发布命令和自动备份。直接执行：
+
+```powershell
+pnpm run deploy
+```
+
+该命令会完成类型检查、生产构建、上传、备份、Nginx 校验和失败自动回滚。
+部署说明见 [docs/one-click-deploy.md](docs/one-click-deploy.md)。
+
+只生成构建文件时执行：
 
 ```bash
 pnpm run build
 ```
-
-详细部署流程（Nginx 配置、反向代理、HTTPS 等）见 [部署指南](https://www.youlai.tech/docs/element/deploy/)。
 
 ## 数据接口
 

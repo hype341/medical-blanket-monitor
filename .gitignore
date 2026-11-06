@@ -6,6 +6,7 @@ dist/
 dist-ssr/
 stats.html
 test-results/
+tmp/
 
 # Local env files
 *.local

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+stage="${1:-}"
+case "$stage" in
+  /tmp/blanket-release-*) ;;
+  *)
+    echo "invalid release directory" >&2
+    exit 2
+    ;;
+esac
+
+stage="$(realpath -e "$stage")"
+case "$stage" in
+  /tmp/blanket-release-*) ;;
+  *)
+    echo "release directory escaped /tmp" >&2
+    exit 2
+    ;;
+esac
+
+test -f "$stage/index.html"
+
+backup_root=/var/backups/blanket
+mkdir -p "$backup_root"
+backup_file="$backup_root/website-$(date +%Y%m%d-%H%M%S).tar.gz"
+tar -C /var/www/blanket -czf "$backup_file" .
+ls -1t "$backup_root"/website-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+
+cp -a "$stage/." /var/www/blanket/
+chown -R www-data:www-data /var/www/blanket
+if ! nginx -t; then
+  tar -C /var/www/blanket -xzf "$backup_file"
+  chown -R www-data:www-data /var/www/blanket
+  nginx -t
+  systemctl reload nginx
+  echo "deployment failed; restored $backup_file" >&2
+  exit 1
+fi
+systemctl reload nginx
+echo "website deployed from $stage"
+echo "backup: $backup_file"
