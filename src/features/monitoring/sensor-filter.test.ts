@@ -11,15 +11,15 @@ const baseConfig: SensorFilterConfig = {
 
 describe("sensor filter", () => {
   it("shows original data before the developer enables any operation", () => {
-    const result = applySensorFilter([1, 5, 10, 20], {
+    const result = applySensorFilter([0, 1, 5, 10, 20], {
       ...baseConfig,
       threshold: 10,
     });
 
-    expect(result.values).toEqual([1, 5, 10, 20]);
-    expect(result.activePoints).toBe(4);
+    expect(result.values).toEqual([0, 1, 5, 10, 20]);
+    expect(result.activePoints).toBe(5);
     expect(result.droppedPoints).toBe(0);
-    expect(result.filteredMean).toBe(9);
+    expect(result.filteredMean).toBe(7.2);
   });
 
   it("drops values below the threshold and excludes them from the mean", () => {
@@ -33,6 +33,18 @@ describe("sensor filter", () => {
     expect(result.activePoints).toBe(2);
     expect(result.droppedPoints).toBe(2);
     expect(result.filteredMean).toBe(15);
+  });
+
+  it("keeps zero-valued points active when the drop switch is off", () => {
+    const result = applySensorFilter([0, 1, 5, 10, 20], {
+      ...baseConfig,
+      filterEnabled: true,
+      thresholdEnabled: false,
+    });
+
+    expect(result.activePoints).toBe(5);
+    expect(result.droppedPoints).toBe(0);
+    expect(result.filteredMean).toBe(7.2);
   });
 
   it("uses median filtering to remove an isolated spike", () => {

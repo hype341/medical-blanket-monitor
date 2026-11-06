@@ -56,7 +56,7 @@ describe("sensor heatmap", () => {
   });
 
   it("maps every point linearly without enhancement", () => {
-    expect([0, 1, 4, 100, 255].map(scaleSensorPoint)).toEqual([0, 1, 4, 100, 255]);
+    expect([0, 1, 4, 100, 255].map(scaleSensorPoint)).toEqual([0, 16, 64, 255, 255]);
   });
 
   it("maps every 28-byte group to one top-to-bottom column", () => {

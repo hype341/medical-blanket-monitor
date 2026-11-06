@@ -31,7 +31,7 @@ export const DEFAULT_SENSOR_FILTER_CONFIG: SensorFilterConfig = {
   windowSize: 3,
 };
 
-const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v2";
+const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v3";
 
 export function loadSensorFilterConfig(): SensorFilterConfig {
   try {
@@ -103,7 +103,13 @@ export function applySensorFilter(
     const { row, column } = getSensorPointPosition(sourceIndex);
     return filtered[row * SENSOR_HEATMAP_COLUMNS + column] ?? 0;
   });
-  const activeValues = output.filter((value) => value > 0);
+  const activeValues: number[] = [];
+  values.forEach((_, sourceIndex) => {
+    const { row, column } = getSensorPointPosition(sourceIndex);
+    if (active[row * SENSOR_HEATMAP_COLUMNS + column]) {
+      activeValues.push(output[sourceIndex] ?? 0);
+    }
+  });
 
   return {
     values: output,

@@ -50,7 +50,7 @@
 
     <footer>
       <span v-if="showTechnicalDetails">
-        {{ pointCount }} / {{ SENSOR_POINT_COUNT }} 点 · 峰值 {{ peakValue }}
+        {{ pointCount }} / {{ SENSOR_POINT_COUNT }} 点 · 范围 {{ minValue }}–{{ peakValue }}
       </span>
       <span v-else>毯面压力分布</span>
       <span class="sensor-heatmap__footer-meta">
@@ -71,7 +71,7 @@
         <img :src="snapshotUrl" alt="放大的 64 列 28 行毯面感应热力图" />
         <div v-if="showTechnicalDetails">
           <span>28 点/列 × 64 列 · 共 1792 点</span>
-          <span>原始峰值 {{ peakValue }} · 显示值按 0–255 线性映射</span>
+          <span>原始范围 {{ minValue }}–{{ peakValue }} · 显示值 = 原始值 × 16</span>
         </div>
       </div>
       <template #footer>
@@ -122,6 +122,9 @@ const pointCount = computed(
 );
 const peakValue = computed(() =>
   buildSensorHeatmap(props.hexData).peakValue,
+);
+const minValue = computed(() =>
+  buildSensorHeatmap(props.hexData).minValue,
 );
 
 let renderTimer: ReturnType<typeof setTimeout> | null = null;

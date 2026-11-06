@@ -266,8 +266,8 @@ test("only developers can open sensor tuning from the left menu", async ({ page 
   await tuningPanel.getByRole("switch", { name: "开启滤波操作" }).click();
   await tuningPanel.getByLabel("滤波方式").click();
   await page.getByRole("option", { name: "中值滤波" }).click();
-  await tuningPanel.getByRole("switch", { name: "开启阈值操作" }).click();
-  await tuningPanel.getByLabel("丢弃阈值").fill("20");
+  await tuningPanel.getByRole("switch", { name: "开启丢点操作" }).click();
+  await tuningPanel.getByLabel("丢点阈值").fill("20");
   await expect(tuningPanel).toContainText("有效点");
 });
 

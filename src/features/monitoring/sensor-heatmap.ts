@@ -8,6 +8,7 @@ export interface SensorHeatmapFrame {
   values: number[];
   pixels: Uint8ClampedArray;
   complete: boolean;
+  minValue: number;
   peakValue: number;
 }
 
@@ -38,6 +39,7 @@ export function buildSensorHeatmap(
 ): SensorHeatmapFrame {
   const values = decodeSensorHex(hexData).slice(0, columns * rows);
   const pixels = new Uint8ClampedArray(columns * rows * 4);
+  const minValue = values.length ? Math.min(...values) : 0;
   const peakValue = Math.max(0, ...values);
 
   values.forEach((value, sourceIndex) => {
@@ -57,6 +59,7 @@ export function buildSensorHeatmap(
     values,
     pixels,
     complete: values.length === SENSOR_POINT_COUNT,
+    minValue,
     peakValue,
   };
 }
@@ -72,7 +75,7 @@ export function getSensorPointPosition(sourceIndex: number): {
 }
 
 export function scaleSensorPoint(value: number): number {
-  return Math.min(255, Math.max(0, Math.round(value)));
+  return Math.min(255, Math.max(0, Math.round(value * 16)));
 }
 
 function sensorValueColor(value: number): readonly [number, number, number] {

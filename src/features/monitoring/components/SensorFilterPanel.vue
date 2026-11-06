@@ -40,22 +40,22 @@
         </el-select>
       </div>
       <div class="sensor-filter-panel__row" role="row">
-        <span role="cell">阈值操作</span>
+        <span role="cell">丢点操作</span>
         <strong role="cell">{{ modelValue.thresholdEnabled ? "已开启" : "已关闭" }}</strong>
         <el-switch
           :model-value="modelValue.thresholdEnabled"
-          aria-label="开启阈值操作"
+          aria-label="开启丢点操作"
           @update:model-value="setThresholdEnabled"
         />
       </div>
       <div class="sensor-filter-panel__row" role="row">
-        <span role="cell">显示阈值</span>
+        <span role="cell">丢点阈值</span>
         <strong role="cell">
           {{ modelValue.thresholdEnabled ? `低于 ${modelValue.threshold}` : "不丢弃" }}
         </strong>
         <el-input-number
           :model-value="modelValue.threshold"
-          aria-label="丢弃阈值"
+          aria-label="丢点阈值"
           :disabled="!modelValue.thresholdEnabled"
           :min="0"
           :max="255"
@@ -98,7 +98,7 @@
     </div>
     <p class="sensor-filter-panel__notice">
       原始数据始终保留。两个开关默认关闭，此时 1792 个点全部按原值显示；
-      滤波、窗口和阈值只有你手动开启后才生效。
+      滤波、窗口和丢点只有你手动开启后才生效。
     </p>
   </section>
 </template>
