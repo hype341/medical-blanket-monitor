@@ -33,6 +33,9 @@ Thumbs.db
 .eslintcache
 .stylelintcache
 
+# Backend runtime state
+backend/data/
+
 # Lock files (use pnpm)
 package-lock.json
 yarn.lock

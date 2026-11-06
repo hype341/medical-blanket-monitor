@@ -244,6 +244,44 @@ test("administrator can delete a bed from bed monitoring", async ({ page }) => {
   await expect(page.locator(".bed-list-header__count strong")).toHaveText(String(before - 1));
 });
 
+test("administrator can delete blankets, cameras, and staff with guarded organization data", async ({
+  page,
+}) => {
+  await loginAsAdmin(page);
+
+  await openDevicePage(page, "毯子管理");
+  const blanketRowsBefore = await page.locator(".blanket-row").count();
+  await page
+    .locator(".blanket-row")
+    .first()
+    .getByRole("button", { name: "删除", exact: true })
+    .click();
+  await page.getByRole("button", { name: "删除毯子", exact: true }).click();
+  await expect(page.getByText("毯子已删除")).toBeVisible();
+  await expect(page.locator(".blanket-row")).toHaveCount(blanketRowsBefore - 1);
+
+  await openDevicePage(page, "摄像头管理");
+  await expect(page.getByRole("heading", { name: "摄像头管理" })).toBeVisible();
+  await expect(page.locator(".camera-table .el-table__row").first()).toBeVisible();
+  const cameraRowsBefore = await page.locator(".camera-table .el-table__row").count();
+  await page.locator(".camera-table .el-table__row").first().getByRole("button", { name: "删除" }).click();
+  await page.getByRole("button", { name: "删除摄像头", exact: true }).click();
+  await expect(page.getByText("摄像头已删除")).toBeVisible();
+  await expect(page.locator(".camera-table .el-table__row")).toHaveCount(cameraRowsBefore - 1);
+
+  await page.goto("/#/admin/staff", { waitUntil: "networkidle" });
+  const nurseRow = page.locator(".staff-row").filter({ hasText: "值班护士" }).first();
+  await nurseRow.getByRole("button", { name: "删除", exact: true }).click();
+  await page.getByRole("button", { name: "删除账号", exact: true }).click();
+  await expect(page.getByText("人员账号已删除")).toBeVisible();
+  await expect(page.locator(".staff-row").filter({ hasText: "值班护士" })).toHaveCount(0);
+
+  await page.goto("/#/admin/wards", { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "删除病区", exact: true }).click();
+  await page.getByRole("button", { name: "删除病区", exact: true }).last().click();
+  await expect(page.getByText("还有病房或床位，不能直接删除")).toBeVisible();
+});
+
 test("only administrators can manage wards and rooms", async ({ page }) => {
   await loginAsAdmin(page);
   await page.getByText("管理设置", { exact: true }).first().click();
@@ -542,6 +580,10 @@ test("developer can still see technical MQTT and camera links in bed detail", as
   await page.getByRole("button", { name: "完整报文", exact: true }).click();
   await expect(page.locator(".sensor-links__list code").first()).toContainText("/api/public/sensors/");
   await expect(page.locator(".sensor-links__list code").first()).not.toContainText("/hex");
+  await page.getByRole("button", { name: "1792 字节数据", exact: true }).click();
+  await page.locator(".sensor-links__list").getByRole("button", { name: "打开" }).click();
+  await expect(page).toHaveURL(/\/api\/public\/sensors\/bed-a-01\/hex$/);
+  await expect(page.locator("body")).toContainText(/^[0-9a-f]{2}(,[0-9a-f]{2})+/);
 });
 
 test("developer can rename the platform brand", async ({ page }) => {
@@ -585,6 +627,21 @@ test("refreshing and switching monitored pages does not raise Vue DOM errors", a
   }
 
   expect(pageErrors).toEqual([]);
+});
+
+test("refresh current tab stays in the same page and keeps the login session", async ({ page }) => {
+  await loginAs(page, "developer");
+  await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+  let popupCount = 0;
+  page.on("popup", () => {
+    popupCount += 1;
+  });
+
+  await page.getByRole("button", { name: "刷新当前" }).first().click();
+  await page.waitForTimeout(800);
+  expect(popupCount).toBe(0);
+  await expect(page).toHaveURL(/#\/beds\/bed-a-01/);
+  await expect(page.getByRole("heading", { name: /01 床/ })).toBeVisible();
 });
 
 test("developer can send a bed notification through the MQTT service", async ({ page }) => {
