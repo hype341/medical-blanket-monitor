@@ -480,6 +480,9 @@ test("developer can inspect MQTT credentials and runtime diagnostics", async ({ 
   await expect(page.locator(".camera-document .document-preview")).toContainText(
     "http://10.208.236.131:8889/camera-01/whep",
   );
+  await expect(page.locator(".camera-document .document-preview")).toContainText(
+    "rtmp://10.208.236.131:1935/camera-01",
+  );
 
   await page.getByRole("button", { name: "批量导入", exact: true }).click();
   const csvRows = Array.from(

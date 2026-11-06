@@ -58,7 +58,9 @@ describe("online documentation", () => {
     expect(document).toContain("浏览器直接观看");
     expect(document).toContain("http://10.208.236.131:8889/camera-01");
     expect(document).toContain("http://10.208.236.131:8889/camera-01/whep");
+    expect(document).toContain("http://10.208.236.131:8888/camera-01/index.m3u8");
     expect(document).toContain("rtsp://10.208.236.131:8554/camera-01");
+    expect(document).toContain("rtmp://10.208.236.131:1935/camera-01");
     expect(document).toContain("301 病房 / 01 床");
     expect(document).toContain("openCameraPlaybackStream");
   });

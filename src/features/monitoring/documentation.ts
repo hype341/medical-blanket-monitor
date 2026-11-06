@@ -348,6 +348,7 @@ export function generateVideoDocumentation(data: MonitoringData, generatedAt: st
 - 设备标识：\`${camera.cameraKey}\`
 - MediaMTX 路径：\`${endpoints.mediaPath}\`
 - 设备状态：\`${camera.status}\`
+- 摄像头上行推流：\`${endpoints.rtmpUrl}\`
 - 浏览器直接观看：\`${endpoints.webRtcViewUrl}\`
 - WebRTC：\`${endpoints.webRtcUrl}\`
 - HLS：\`${endpoints.hlsUrl}\`
