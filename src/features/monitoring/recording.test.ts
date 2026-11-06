@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   buildClipWindow,
   findPlaybackSegment,
+  mapPlaybackVideoTime,
   mapMediaMtxPlaybackItems,
   normalizePlaybackSegments,
   parseAlarmMessage,
   pruneExpiredSegments,
+  resolvePlaybackSource,
 } from "./recording";
 
 const segments = [
@@ -140,6 +142,46 @@ describe("rolling recording timeline", () => {
     expect(normalized.map((segment) => segment.id)).toEqual(["segment-01", "extended"]);
     expect(normalized[1].startAt).toBe("2026-11-04T17:05:00.000Z");
     expect(normalized[1].contentOffsetSeconds).toBe(30);
+  });
+
+  it("maps video time back to the visible timeline after an overlap is trimmed", () => {
+    const normalized = normalizePlaybackSegments([
+      {
+        ...segments[0],
+        startAt: "2026-11-04T17:00:00.000Z",
+        endAt: "2026-11-04T17:05:00.000Z",
+      },
+      {
+        ...segments[1],
+        id: "overlap",
+        startAt: "2026-11-04T17:04:00.000Z",
+        endAt: "2026-11-04T17:10:00.000Z",
+      },
+    ]);
+
+    expect(mapPlaybackVideoTime(normalized[1], 60)).toBe("2026-11-04T17:05:00.000Z");
+    expect(mapPlaybackVideoTime(normalized[1], 120)).toBe("2026-11-04T17:06:00.000Z");
+  });
+
+  it("starts MediaMTX playback from the requested timestamp when seeking", () => {
+    const [segment] = mapMediaMtxPlaybackItems(
+      [
+        {
+          start: "2026-11-04T17:00:00.000Z",
+          duration: 3_600,
+          url: "http://127.0.0.1:9996/get?path=camera-01&start=17%3A00%3A00Z&duration=3600",
+        },
+      ],
+      "camera-01",
+      "http://10.208.236.131:9996",
+    );
+
+    const resolved = resolvePlaybackSource(segment, "2026-11-04T17:20:00.000Z");
+    const playbackUrl = new URL(resolved.playbackUrl);
+    expect(playbackUrl.searchParams.get("start")).toBe("2026-11-04T17:20:00.000Z");
+    expect(playbackUrl.searchParams.get("path")).toBe("camera-01");
+    expect(resolved.timelineStartAt).toBe("2026-11-04T17:20:00.000Z");
+    expect(resolved.videoOffsetSeconds).toBe(0);
   });
 
   it("removes segments outside the server retention window", () => {

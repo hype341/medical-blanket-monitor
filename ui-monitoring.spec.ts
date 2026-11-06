@@ -50,6 +50,36 @@ async function logoutFromUi(page: Page): Promise<void> {
   await page.waitForURL("**/#/login**");
 }
 
+function clockSeconds(value: string | null): number {
+  const match = value?.match(/(\d{2}):(\d{2}):(\d{2})/);
+  if (!match) return Number.NaN;
+  return Number(match[1]) * 3_600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
+function clockDistance(value: string | null, target: Date): number {
+  const current = clockSeconds(value);
+  const expected = target.getHours() * 3_600 + target.getMinutes() * 60 + target.getSeconds();
+  const direct = Math.abs(current - expected);
+  return Math.min(direct, 86_400 - direct);
+}
+
+async function seekRecordingTo(page: Page, target: Date): Promise<number> {
+  const localValue = await page.evaluate((iso) => {
+    const date = new Date(iso);
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+      .toISOString()
+      .slice(0, 19);
+  }, target.toISOString());
+  const input = page.locator('input[aria-label="按时间定位回放"]');
+  await input.fill(localValue);
+  const startedAt = Date.now();
+  await page.getByRole("button", { name: "回放此时间", exact: true }).click();
+  await expect(page.locator(".recording-player")).toHaveAttribute("data-state", "playing", {
+    timeout: 8_000,
+  });
+  return Date.now() - startedAt;
+}
+
 async function openDevicePage(page: Page, label: string): Promise<void> {
   const group = page.locator(".el-sub-menu").filter({ hasText: "设备管理" });
   await group.locator(".el-sub-menu__title").click();
@@ -562,6 +592,75 @@ test("recorded video plays and advances when the camera node is online", async (
   await page.waitForTimeout(2_500);
   await expect(timeLabel).not.toHaveText(before ?? "");
   await page.screenshot({ path: "test-results/monitoring-playback-live.png", fullPage: true });
+});
+
+test("recording seeks quickly and switches to another timestamp without stale loading", async ({
+  page,
+}) => {
+  const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
+  test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+
+  await loginAs(page, "nurse");
+  await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+  await expect(page.locator(".recording-timeline__segment").first()).toBeVisible({
+    timeout: 20_000,
+  });
+
+  const firstTarget = new Date(Date.now() - 5 * 60_000);
+  const firstDuration = await seekRecordingTo(page, firstTarget);
+  expect(firstDuration).toBeLessThan(8_000);
+  await page.waitForTimeout(750);
+  await expect
+    .poll(
+      async () =>
+        clockDistance(
+          await page.locator(".recording-player__chrome strong").textContent(),
+          firstTarget,
+        ),
+      { timeout: 4_000 },
+    )
+    .toBeLessThanOrEqual(3);
+
+  const secondTarget = new Date(firstTarget.getTime() - 60_000);
+  const secondDuration = await seekRecordingTo(page, secondTarget);
+  expect(secondDuration).toBeLessThan(5_000);
+  await expect
+    .poll(
+      async () =>
+        clockDistance(
+          await page.locator(".recording-player__chrome strong").textContent(),
+          secondTarget,
+        ),
+      { timeout: 4_000 },
+    )
+    .toBeLessThanOrEqual(3);
+});
+
+test("recorded playback keeps advancing without long visible freezes", async ({ page }) => {
+  const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
+  test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+
+  await loginAs(page, "nurse");
+  await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+  const segment = page.locator(".recording-timeline__segment").first();
+  await expect(segment).toBeVisible({ timeout: 20_000 });
+  await segment.click();
+
+  const player = page.locator(".recording-player");
+  await expect(player).toHaveAttribute("data-state", "playing", { timeout: 20_000 });
+  const timeLabel = player.locator(".recording-player__chrome strong");
+  const samples: string[] = [];
+  for (let index = 0; index < 20; index += 1) {
+    samples.push((await timeLabel.textContent()) ?? "");
+    await page.waitForTimeout(500);
+  }
+
+  const seconds = samples.map(clockSeconds).filter(Number.isFinite);
+  const gaps = seconds.slice(1).map((value, index) => value - seconds[index]);
+  expect(seconds.length).toBeGreaterThan(18);
+  expect(gaps.every((gap) => gap >= 0), `playback clock samples: ${samples.join(", ")}`).toBe(true);
+  expect(Math.max(...gaps)).toBeLessThanOrEqual(2);
+  expect(seconds.at(-1)! - seconds[0]).toBeGreaterThanOrEqual(8);
 });
 
 test("developer can still see technical MQTT and camera links in bed detail", async ({ page }) => {

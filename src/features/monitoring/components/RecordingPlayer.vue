@@ -49,7 +49,11 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import type { RecordingSegment } from "../recording";
+import {
+  mapPlaybackVideoTime,
+  resolvePlaybackSource,
+  type RecordingSegment,
+} from "../recording";
 
 type Slot = "a" | "b";
 type MediaState = "empty" | "loading" | "buffering" | "playing" | "paused" | "ended" | "error";
@@ -138,24 +142,6 @@ function findNextSegment(segment: RecordingSegment): RecordingSegment | null {
   return index >= 0 ? (sortedSegments.value[index + 1] ?? null) : null;
 }
 
-function offsetSeconds(
-  video: HTMLVideoElement,
-  segment: RecordingSegment,
-  targetAt: string,
-): number {
-  const segmentStart = new Date(segment.startAt).getTime();
-  const target = new Date(targetAt).getTime();
-  const duration = Number.isFinite(video.duration) ? video.duration : 0;
-  const contentOffset = segment.contentOffsetSeconds ?? 0;
-  return Math.max(
-    0,
-    Math.min(
-      duration || Number.MAX_SAFE_INTEGER,
-      contentOffset + (target - segmentStart) / 1000,
-    ),
-  );
-}
-
 async function waitForMetadata(video: HTMLVideoElement, generation: number): Promise<void> {
   if (video.readyState >= HTMLMediaElement.HAVE_METADATA) return;
 
@@ -187,6 +173,49 @@ async function waitForMetadata(video: HTMLVideoElement, generation: number): Pro
   });
 }
 
+async function seekVideo(
+  video: HTMLVideoElement,
+  targetSeconds: number,
+  generation: number,
+): Promise<void> {
+  const target = Math.max(
+    0,
+    Math.min(
+      Number.isFinite(video.duration) ? video.duration : Number.MAX_SAFE_INTEGER,
+      targetSeconds,
+    ),
+  );
+  if (!video.seeking && Math.abs(video.currentTime - target) < 0.05) return;
+
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("录像定位超时"));
+    }, 8_000);
+    const onSeeked = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error("录像定位失败"));
+    };
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      video.removeEventListener("seeked", onSeeked);
+      video.removeEventListener("error", onError);
+    };
+
+    video.addEventListener("seeked", onSeeked, { once: true });
+    video.addEventListener("error", onError, { once: true });
+    video.currentTime = target;
+    if (generation !== loadGeneration) {
+      cleanup();
+      reject(new Error("已切换回放位置"));
+    }
+  });
+}
+
 async function loadSegment(
   slot: Slot,
   segment: RecordingSegment,
@@ -197,14 +226,18 @@ async function loadSegment(
   if (!video) throw new Error("视频播放器尚未就绪");
 
   const generation = loadGeneration;
+  const source = resolvePlaybackSource(segment, targetAt);
   video.pause();
-  video.src = segment.playbackUrl;
+  video.src = source.playbackUrl;
   video.load();
   await waitForMetadata(video, generation);
   if (generation !== loadGeneration) throw new Error("已切换回放位置");
 
-  video.currentTime = offsetSeconds(video, segment, targetAt);
+  await seekVideo(video, source.targetVideoSeconds, generation);
+  if (generation !== loadGeneration) throw new Error("已切换回放位置");
   video.dataset.segmentId = segment.id;
+  video.dataset.timelineStartAt = source.timelineStartAt;
+  video.dataset.videoOffsetSeconds = String(source.videoOffsetSeconds);
   if (autoplay) await video.play();
 }
 
@@ -272,10 +305,6 @@ async function switchToNext(slot: Slot): Promise<void> {
       await loadSegment(nextSlot, next, next.startAt, false);
     }
     if (!nextVideo) return;
-    nextVideo.currentTime = Math.min(
-      next.contentOffsetSeconds ?? 0,
-      Number.isFinite(nextVideo.duration) ? nextVideo.duration : Number.MAX_SAFE_INTEGER,
-    );
     await nextVideo.play();
     const previous = getVideo(slot);
     previous?.pause();
@@ -298,7 +327,15 @@ function handleTimeUpdate(slot: Slot): void {
   const segment = sortedSegments.value.find((item) => item.id === activeSegmentId.value);
   if (!video || !segment) return;
 
-  currentAbsoluteMs.value = new Date(segment.startAt).getTime() + video.currentTime * 1000;
+  const absoluteAt = mapPlaybackVideoTime(
+    {
+      ...segment,
+      startAt: video.dataset.timelineStartAt || segment.startAt,
+      contentOffsetSeconds: Number(video.dataset.videoOffsetSeconds ?? segment.contentOffsetSeconds ?? 0),
+    },
+    video.currentTime,
+  );
+  currentAbsoluteMs.value = new Date(absoluteAt).getTime();
   emit("time-update", new Date(currentAbsoluteMs.value).toISOString());
 
   const remaining = video.duration - video.currentTime;

@@ -54,6 +54,13 @@ export interface MediaMtxPlaybackItem {
   url: string;
 }
 
+export interface ResolvedPlaybackSource {
+  playbackUrl: string;
+  timelineStartAt: string;
+  videoOffsetSeconds: number;
+  targetVideoSeconds: number;
+}
+
 export function mapMediaMtxPlaybackItems(
   items: MediaMtxPlaybackItem[],
   cameraKey: string,
@@ -160,6 +167,55 @@ export function findPlaybackSegment(
         new Date(segment.endAt).getTime() + toleranceMs >= target,
     ) ?? null
   );
+}
+
+export function mapPlaybackVideoTime(
+  segment: RecordingSegment,
+  videoTimeSeconds: number,
+): string {
+  const visibleSeconds = Math.max(0, videoTimeSeconds - (segment.contentOffsetSeconds ?? 0));
+  return new Date(new Date(segment.startAt).getTime() + visibleSeconds * 1000).toISOString();
+}
+
+export function resolvePlaybackSource(
+  segment: RecordingSegment,
+  targetAt: string,
+): ResolvedPlaybackSource {
+  const segmentStart = new Date(segment.startAt).getTime();
+  const segmentEnd = new Date(segment.endAt).getTime();
+  const requested = Math.min(
+    segmentEnd,
+    Math.max(segmentStart, new Date(targetAt).getTime()),
+  );
+  const contentOffset = segment.contentOffsetSeconds ?? 0;
+
+  try {
+    const url = new URL(segment.playbackUrl);
+    const isMediaMtxStream = url.pathname.endsWith("/get") && url.searchParams.has("path");
+    if (
+      isMediaMtxStream &&
+      (requested - segmentStart > 250 || contentOffset > 0.25)
+    ) {
+      const timelineStartAt = new Date(requested).toISOString();
+      url.searchParams.set("start", timelineStartAt);
+      url.searchParams.set("duration", String(Math.max(0, (segmentEnd - requested) / 1000)));
+      return {
+        playbackUrl: url.toString(),
+        timelineStartAt,
+        videoOffsetSeconds: 0,
+        targetVideoSeconds: 0,
+      };
+    }
+  } catch {
+    // Non-URL playback sources keep the normal media-element seek behavior.
+  }
+
+  return {
+    playbackUrl: segment.playbackUrl,
+    timelineStartAt: segment.startAt,
+    videoOffsetSeconds: contentOffset,
+    targetVideoSeconds: Math.max(0, contentOffset + (requested - segmentStart) / 1000),
+  };
 }
 
 export function pruneExpiredSegments(
