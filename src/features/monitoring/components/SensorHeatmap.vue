@@ -55,7 +55,13 @@
       <span v-else>毯面压力分布</span>
       <span class="sensor-heatmap__footer-meta">
         <b v-if="showTechnicalDetails">
-          {{ processingMode === "RAW" ? "仅原始数据" : "已启用处理" }}
+          {{
+            gainEnabled
+              ? `幂次增益 ^${gainPower} × ${gainMultiplier}`
+              : processingMode === "RAW"
+                ? "仅原始数据"
+                : "已启用处理"
+          }}
         </b>
         <span class="sensor-heatmap__scale">白 <i /> 红</span>
       </span>
@@ -71,7 +77,11 @@
         <img :src="snapshotUrl" alt="放大的 64 列 28 行毯面感应热力图" />
         <div v-if="showTechnicalDetails">
           <span>28 点/列 × 64 列 · 共 1792 点</span>
-          <span>原始范围 {{ minValue }}–{{ peakValue }} · 显示值 = 原始值 × 16</span>
+          <span v-if="gainEnabled">
+            原始范围 {{ minValue }}–{{ peakValue }} ·
+            显示值 = 原始值^{{ gainPower }} × {{ gainMultiplier }}
+          </span>
+          <span v-else>原始范围 {{ minValue }}–{{ peakValue }} · 原始值直接显示</span>
         </div>
       </div>
       <template #footer>
@@ -99,6 +109,9 @@ const props = withDefaults(
     streamStatus?: "connecting" | "connected" | "reconnecting" | "closed";
     processingMode?: "RAW" | "PROCESSED";
     showTechnicalDetails?: boolean;
+    gainEnabled?: boolean;
+    gainPower?: number;
+    gainMultiplier?: number;
   }>(),
   {
     hexData: "",
@@ -107,6 +120,9 @@ const props = withDefaults(
     streamStatus: "closed",
     processingMode: "RAW",
     showTechnicalDetails: false,
+    gainEnabled: false,
+    gainPower: 1,
+    gainMultiplier: 16,
   },
 );
 
@@ -117,15 +133,21 @@ const snapshotUrl = ref("");
 const sourceCanvas = document.createElement("canvas");
 sourceCanvas.width = SENSOR_HEATMAP_COLUMNS;
 sourceCanvas.height = SENSOR_HEATMAP_ROWS;
-const pointCount = computed(
-  () => props.hexData.split(",").filter((value) => value.trim()).length,
+const heatmapFrame = computed(() =>
+  buildSensorHeatmap(
+    props.hexData,
+    SENSOR_HEATMAP_COLUMNS,
+    SENSOR_HEATMAP_ROWS,
+    {
+      gainEnabled: props.gainEnabled,
+      gainPower: props.gainPower,
+      gainMultiplier: props.gainMultiplier,
+    },
+  ),
 );
-const peakValue = computed(() =>
-  buildSensorHeatmap(props.hexData).peakValue,
-);
-const minValue = computed(() =>
-  buildSensorHeatmap(props.hexData).minValue,
-);
+const pointCount = computed(() => heatmapFrame.value.values.length);
+const peakValue = computed(() => heatmapFrame.value.peakValue);
+const minValue = computed(() => heatmapFrame.value.minValue);
 
 let renderTimer: ReturnType<typeof setTimeout> | null = null;
 let lastRenderedAt = 0;
@@ -138,7 +160,7 @@ function drawHeatmap(): void {
   const sourceContext = sourceCanvas.getContext("2d");
   if (!context || !sourceContext) return;
 
-  const frame = buildSensorHeatmap(props.hexData);
+  const frame = heatmapFrame.value;
   sourceContext.clearRect(0, 0, frame.columns, frame.rows);
   const imageData = sourceContext.createImageData(frame.columns, frame.rows);
   imageData.data.set(frame.pixels);

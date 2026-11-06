@@ -12,6 +12,12 @@ export interface SensorHeatmapFrame {
   peakValue: number;
 }
 
+export interface SensorHeatmapDisplayOptions {
+  gainEnabled?: boolean;
+  gainPower?: number;
+  gainMultiplier?: number;
+}
+
 const COLOR_STOPS = [
   { value: 0, color: [248, 250, 249] },
   { value: 64, color: [255, 238, 199] },
@@ -36,6 +42,7 @@ export function buildSensorHeatmap(
   hexData: string | null | undefined,
   columns = SENSOR_HEATMAP_COLUMNS,
   rows = SENSOR_HEATMAP_ROWS,
+  display: SensorHeatmapDisplayOptions = {},
 ): SensorHeatmapFrame {
   const values = decodeSensorHex(hexData).slice(0, columns * rows);
   const pixels = new Uint8ClampedArray(columns * rows * 4);
@@ -43,7 +50,12 @@ export function buildSensorHeatmap(
   const peakValue = Math.max(0, ...values);
 
   values.forEach((value, sourceIndex) => {
-    const displayValue = scaleSensorPoint(value);
+    const displayValue = scaleSensorPoint(
+      value,
+      display.gainEnabled,
+      display.gainPower,
+      display.gainMultiplier,
+    );
     const [red, green, blue] = sensorValueColor(displayValue);
     const { row, column } = getSensorPointPosition(sourceIndex);
     const offset = (row * columns + column) * 4;
@@ -74,8 +86,17 @@ export function getSensorPointPosition(sourceIndex: number): {
   };
 }
 
-export function scaleSensorPoint(value: number): number {
-  return Math.min(255, Math.max(0, Math.round(value * 16)));
+export function scaleSensorPoint(
+  value: number,
+  gainEnabled = false,
+  gainPower = 1,
+  gainMultiplier = 16,
+): number {
+  const normalized = Math.min(255, Math.max(0, value));
+  if (!gainEnabled) return Math.round(normalized);
+  const power = Math.min(4, Math.max(0.1, gainPower));
+  const multiplier = Math.min(32, Math.max(0.1, gainMultiplier));
+  return Math.min(255, Math.max(0, Math.round(normalized ** power * multiplier)));
 }
 
 function sensorValueColor(value: number): readonly [number, number, number] {

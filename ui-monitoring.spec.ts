@@ -263,12 +263,62 @@ test("only developers can open sensor tuning from the left menu", async ({ page 
   const tuningPanel = page.locator(".sensor-filter-panel");
   await expect(tuningPanel.getByRole("heading", { name: "数据滤波调参" })).toBeVisible();
   await expect(tuningPanel).toContainText("实时平均值");
-  await tuningPanel.getByRole("switch", { name: "开启滤波操作" }).click();
-  await tuningPanel.getByLabel("滤波方式").click();
+  const activePointRow = tuningPanel
+    .locator(".sensor-filter-panel__row")
+    .filter({ hasText: "有效点" });
+  await expect
+    .poll(async () => Number(await activePointRow.locator("strong").textContent()))
+    .toBe(1792);
+  await tuningPanel
+    .locator(".sensor-filter-panel__row")
+    .filter({ hasText: "滤波操作" })
+    .locator(".el-switch")
+    .click();
+  await tuningPanel
+    .locator(".sensor-filter-panel__row")
+    .filter({ hasText: "滤波方式" })
+    .locator(".el-select")
+    .click();
   await page.getByRole("option", { name: "中值滤波" }).click();
-  await tuningPanel.getByRole("switch", { name: "开启丢点操作" }).click();
+  await tuningPanel
+    .locator(".sensor-filter-panel__row")
+    .filter({ hasText: "丢点操作" })
+    .locator(".el-switch")
+    .click();
   await tuningPanel.getByLabel("丢点阈值").fill("20");
-  await expect(tuningPanel).toContainText("有效点");
+  await expect
+    .poll(async () => Number(await activePointRow.locator("strong").textContent()))
+    .toBeLessThan(1792);
+  await tuningPanel
+    .locator(".sensor-filter-panel__row")
+    .filter({ hasText: "幂次增强操作" })
+    .locator(".el-switch")
+    .click();
+  await tuningPanel.getByLabel("显示次方").fill("2");
+  await tuningPanel.getByLabel("显示倍数").fill("16");
+  await expect(tuningPanel).toContainText("^ 2");
+  await expect(tuningPanel).toContainText("× 16");
+});
+
+test("developer tuning page keeps receiving and recomputing live sensor data", async ({
+  page,
+}) => {
+  await loginAs(page, "developer");
+  await page.getByText("调参设置", { exact: true }).click();
+  await expect(page.getByRole("heading", { name: "毯面数据调参" })).toBeVisible();
+
+  const rawData = page.locator(".sensor-graphic__raw-data code");
+  const averageRow = page
+    .locator(".sensor-filter-panel__row")
+    .filter({ hasText: "实时平均值" })
+    .locator("strong");
+  const samples: string[] = [];
+  for (let index = 0; index < 8; index += 1) {
+    samples.push(`${await rawData.textContent()}|${await averageRow.textContent()}`);
+    await page.waitForTimeout(1_000);
+  }
+
+  expect(new Set(samples).size).toBeGreaterThan(1);
 });
 
 test("bed monitor stays usable on a narrow screen", async ({ page }) => {

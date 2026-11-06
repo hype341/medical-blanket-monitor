@@ -4,6 +4,9 @@ import { applySensorFilter, type SensorFilterConfig } from "./sensor-filter";
 const baseConfig: SensorFilterConfig = {
   filterEnabled: false,
   thresholdEnabled: false,
+  gainEnabled: false,
+  gainPower: 1,
+  gainMultiplier: 16,
   type: "NONE",
   threshold: 0,
   windowSize: 3,

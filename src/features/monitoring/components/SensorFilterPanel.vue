@@ -53,15 +53,16 @@
         <strong role="cell">
           {{ modelValue.thresholdEnabled ? `低于 ${modelValue.threshold}` : "不丢弃" }}
         </strong>
-        <el-input-number
-          :model-value="modelValue.threshold"
+        <input
+          class="sensor-filter-panel__number"
+          :value="modelValue.threshold"
+          type="number"
+          min="0"
+          max="255"
+          step="1"
           aria-label="丢点阈值"
           :disabled="!modelValue.thresholdEnabled"
-          :min="0"
-          :max="255"
-          :step="1"
-          controls-position="right"
-          @update:model-value="setThreshold"
+          @input="handleThresholdInput"
         />
       </div>
       <div class="sensor-filter-panel__row" role="row">
@@ -77,6 +78,45 @@
           <el-option label="5 × 5" :value="5" />
           <el-option label="7 × 7" :value="7" />
         </el-select>
+      </div>
+      <div class="sensor-filter-panel__row" role="row">
+        <span role="cell">幂次增强操作</span>
+        <strong role="cell">{{ modelValue.gainEnabled ? "已开启" : "已关闭" }}</strong>
+        <el-switch
+          :model-value="modelValue.gainEnabled"
+          aria-label="开启幂次增强操作"
+          @update:model-value="setGainEnabled"
+        />
+      </div>
+      <div class="sensor-filter-panel__row" role="row">
+        <span role="cell">原始值次方</span>
+        <strong role="cell">^ {{ modelValue.gainPower }}</strong>
+        <input
+          class="sensor-filter-panel__number"
+          :value="modelValue.gainPower"
+          type="number"
+          min="0.1"
+          max="4"
+          step="0.1"
+          aria-label="显示次方"
+          :disabled="!modelValue.gainEnabled"
+          @input="handleGainPowerInput"
+        />
+      </div>
+      <div class="sensor-filter-panel__row" role="row">
+        <span role="cell">显示倍数</span>
+        <strong role="cell">× {{ modelValue.gainMultiplier }}</strong>
+        <input
+          class="sensor-filter-panel__number"
+          :value="modelValue.gainMultiplier"
+          type="number"
+          min="0.1"
+          max="32"
+          step="0.1"
+          aria-label="显示倍数"
+          :disabled="!modelValue.gainEnabled"
+          @input="handleGainMultiplierInput"
+        />
       </div>
       <div class="sensor-filter-panel__row" role="row">
         <span role="cell">实时平均值</span>
@@ -147,10 +187,34 @@ function setThresholdEnabled(value: string | number | boolean): void {
   });
 }
 
-function setThreshold(value: number | undefined): void {
+function setGainEnabled(value: string | number | boolean): void {
   emit("update:modelValue", {
     ...props.modelValue,
-    threshold: Math.min(255, Math.max(0, Number(value) || 0)),
+    gainEnabled: Boolean(value),
+  });
+}
+
+function handleGainPowerInput(event: Event): void {
+  const value = Number((event.target as HTMLInputElement).value);
+  emit("update:modelValue", {
+    ...props.modelValue,
+    gainPower: Math.min(4, Math.max(0.1, value || 1)),
+  });
+}
+
+function handleGainMultiplierInput(event: Event): void {
+  const value = Number((event.target as HTMLInputElement).value);
+  emit("update:modelValue", {
+    ...props.modelValue,
+    gainMultiplier: Math.min(32, Math.max(0.1, value || 16)),
+  });
+}
+
+function handleThresholdInput(event: Event): void {
+  const value = Number((event.target as HTMLInputElement).value);
+  emit("update:modelValue", {
+    ...props.modelValue,
+    threshold: Math.min(255, Math.max(0, value || 0)),
   });
 }
 
@@ -162,6 +226,9 @@ function reset(): void {
   emit("update:modelValue", {
     filterEnabled: false,
     thresholdEnabled: false,
+    gainEnabled: false,
+    gainPower: 1,
+    gainMultiplier: 16,
     type: "NONE",
     threshold: 0,
     windowSize: 3,
@@ -258,8 +325,29 @@ function formatMean(value: number): string {
   }
 
   :deep(.el-select),
-  :deep(.el-input-number) {
+  .sensor-filter-panel__number {
     width: 100%;
+  }
+}
+
+.sensor-filter-panel__number {
+  height: 30px;
+  padding: 0 9px;
+  font-family: "Avenir Next", sans-serif;
+  font-size: 11px;
+  color: #296759;
+  background: #fff;
+  border: 1px solid #cadbd5;
+
+  &:disabled {
+    color: #99aaa4;
+    cursor: not-allowed;
+    background: #f3f6f5;
+  }
+
+  &:focus {
+    outline: 2px solid #2f806a;
+    outline-offset: 1px;
   }
 }
 

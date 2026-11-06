@@ -9,6 +9,9 @@ export type SensorFilterType = "NONE" | "MEAN" | "MEDIAN" | "GAUSSIAN";
 export interface SensorFilterConfig {
   filterEnabled: boolean;
   thresholdEnabled: boolean;
+  gainEnabled: boolean;
+  gainPower: number;
+  gainMultiplier: number;
   type: SensorFilterType;
   threshold: number;
   windowSize: 3 | 5 | 7;
@@ -26,12 +29,15 @@ export interface SensorFilterResult {
 export const DEFAULT_SENSOR_FILTER_CONFIG: SensorFilterConfig = {
   filterEnabled: false,
   thresholdEnabled: false,
+  gainEnabled: false,
+  gainPower: 1,
+  gainMultiplier: 16,
   type: "NONE",
   threshold: 0,
   windowSize: 3,
 };
 
-const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v3";
+const SENSOR_FILTER_STORAGE_KEY = "monitoring-sensor-filter-config-v4";
 
 export function loadSensorFilterConfig(): SensorFilterConfig {
   try {
@@ -47,6 +53,12 @@ export function loadSensorFilterConfig(): SensorFilterConfig {
     return {
       filterEnabled: parsed.filterEnabled === true,
       thresholdEnabled: parsed.thresholdEnabled === true,
+      gainEnabled: parsed.gainEnabled === true,
+      gainPower: Math.min(4, Math.max(0.1, Number(parsed.gainPower) || 1)),
+      gainMultiplier: Math.min(
+        32,
+        Math.max(0.1, Number(parsed.gainMultiplier) || 16),
+      ),
       type,
       threshold: Math.min(255, Math.max(0, Number(parsed.threshold) || 0)),
       windowSize:

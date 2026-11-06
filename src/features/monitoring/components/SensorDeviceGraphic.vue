@@ -12,6 +12,9 @@
       :stream-status="streamStatus"
       :processing-mode="processingMode"
       :show-technical-details="showTechnicalDetails"
+      :gain-enabled="gainEnabled"
+      :gain-power="gainPower"
+      :gain-multiplier="gainMultiplier"
     />
 
     <div class="sensor-graphic__identity">
@@ -48,6 +51,9 @@ const props = withDefaults(
     displayData?: string;
     processingMode?: "RAW" | "PROCESSED";
     showTechnicalDetails?: boolean;
+    gainEnabled?: boolean;
+    gainPower?: number;
+    gainMultiplier?: number;
   }>(),
   {
     refreshRateHz: 1,
@@ -55,6 +61,9 @@ const props = withDefaults(
     showRawData: false,
     processingMode: "RAW",
     showTechnicalDetails: false,
+    gainEnabled: false,
+    gainPower: 1,
+    gainMultiplier: 16,
   },
 );
 

@@ -58,6 +58,9 @@
             :show-raw-data="true"
             :display-data="filteredSensorHex"
             :show-technical-details="true"
+            :gain-enabled="filterConfig.gainEnabled"
+            :gain-power="filterConfig.gainPower"
+            :gain-multiplier="filterConfig.gainMultiplier"
             :processing-mode="
               filterConfig.filterEnabled || filterConfig.thresholdEnabled
                 ? 'PROCESSED'
@@ -94,6 +97,8 @@ const selectedBedId = ref("");
 const streamStatus = ref<"connecting" | "connected" | "reconnecting" | "closed">("closed");
 let streamController: SensorStreamController | null = null;
 let streamGeneration = 0;
+let snapshotTimer: ReturnType<typeof setInterval> | null = null;
+let snapshotFetching = false;
 
 const rows = computed(() =>
   store.bedSummaries
@@ -141,11 +146,21 @@ watch(
 
 watch(
   () => [selectedBedId.value, store.mqttSettings.websocketUrl, store.mqttSettings.username],
-  () => connectSensorStream(),
+  () => {
+    connectSensorStream();
+    void refreshSelectedSensorSnapshot();
+  },
 );
 
-onMounted(connectSensorStream);
-onBeforeUnmount(disconnectSensorStream);
+onMounted(() => {
+  connectSensorStream();
+  void refreshSelectedSensorSnapshot();
+  snapshotTimer = setInterval(() => void refreshSelectedSensorSnapshot(), 1_000);
+});
+onBeforeUnmount(() => {
+  disconnectSensorStream();
+  if (snapshotTimer) clearInterval(snapshotTimer);
+});
 
 function connectSensorStream(): void {
   const generation = ++streamGeneration;
@@ -177,6 +192,31 @@ function disconnectSensorStream(): void {
   streamController?.close();
   streamController = null;
   streamStatus.value = "closed";
+}
+
+async function refreshSelectedSensorSnapshot(): Promise<void> {
+  if (document.visibilityState !== "visible" || snapshotFetching) return;
+  const bedId = selectedRow.value?.bed.id;
+  if (!bedId) return;
+  snapshotFetching = true;
+  try {
+    const response = await fetch(`/api/public/sensors/${encodeURIComponent(bedId)}`, {
+      cache: "no-store",
+    });
+    if (!response.ok) return;
+    const snapshot = (await response.json()) as {
+      status?: "ONLINE" | "STALE" | "OFFLINE" | "ALARM";
+      data?: string;
+      observedAt?: string;
+    };
+    if (selectedRow.value?.bed.id === bedId) {
+      store.syncSensorSnapshot(bedId, snapshot);
+    }
+  } catch {
+    // MQTT remains active while the snapshot endpoint recovers.
+  } finally {
+    snapshotFetching = false;
+  }
 }
 </script>
 

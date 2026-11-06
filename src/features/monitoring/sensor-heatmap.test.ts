@@ -34,7 +34,7 @@ describe("sensor heatmap", () => {
         `${frame.pixels[index]},${frame.pixels[index + 1]},${frame.pixels[index + 2]}`,
       );
     }
-    expect(colors.size).toBeGreaterThan(20);
+    expect(colors.size).toBeGreaterThan(10);
   });
 
   it("marks incomplete frames instead of inventing sensor readings", () => {
@@ -56,7 +56,18 @@ describe("sensor heatmap", () => {
   });
 
   it("maps every point linearly without enhancement", () => {
-    expect([0, 1, 4, 100, 255].map(scaleSensorPoint)).toEqual([0, 16, 64, 255, 255]);
+    expect([0, 1, 4, 100, 255].map((value) => scaleSensorPoint(value))).toEqual([
+      0, 1, 4, 100, 255,
+    ]);
+  });
+
+  it("applies the configured power and multiplier only when enabled", () => {
+    expect([0, 1, 4, 16].map((value) => scaleSensorPoint(value, false, 2, 16))).toEqual([
+      0, 1, 4, 16,
+    ]);
+    expect([0, 1, 4, 16].map((value) => scaleSensorPoint(value, true, 2, 16))).toEqual([
+      0, 16, 255, 255,
+    ]);
   });
 
   it("maps every 28-byte group to one top-to-bottom column", () => {

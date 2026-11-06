@@ -137,6 +137,9 @@
           :show-raw-data="store.activeRole === 'DEVELOPER'"
           :display-data="filteredSensorHex"
           :show-technical-details="store.activeRole === 'DEVELOPER'"
+          :gain-enabled="sensorFilterConfig.gainEnabled"
+          :gain-power="sensorFilterConfig.gainPower"
+          :gain-multiplier="sensorFilterConfig.gainMultiplier"
           :processing-mode="
             sensorFilterConfig.filterEnabled || sensorFilterConfig.thresholdEnabled
               ? 'PROCESSED'
