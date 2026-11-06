@@ -4,18 +4,13 @@
     data-testid="sensor-graphic"
     :data-status="sensor?.status ?? 'OFFLINE'"
   >
-    <div class="sensor-graphic__visual" aria-hidden="true">
-      <svg viewBox="0 0 240 160" role="presentation">
-        <path
-          class="sensor-graphic__blanket"
-          d="M33 51c34-20 137-20 174 0v66c-37 20-140 20-174 0V51Z"
-        />
-        <path class="sensor-graphic__fold" d="M65 43v77M108 38v88M151 38v88M191 45v75" />
-        <path class="sensor-graphic__edge" d="M35 108c40 18 130 18 170 0" />
-        <circle class="sensor-graphic__sensor" cx="202" cy="50" r="8" />
-        <path class="sensor-graphic__wave" d="M214 39c7 6 10 15 10 24M220 32c11 9 17 22 16 37" />
-      </svg>
-    </div>
+    <SensorHeatmap
+      class="sensor-graphic__heatmap"
+      :hex-data="sensor?.latestData"
+      :status="sensor?.status"
+      :refresh-rate-hz="refreshRateHz"
+      :stream-status="streamStatus"
+    />
 
     <div class="sensor-graphic__identity">
       <span>毯子传感器</span>
@@ -40,10 +35,19 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { SensorDevice } from "../types";
+import SensorHeatmap from "./SensorHeatmap.vue";
 
-const props = defineProps<{
-  sensor: SensorDevice | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    sensor: SensorDevice | null;
+    refreshRateHz?: number;
+    streamStatus?: "connecting" | "connected" | "reconnecting" | "closed";
+  }>(),
+  {
+    refreshRateHz: 1,
+    streamStatus: "closed",
+  },
+);
 
 const statusLabel = computed(() => {
   const labels = {
@@ -63,7 +67,7 @@ const dataByteCount = computed(
 <style scoped lang="scss">
 .sensor-graphic {
   display: grid;
-  grid-template-columns: minmax(150px, 0.8fr) minmax(170px, 1.2fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
   align-items: center;
   padding: 18px;
@@ -72,42 +76,8 @@ const dataByteCount = computed(
   border: 1px solid #dbe7e2;
 }
 
-.sensor-graphic__visual {
-  overflow: hidden;
-  background: #e9f4ef;
-  border-radius: 2px;
-
-  svg {
-    display: block;
-    width: 100%;
-    height: 125px;
-  }
-}
-
-.sensor-graphic__blanket {
-  fill: #fbfdfc;
-  stroke: #2f806a;
-  stroke-width: 2;
-}
-
-.sensor-graphic__fold,
-.sensor-graphic__edge {
-  fill: none;
-  stroke: #8ebcac;
-  stroke-width: 1;
-}
-
-.sensor-graphic__sensor {
-  fill: #2f806a;
-  stroke: #fff;
-  stroke-width: 3;
-}
-
-.sensor-graphic__wave {
-  fill: none;
-  stroke: #5ca38e;
-  stroke-width: 2;
-  stroke-linecap: round;
+.sensor-graphic__heatmap {
+  grid-column: 1 / -1;
 }
 
 .sensor-graphic__identity {
@@ -206,7 +176,7 @@ const dataByteCount = computed(
 
 @container sensor-panel (width <= 640px) {
   .sensor-graphic {
-    grid-template-columns: minmax(135px, 0.75fr) minmax(0, 1.25fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 14px;
   }
 

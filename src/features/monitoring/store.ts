@@ -1192,6 +1192,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
       sensor.latestData = normalizeHexData(snapshot.data);
     }
     if (snapshot.observedAt) sensor.lastSeenAt = snapshot.observedAt;
+    if (snapshot.metrics) sensor.latestMetrics = structuredClone(snapshot.metrics);
   }
 
   function setCameras(nextCameras: Camera[]): void {

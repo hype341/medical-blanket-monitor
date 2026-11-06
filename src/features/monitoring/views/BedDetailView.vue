@@ -98,10 +98,10 @@
           <span>{{ lastSeenLabel }}</span>
         </header>
 
-        <div class="sensor-refresh">
+        <div v-if="store.activeRole === 'DEVELOPER'" class="sensor-refresh">
           <div>
-            <strong>传感器图形帧率</strong>
-            <small>每秒重绘多少帧，可输入 0.1–10 帧/秒。</small>
+            <strong>热力图刷新帧率</strong>
+            <small>开发者可调整重绘速度，范围 0.1–10 帧/秒。</small>
           </div>
           <div class="sensor-refresh__control">
             <label class="sensor-refresh__input">
@@ -129,8 +129,19 @@
             </div>
           </div>
         </div>
+        <div v-else class="sensor-refresh sensor-refresh--readonly">
+          <div>
+            <strong>实时毯面热力图</strong>
+            <small>按 28 × 64 点阵显示，每个感应点对应 1 字节。</small>
+          </div>
+          <span>{{ sensorRefreshRate }} 帧/秒</span>
+        </div>
 
-        <SensorDeviceGraphic :sensor="summary.sensor" />
+        <SensorDeviceGraphic
+          :sensor="summary.sensor"
+          :refresh-rate-hz="sensorRefreshRate"
+          :stream-status="sensorStreamStatus"
+        />
         <SensorLinkPanel
           v-if="store.activeRole === 'DEVELOPER'"
           :summary="summary"
@@ -166,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 import UniversalVideoPlayer from "@/components/UniversalVideoPlayer/index.vue";
@@ -191,6 +202,11 @@ import { useMonitoringStore } from "../store";
 import type { PatientUpdateInput } from "../types";
 import { getCameraMediaEndpoints } from "../media-endpoints";
 import { probeCameraHealth } from "../camera-health";
+import {
+  extractSensorHexData,
+  openSensorDataStream,
+  type SensorStreamController,
+} from "../stream-api";
 
 const route = useRoute();
 const router = useRouter();
@@ -253,8 +269,11 @@ let sensorTimer: ReturnType<typeof setInterval> | null = null;
 let cameraHealthTimer: ReturnType<typeof setInterval> | null = null;
 let sensorFetching = false;
 let cameraHealthController: AbortController | null = null;
+let sensorStreamController: SensorStreamController | null = null;
+let sensorStreamGeneration = 0;
 let playbackConfirmedOnline = false;
 let lastFullRecordingRefreshAt = 0;
+const sensorStreamStatus = ref<"connecting" | "connected" | "reconnecting" | "closed">("closed");
 const alarms = computed(() => store.alarms.filter((alarm) => alarm.bedId === route.params.bedId));
 
 function openRecordingAt(targetAt: string): boolean {
@@ -342,6 +361,39 @@ function savePatient(input: PatientUpdateInput): void {
 function normalizeRefreshRate(): void {
   const value = Number(sensorRefreshRate.value);
   sensorRefreshRate.value = Number.isFinite(value) ? Math.min(10, Math.max(0.1, value)) : 1;
+}
+
+function connectSensorDataStream(): void {
+  const generation = ++sensorStreamGeneration;
+  sensorStreamController?.close();
+  sensorStreamController = null;
+  sensorStreamStatus.value = "closed";
+
+  const bedId = summary.value?.bed.id;
+  const dataTopic = summary.value?.dataTopic;
+  if (!bedId || !dataTopic) return;
+
+  sensorStreamController = openSensorDataStream(store.mqttSettings, dataTopic, {
+    onStatus: (status) => {
+      if (generation === sensorStreamGeneration) sensorStreamStatus.value = status;
+    },
+    onData: (reading) => {
+      if (generation !== sensorStreamGeneration || summary.value?.bed.id !== bedId) return;
+      store.syncSensorSnapshot(bedId, {
+        status: reading.status,
+        data: extractSensorHexData(reading),
+        observedAt: reading.observedAt || new Date().toISOString(),
+        metrics: reading.metrics,
+      });
+    },
+  });
+}
+
+function disconnectSensorDataStream(): void {
+  sensorStreamGeneration += 1;
+  sensorStreamController?.close();
+  sensorStreamController = null;
+  sensorStreamStatus.value = "closed";
 }
 
 function useDefaultAvatar(event: Event): void {
@@ -438,6 +490,7 @@ async function refreshCameraHealth(): Promise<void> {
 
 onMounted(() => {
   document.addEventListener("visibilitychange", handleVisibility);
+  connectSensorDataStream();
   void refreshRecordings();
   void refreshSensorSnapshot();
   void refreshCameraHealth();
@@ -449,11 +502,17 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener("visibilitychange", handleVisibility);
+  disconnectSensorDataStream();
   if (recordingTimer) clearInterval(recordingTimer);
   if (sensorTimer) clearInterval(sensorTimer);
   if (cameraHealthTimer) clearInterval(cameraHealthTimer);
   cameraHealthController?.abort();
 });
+
+watch(
+  () => [summary.value?.dataTopic, store.mqttSettings.websocketUrl, store.mqttSettings.username],
+  () => connectSensorDataStream(),
+);
 
 function handleVisibility(): void {
   if (document.visibilityState !== "visible") return;
@@ -716,6 +775,21 @@ function handleVisibility(): void {
   small {
     font-size: 11px;
     color: #81918c;
+  }
+}
+
+.sensor-refresh--readonly {
+  background: linear-gradient(90deg, #f4faf7, #fbfcfb);
+  border-color: #d3e5dd;
+
+  > span {
+    padding: 6px 9px;
+    font-family: "Avenir Next", sans-serif;
+    font-size: 10px;
+    font-weight: 650;
+    color: #2e6c5c;
+    background: #eaf5f0;
+    border: 1px solid #c6ded6;
   }
 }
 

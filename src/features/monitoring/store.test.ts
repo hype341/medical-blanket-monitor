@@ -219,6 +219,9 @@ describe("monitoring store", () => {
       status: "ONLINE",
       data: "ff,aa",
       observedAt: "2026-11-05T22:00:00+08:00",
+      metrics: {
+        rawFrame: [255, 170],
+      },
     });
 
     const sensor = store.bedSummaries.find((item) => item.bed.id === "bed-a-01")?.sensor;
@@ -226,6 +229,9 @@ describe("monitoring store", () => {
       status: "ONLINE",
       latestData: "ff,aa",
       lastSeenAt: "2026-11-05T22:00:00+08:00",
+      latestMetrics: {
+        rawFrame: [255, 170],
+      },
     });
   });
 

@@ -42,6 +42,8 @@ describe("online documentation", () => {
     expect(document).toContain("openSensorRawHexStream");
     expect(document).toContain("getSensorHex");
     expect(document).toContain("getSensorRawHex");
+    expect(document).toContain("28 × 64");
+    expect(document).toContain("每点 1 字节");
     expect(document).toContain("/api/public/sensors/bed-a-01/hex");
     expect(document).toContain("/api/public/sensors/bed-a-01/raw-hex");
     expect(document).toContain("runSensorProcessors");

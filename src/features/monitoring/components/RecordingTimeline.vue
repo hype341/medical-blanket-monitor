@@ -13,7 +13,7 @@
           :key="minutes"
           type="button"
           :class="{ 'is-active': timelineWindowMinutes === minutes }"
-          @click="timelineWindowMinutes = minutes"
+          @click="setTimelineWindow(minutes)"
         >
           {{ windowLabel(minutes) }}
         </button>
@@ -142,6 +142,7 @@ const emit = defineEmits<{
 }>();
 
 const now = ref(Date.now());
+const windowEndAt = ref(Date.now());
 const cursorPercent = ref(100);
 const isScrubbing = ref(false);
 const jumpDirty = ref(false);
@@ -154,8 +155,8 @@ const availableWindows = computed(() =>
   [15, 60, 360, 1_440].filter((minutes) => minutes <= props.retentionMinutes),
 );
 const retentionStart = computed(() => now.value - props.retentionMinutes * 60_000);
-const windowStart = computed(() => now.value - timelineWindowMinutes.value * 60_000);
-const windowSpan = computed(() => now.value - windowStart.value);
+const windowStart = computed(() => windowEndAt.value - timelineWindowMinutes.value * 60_000);
+const windowSpan = computed(() => windowEndAt.value - windowStart.value);
 const visibleSegments = computed(() =>
   pruneExpiredSegments(
     props.segments,
@@ -171,14 +172,14 @@ const cursorTime = computed(() =>
   formatDateTime(new Date(windowStart.value + (cursorPercent.value / 100) * windowSpan.value)),
 );
 const windowStartLabel = computed(() => formatTime(new Date(windowStart.value).toISOString()));
-const windowEndLabel = computed(() => formatTime(new Date(now.value).toISOString()));
+const windowEndLabel = computed(() => formatTime(new Date(windowEndAt.value).toISOString()));
 const jumpMin = computed(() => toDateTimeLocal(retentionStart.value));
 const jumpMax = computed(() => toDateTimeLocal(now.value));
 
 const positionedSegments = computed(() =>
   visibleSegments.value.map((segment) => {
     const start = Math.max(new Date(segment.startAt).getTime(), windowStart.value);
-    const end = Math.min(new Date(segment.endAt).getTime(), now.value);
+    const end = Math.min(new Date(segment.endAt).getTime(), windowEndAt.value);
     return {
       ...segment,
       visibleStartAt: new Date(start).toISOString(),
@@ -222,7 +223,7 @@ function windowLabel(minutes: number): string {
 function shiftCursor(seconds: number): void {
   cursorPercent.value = Math.min(
     100,
-    Math.max(0, cursorPercent.value + (seconds / (props.retentionMinutes * 60)) * 100),
+    Math.max(0, cursorPercent.value + ((seconds * 1_000) / windowSpan.value) * 100),
   );
   commitSeek();
 }
@@ -243,11 +244,28 @@ function syncCursor(): void {
     return;
   }
   const target = new Date(props.currentAt).getTime();
+  if (target < windowStart.value || target > windowEndAt.value) {
+    focusWindowAt(target);
+  }
   cursorPercent.value = Math.min(
     100,
     Math.max(0, ((target - windowStart.value) / windowSpan.value) * 100),
   );
   if (!jumpDirty.value) jumpValue.value = toDateTimeLocal(target);
+}
+
+function focusWindowAt(target: number): void {
+  const span = windowSpan.value;
+  windowEndAt.value = Math.min(now.value, target + span * 0.82);
+}
+
+function setTimelineWindow(minutes: number): void {
+  timelineWindowMinutes.value = minutes;
+  if (props.currentAt) {
+    focusWindowAt(new Date(props.currentAt).getTime());
+  } else {
+    windowEndAt.value = now.value;
+  }
 }
 
 function seekToInputTime(): void {
@@ -269,6 +287,9 @@ function seekToInputTime(): void {
   if (target < windowStart.value) {
     timelineWindowMinutes.value = props.retentionMinutes;
   }
+  if (target < windowStart.value || target > windowEndAt.value) {
+    focusWindowAt(target);
+  }
   jumpError.value = "";
   cursorPercent.value = ((target - windowStart.value) / windowSpan.value) * 100;
   jumpDirty.value = false;
@@ -285,6 +306,7 @@ watch(() => props.currentAt, syncCursor, { immediate: true });
 onMounted(() => {
   clockTimer = setInterval(() => {
     now.value = Date.now();
+    if (!props.currentAt && !isScrubbing.value) windowEndAt.value = now.value;
     if (!isScrubbing.value) syncCursor();
   }, 1000);
 });

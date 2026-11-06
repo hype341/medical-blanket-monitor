@@ -218,6 +218,19 @@ rawStream.close();
 当前床位纯数据：\`/api/public/sensors/${sampleBedId}/hex\`；原始帧：
 \`/api/public/sensors/${sampleBedId}/raw-hex\`。
 
+### 28 × 64 热力图
+
+1792 个压力点按行优先排列，每点 1 字节，取值范围 \`00\`–\`ff\`。
+前端按 64 列、28 行绘制：最低值显示白色，压力升高依次过渡为黄色、橙色，
+最高值显示红色。
+
+\`\`\`ts
+import { buildSensorHeatmap } from "@/features/monitoring/sensor-heatmap";
+
+const heatmap = buildSensorHeatmap(hexData);
+console.log(heatmap.columns, heatmap.rows, heatmap.values.length);
+\`\`\`
+
 ## 床位数据与告警 Topic
 
 每张床位分别拥有独立的数据 Topic 和告警 Topic。

@@ -72,6 +72,7 @@ export interface SensorSnapshot {
   status?: SensorStatus;
   data?: string;
   observedAt?: string;
+  metrics?: SensorMetrics;
 }
 
 export interface CameraPlayback {

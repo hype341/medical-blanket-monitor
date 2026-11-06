@@ -100,6 +100,28 @@ async function clearLiveAlarms(
   }
 }
 
+async function isCameraNodeOnline(): Promise<boolean> {
+  try {
+    const start = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    const end = new Date(Date.now() + 60_000).toISOString();
+    const listUrl = new URL("http://10.208.236.131:9996/list");
+    listUrl.search = new URLSearchParams({ path: "camera-01", start, end }).toString();
+    const listResponse = await fetch(listUrl, { signal: AbortSignal.timeout(6_000) });
+    if (!listResponse.ok) return false;
+    const items = (await listResponse.json()) as Array<{ url?: string }>;
+    const playbackUrl = items.find((item) => item.url)?.url;
+    if (!playbackUrl) return false;
+    const playbackResponse = await fetch(playbackUrl, {
+      headers: { Range: "bytes=0-0" },
+      signal: AbortSignal.timeout(6_000),
+    });
+    await playbackResponse.body?.cancel();
+    return playbackResponse.ok;
+  } catch {
+    return false;
+  }
+}
+
 test("login rejects an invalid captcha before account validation", async ({ page }) => {
   await page.goto("/#/login", { waitUntil: "networkidle" });
   await page.screenshot({ path: "test-results/monitoring-login-captcha.png", fullPage: true });
@@ -138,6 +160,8 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await page.locator('[data-testid="bed-card"]').first().click();
   await expect(page).toHaveURL(/#\/beds\/bed-/);
   await expect(page.getByTestId("sensor-graphic")).toBeVisible();
+  await expect(page.getByTestId("sensor-heatmap")).toContainText("28 × 64");
+  await expect(page.getByTestId("sensor-heatmap")).toContainText("1792 / 1792");
   await expect(page.getByText("1792 字节数据", { exact: true })).toBeVisible();
   await expect(page.locator(".sensor-graphic__raw-data code")).toHaveText(
     /^[0-9a-f]{2}(,[0-9a-f]{2})+/,
@@ -149,11 +173,7 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(page.getByText(/sensor\/.+\/telemetry/)).toHaveCount(0);
   await expect(page.getByText("毯面温度")).toHaveCount(0);
   await expect(page.getByText("设备电量")).toHaveCount(0);
-  const refreshRate = page.getByLabel("传感器图形帧率");
-  await refreshRate.fill("7");
-  await expect(refreshRate).toHaveValue("7");
-  await page.getByRole("button", { name: "5 帧/秒", exact: true }).click();
-  await expect(refreshRate).toHaveValue("5");
+  await expect(page.getByLabel("传感器图形帧率")).toHaveCount(0);
   await expect(page.getByText("智能识别扩展")).toBeVisible();
   await expect(page.getByText("录像回放").first()).toBeVisible();
   await expect(page.getByText("床位告警").first()).toBeVisible();
@@ -177,6 +197,43 @@ test("nurse can open a bed monitor from the safety overview", async ({ page }) =
   await expect(page.getByText("床位状态平稳").first()).toBeVisible();
   await page.waitForTimeout(600);
   await page.screenshot({ path: "test-results/monitoring-bed-detail.png", fullPage: true });
+});
+
+test("developer receives sensor MQTT data and controls heatmap frame rate", async ({ page }) => {
+  const mqttSockets: string[] = [];
+  page.on("websocket", (socket) => mqttSockets.push(socket.url()));
+
+  await loginAs(page, "developer");
+  await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+
+  const heatmap = page.getByTestId("sensor-heatmap");
+  await expect(heatmap).toBeVisible();
+  await expect(heatmap).toContainText("28 × 64");
+  await expect(heatmap).toContainText("1792 / 1792");
+  await expect(heatmap).toHaveAttribute("data-rendered-points", "1792");
+  const coloredPixels = await heatmap.locator("canvas").evaluate((canvas: HTMLCanvasElement) => {
+    const context = canvas.getContext("2d");
+    if (!context) return 0;
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let colored = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] + pixels[index + 1] + pixels[index + 2] > 45) colored += 1;
+    }
+    return colored;
+  });
+  expect(coloredPixels).toBeGreaterThan(25_000);
+  await page.locator(".sensor-panel").screenshot({
+    path: "test-results/monitoring-sensor-heatmap.png",
+  });
+  const refreshRate = page.getByLabel("传感器图形帧率");
+  await expect(refreshRate).toBeVisible();
+  await refreshRate.fill("7");
+  await expect(refreshRate).toHaveValue("7");
+  await page.getByRole("button", { name: "5 帧/秒", exact: true }).click();
+  await expect(refreshRate).toHaveValue("5");
+  await expect
+    .poll(() => mqttSockets.some((url) => url.includes(":8083/mqtt")), { timeout: 15_000 })
+    .toBe(true);
 });
 
 test("bed monitor stays usable on a narrow screen", async ({ page }) => {
@@ -581,12 +638,13 @@ test("camera status matches browser media reachability", async ({ page, request 
 test("recorded video plays and advances when the camera node is online", async ({ page }) => {
   const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
   test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+  test.skip(!(await isCameraNodeOnline()), "camera node is offline");
 
   await loginAs(page, "nurse");
   await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
   const segment = page.locator(".recording-timeline__segment").first();
   await expect(segment).toBeVisible({ timeout: 20_000 });
-  await segment.click();
+  await seekRecordingTo(page, new Date(Date.now() - 5 * 60_000));
 
   const player = page.locator(".recording-player");
   await expect(player).toHaveAttribute("data-state", "playing", { timeout: 20_000 });
@@ -602,6 +660,7 @@ test("recording seeks quickly and switches to another timestamp without stale lo
 }) => {
   const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
   test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+  test.skip(!(await isCameraNodeOnline()), "camera node is offline");
 
   await loginAs(page, "nurse");
   await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
@@ -639,9 +698,12 @@ test("recording seeks quickly and switches to another timestamp without stale lo
     .toBeLessThanOrEqual(3);
 });
 
-test("recorded playback keeps advancing without long visible freezes", async ({ page }) => {
+test("recorded playback keeps advancing without long visible freezes", async ({
+  page,
+}) => {
   const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
   test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+  test.skip(!(await isCameraNodeOnline()), "camera node is offline");
 
   await loginAs(page, "nurse");
   await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
@@ -664,6 +726,51 @@ test("recorded playback keeps advancing without long visible freezes", async ({ 
   expect(gaps.every((gap) => gap >= 0), `playback clock samples: ${samples.join(", ")}`).toBe(true);
   expect(Math.max(...gaps)).toBeLessThanOrEqual(2);
   expect(seconds.at(-1)! - seconds[0]).toBeGreaterThanOrEqual(8);
+});
+
+test("recording timeline stays anchored while playback position moves", async ({ page }) => {
+  const liveOrigin = process.env.PLAYWRIGHT_BASE_URL;
+  test.skip(!liveOrigin?.startsWith("http://192.168."), "requires the deployed LAN site");
+  const now = Date.now();
+  await page.route(/http:\/\/10\.208\.236\.131:9996\/list\?.*/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          start: new Date(now - 4 * 60_000).toISOString(),
+          duration: 60,
+          url: `http://10.208.236.131:9996/get?path=camera-01&start=${encodeURIComponent(
+            new Date(now - 4 * 60_000).toISOString(),
+          )}&duration=60`,
+        },
+        {
+          start: new Date(now - 2 * 60_000).toISOString(),
+          duration: 60,
+          url: `http://10.208.236.131:9996/get?path=camera-01&start=${encodeURIComponent(
+            new Date(now - 2 * 60_000).toISOString(),
+          )}&duration=60`,
+        },
+      ]),
+    });
+  });
+
+  await loginAs(page, "nurse");
+  await page.goto("/#/beds/bed-a-01", { waitUntil: "networkidle" });
+  const segment = page.locator(".recording-timeline__segment").first();
+  await expect(segment).toBeVisible({ timeout: 20_000 });
+  await segment.click();
+  await page.waitForTimeout(500);
+
+  const windowStart = page.locator(".recording-timeline__clock span").first();
+  const progress = page.getByLabel("录像回放进度");
+  const beforeWindow = await windowStart.textContent();
+  const beforeProgress = Number(await progress.inputValue());
+  await page.locator(".recording-timeline__segment").nth(1).click();
+  await page.waitForTimeout(1_500);
+
+  expect(Number(await progress.inputValue())).toBeGreaterThan(beforeProgress);
+  expect(await windowStart.textContent()).toBe(beforeWindow);
 });
 
 test("developer can still see technical MQTT and camera links in bed detail", async ({ page }) => {
