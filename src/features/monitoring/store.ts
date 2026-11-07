@@ -124,7 +124,7 @@ function migrateLegacyMediaHosts(data: MonitoringData): void {
     if (!value) return value;
     try {
       const url = new URL(value);
-      if (url.hostname === "10.208.236.131") {
+      if (url.hostname === "10.208.236.131" || url.hostname === "172.20.10.10") {
         url.hostname = DEFAULT_MEDIA_NODE_HOST;
         return url.toString().replace(/\/$/, "");
       }

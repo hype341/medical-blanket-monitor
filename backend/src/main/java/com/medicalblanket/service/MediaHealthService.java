@@ -51,7 +51,7 @@ public class MediaHealthService {
     public MediaHealthService(
             @Value("${blanket.media.timeout-ms:2500}") long timeoutMs,
             @Value("${blanket.media.cache-ttl-ms:15000}") long cacheTtlMs,
-            @Value("${blanket.media.allowed-base-urls:http://10.208.236.131:8888}") String allowedBaseUrls
+            @Value("${blanket.media.allowed-base-urls:http://172.20.10.5:8888}") String allowedBaseUrls
     ) {
         this.timeoutMs = Math.max(500, timeoutMs);
         this.cacheTtlMs = Math.max(1_000, cacheTtlMs);

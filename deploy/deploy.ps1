@@ -1,5 +1,5 @@
 param(
-    [string]$ServerHost = "192.168.86.128",
+    [string]$ServerHost = "172.20.10.3",
     [string]$ServerUser = "h",
     [string]$KeyPath = "$env:USERPROFILE\.ssh\blanket_deploy_ed25519",
     [switch]$SkipBuild

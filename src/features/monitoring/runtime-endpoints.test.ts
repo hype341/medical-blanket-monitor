@@ -9,14 +9,14 @@ describe("runtime server endpoints", () => {
   it("uses the current HTTP server address for MQTT", () => {
     vi.stubGlobal("window", {
       location: {
-        hostname: "172.20.10.8",
+        hostname: "172.20.10.3",
         protocol: "http:",
       },
     });
 
     expect(getRuntimeMqttEndpoints()).toEqual({
-      brokerUrl: "mqtt://172.20.10.8:1883",
-      websocketUrl: "ws://172.20.10.8/mqtt",
+      brokerUrl: "mqtt://172.20.10.3:1883",
+      websocketUrl: "ws://172.20.10.3:8083/mqtt",
     });
   });
 

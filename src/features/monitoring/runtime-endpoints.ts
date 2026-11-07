@@ -14,6 +14,9 @@ export function getRuntimeMqttEndpoints(): RuntimeMqttEndpoints {
       : "ws";
   return {
     brokerUrl: `mqtt://${host}:1883`,
-    websocketUrl: `${websocketProtocol}://${host}/mqtt`,
+    websocketUrl:
+      websocketProtocol === "ws"
+        ? `ws://${host}:8083/mqtt`
+        : `wss://${host}/mqtt`,
   };
 }

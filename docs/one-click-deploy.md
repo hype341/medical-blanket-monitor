@@ -1,6 +1,6 @@
 # 医用智能毯平台一键部署说明
 
-更新日期：2026-11-06
+更新日期：2026-11-07
 
 ## 当前部署信息
 
@@ -8,8 +8,9 @@
 | --- | --- |
 | GitHub 仓库 | https://github.com/hype341/medical-blanket-monitor |
 | 本地项目目录 | D:\codex\blanket |
-| 服务器 | h@192.168.86.128 |
-| 网站 | http://192.168.86.128/ |
+| 网站服务器 | h@172.20.10.3 |
+| 摄像头节点 | lg@172.20.10.5 |
+| 网站 | http://172.20.10.3/ |
 | 网站目录 | /var/www/blanket |
 | 部署私钥 | %USERPROFILE%\.ssh\blanket_deploy_ed25519 |
 | 服务器发布命令 | /usr/local/bin/blanket-deploy |
@@ -48,7 +49,7 @@
 
 ```powershell
 .\deploy.cmd `
-  -ServerHost 192.168.86.200 `
+  -ServerHost 172.20.10.200 `
   -ServerUser h `
   -KeyPath "$env:USERPROFILE\.ssh\blanket_deploy_ed25519"
 ```
@@ -137,8 +138,8 @@ blanket_deploy_ed25519.pub 的内容追加到目标用户的 authorized_keys。
 ## 部署后检查
 
 ```powershell
-Invoke-WebRequest http://192.168.86.128/
-Invoke-RestMethod http://192.168.86.128/api/health
+Invoke-WebRequest http://172.20.10.3/
+Invoke-RestMethod http://172.20.10.3/api/health
 ```
 
 网页应返回 HTTP 200，后端健康状态应为 UP，MQTT 应显示 connected。
