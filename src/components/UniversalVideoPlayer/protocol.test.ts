@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPlaybackCandidates } from "./usePlayback";
+import { getPlaybackCandidates, withHlsCookieCheck } from "./usePlayback";
 
 const basePlayback = {
   cameraId: "camera-a",
@@ -11,10 +11,10 @@ const basePlayback = {
 };
 
 describe("getPlaybackCandidates", () => {
-  it("returns WebRTC, HLS and FLV in reliability order", () => {
+  it("returns HLS, WebRTC and FLV in reliability order", () => {
     expect(getPlaybackCandidates(basePlayback).map((item) => item.protocol)).toEqual([
-      "webrtc",
       "hls",
+      "webrtc",
       "flv",
     ]);
   });
@@ -27,5 +27,14 @@ describe("getPlaybackCandidates", () => {
         flvUrl: null,
       }).map((item) => item.protocol),
     ).toEqual(["hls"]);
+  });
+
+  it("adds the MediaMTX cookie check without duplicating it", () => {
+    expect(
+      withHlsCookieCheck("https://media.example/camera-a/index.m3u8"),
+    ).toBe("https://media.example/camera-a/index.m3u8?cookieCheck=1");
+    expect(
+      withHlsCookieCheck("https://media.example/camera-a/index.m3u8?cookieCheck=1"),
+    ).toBe("https://media.example/camera-a/index.m3u8?cookieCheck=1");
   });
 });

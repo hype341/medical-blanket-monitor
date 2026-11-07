@@ -14,7 +14,7 @@ if [[ ! -f /opt/mediamtx/mediamtx.yml ]]; then
   sed -i 's/^playback: false/playback: true/' /opt/mediamtx/mediamtx.yml
   sed -i 's/^  recordSegmentDuration: 1h/  recordSegmentDuration: 1m/' /opt/mediamtx/mediamtx.yml
   sed -i 's/^  recordDeleteAfter: 1d/  recordDeleteAfter: 24h/' /opt/mediamtx/mediamtx.yml
-  sed -i 's/^hlsVariant: lowLatency/hlsVariant: fmp4/' /opt/mediamtx/mediamtx.yml
+  sed -i 's/^hlsVariant: .*/hlsVariant: lowLatency/' /opt/mediamtx/mediamtx.yml
   sed -i 's/^hlsAlwaysRemux: false/hlsAlwaysRemux: true/' /opt/mediamtx/mediamtx.yml
 fi
 
@@ -35,6 +35,7 @@ install -m 755 setvdserver.sh /usr/local/bin/setvdserver
 install -m 644 camera-stream.service /etc/systemd/system/camera-stream.service
 install -m 755 mediamtx-recordings-cleanup.sh /usr/local/bin/mediamtx-recordings-cleanup.sh
 install -m 755 camera-maintenance.sh /usr/local/bin/blanket-camera-maintenance
+install -m 755 camera-recording.sh /usr/local/bin/blanket-camera-recording
 install -m 644 blanket-recordings-cleanup.service /etc/systemd/system/blanket-recordings-cleanup.service
 install -m 644 blanket-recordings-cleanup.timer /etc/systemd/system/blanket-recordings-cleanup.timer
 install -m 644 blanket-camera-maintenance.service /etc/systemd/system/blanket-camera-maintenance.service
@@ -54,6 +55,12 @@ PLATFORM_SERVER_PORT=80
 MEDIAMTX_HOST=127.0.0.1
 MEDIAMTX_RTMP_PORT=1935
 EOF
+fi
+
+if [[ ! -f /etc/blanket/camera-recording.env ]]; then
+  install -d -m 755 /etc/blanket
+  printf '%s\n' 'RECORDING_ENABLED=true' >/etc/blanket/camera-recording.env
+  chmod 644 /etc/blanket/camera-recording.env
 fi
 
 WIFI_CONNECTION="${WIFI_CONNECTION:-$(nmcli -t -f NAME,TYPE connection show --active |

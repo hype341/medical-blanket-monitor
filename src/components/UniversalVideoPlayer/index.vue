@@ -30,7 +30,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { CameraPlayback, CameraStatus, PlaybackProtocol } from "@/features/monitoring/types";
-import { getPlaybackCandidates } from "./usePlayback";
+import { getPlaybackCandidates, withHlsCookieCheck } from "./usePlayback";
 
 type PlayerState = "empty" | "loading" | "playing" | "error";
 
@@ -280,7 +280,7 @@ async function playHls(url: string, isCurrent: () => boolean): Promise<void> {
       reject(new Error(data.details));
     });
   });
-  hls.loadSource(url);
+  hls.loadSource(withHlsCookieCheck(url));
   hls.attachMedia(video);
   await manifestReady;
   await video.play();

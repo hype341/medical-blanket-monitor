@@ -40,11 +40,21 @@ Windows 端执行 `deploy-camera.cmd` 时也会自动安装最新版 `setvdserve
 
 ## 视频和内存维护
 
-- HLS 使用标准 fMP4 分片，保证桌面浏览器持续刷新。
+- HLS 使用 lowLatency 分片，并在播放器请求中携带 cookieCheck，保证桌面浏览器持续刷新。
 - Wi-Fi 连接自动连接并关闭网卡省电模式。
 - 每 5 分钟清理临时文件、过期录像和过量日志。
 - 可用内存低于 50% 时清理系统页缓存，不终止正在录像的进程。
 - 录像时长根据可用存储动态计算，最长 24 小时、最短 1 小时，并预留约 15% 磁盘。
+
+临时停止或恢复新录像：
+
+```bash
+sudo blanket-camera-recording off
+sudo blanket-camera-recording on
+sudo blanket-camera-recording status
+```
+
+`off` 只停止写入新录像，不删除已有录像，也不影响实时视频。
 
 ## 重新安装摄像头服务
 

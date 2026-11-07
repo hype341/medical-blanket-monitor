@@ -181,7 +181,7 @@ sudo docker restart mediamtx
 关键配置：
 
 ```text
-hlsVariant: fmp4
+hlsVariant: lowLatency
 hlsAlwaysRemux: true
 record: true
 playback: true
@@ -250,6 +250,16 @@ systemctl list-timers
 ```
 
 长期部署建议把录像目录放到独立硬盘或 NAS，避免占满系统盘。
+
+临时停止或恢复新录像：
+
+```bash
+sudo blanket-camera-recording off
+sudo blanket-camera-recording on
+sudo blanket-camera-recording status
+```
+
+停止录像不会影响实时视频；已有录像默认保留。
 
 ## 10. 内存维护
 

@@ -26,9 +26,11 @@ required_files=(
   camera-stream.sh
   camera-stream.service
   camera-stream.env.example
+  camera-recording.env.example
   setvdserver.sh
   mediamtx-recordings-cleanup.sh
   camera-maintenance.sh
+  camera-recording.sh
   blanket-recordings-cleanup.service
   blanket-recordings-cleanup.timer
   blanket-camera-maintenance.service
@@ -56,10 +58,12 @@ backup_paths=(
   etc/systemd/system/blanket-camera-maintenance.service
   etc/systemd/system/blanket-camera-maintenance.timer
   opt/mediamtx/mediamtx.yml
+  etc/blanket/camera-recording.env
   usr/local/bin/camera-stream.sh
   usr/local/bin/setvdserver
   usr/local/bin/mediamtx-recordings-cleanup.sh
   usr/local/bin/blanket-camera-maintenance
+  usr/local/bin/blanket-camera-recording
   usr/local/bin/blanket-camera-healthcheck
 )
 existing_paths=()
@@ -95,11 +99,16 @@ install -m 755 "$stage/setvdserver.sh" /usr/local/bin/setvdserver
 
 mediamtx_config=/opt/mediamtx/mediamtx.yml
 if [[ -f "$mediamtx_config" ]]; then
-  sed -i 's/^  record: false/  record: true/' "$mediamtx_config"
+  recording_enabled="$(awk -F= '$1 == "RECORDING_ENABLED" {print $2; exit}' /etc/blanket/camera-recording.env 2>/dev/null || true)"
+  if [[ "${recording_enabled:-true}" == "false" ]]; then
+    sed -i 's/^  record:.*/  record: false/' "$mediamtx_config"
+  else
+    sed -i 's/^  record:.*/  record: true/' "$mediamtx_config"
+  fi
   sed -i 's/^playback: false/playback: true/' "$mediamtx_config"
   sed -i 's/^  recordSegmentDuration: 1h/  recordSegmentDuration: 1m/' "$mediamtx_config"
   sed -i 's/^  recordDeleteAfter: 1d/  recordDeleteAfter: 24h/' "$mediamtx_config"
-  sed -i 's/^hlsVariant: lowLatency/hlsVariant: fmp4/' "$mediamtx_config"
+  sed -i 's/^hlsVariant: .*/hlsVariant: lowLatency/' "$mediamtx_config"
   sed -i 's/^hlsAlwaysRemux: false/hlsAlwaysRemux: true/' "$mediamtx_config"
   sed -i 's/^hlsSegmentDuration: .*/hlsSegmentDuration: 1s/' "$mediamtx_config"
 else
