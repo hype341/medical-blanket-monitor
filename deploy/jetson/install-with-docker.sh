@@ -29,6 +29,7 @@ else
 fi
 
 install -m 755 camera-stream.sh /usr/local/bin/camera-stream.sh
+install -m 755 setvdserver.sh /usr/local/bin/setvdserver
 install -m 644 camera-stream.service /etc/systemd/system/camera-stream.service
 install -m 755 mediamtx-recordings-cleanup.sh /usr/local/bin/mediamtx-recordings-cleanup.sh
 install -m 644 blanket-recordings-cleanup.service /etc/systemd/system/blanket-recordings-cleanup.service
