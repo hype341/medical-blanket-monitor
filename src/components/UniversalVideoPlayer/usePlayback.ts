@@ -7,8 +7,8 @@ export interface PlaybackCandidate {
 
 export function getPlaybackCandidates(playback: CameraPlayback): PlaybackCandidate[] {
   return [
-    { protocol: "hls", url: playback.hlsUrl },
     { protocol: "webrtc", url: playback.webrtcUrl },
+    { protocol: "hls", url: playback.hlsUrl },
     { protocol: "flv", url: playback.flvUrl },
   ].filter((candidate): candidate is PlaybackCandidate => Boolean(candidate.url));
 }

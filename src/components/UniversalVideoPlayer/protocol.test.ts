@@ -11,10 +11,10 @@ const basePlayback = {
 };
 
 describe("getPlaybackCandidates", () => {
-  it("returns HLS, WebRTC and FLV in reliability order", () => {
+  it("returns WebRTC, HLS and FLV in reliability order", () => {
     expect(getPlaybackCandidates(basePlayback).map((item) => item.protocol)).toEqual([
-      "hls",
       "webrtc",
+      "hls",
       "flv",
     ]);
   });

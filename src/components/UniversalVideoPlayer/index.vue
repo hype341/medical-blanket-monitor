@@ -185,7 +185,6 @@ async function playWebRtc(url: string, isCurrent: () => boolean): Promise<void> 
   let disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
   let connectionActive = true;
   peer.addTransceiver("video", { direction: "recvonly" });
-  peer.addTransceiver("audio", { direction: "recvonly" });
   peer.ontrack = (event) => {
     video.srcObject = event.streams[0] ?? new MediaStream([event.track]);
     event.track.addEventListener(
