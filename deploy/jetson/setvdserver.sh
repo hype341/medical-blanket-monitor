@@ -130,7 +130,7 @@ test_target() {
     echo "网络检查：${server}:${port} 可连接"
     return 0
   fi
-  echo "警告：${server}:${port} 当前不可连接，配置仍会保存；服务会持续自动重连。" >&2
+  echo "警告：${server}:${port} 当前不可连接，配置仍会保存。" >&2
   return 1
 }
 

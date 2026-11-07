@@ -224,6 +224,19 @@ systemctl status blanket-recordings-cleanup.timer
 camera healthcheck passed: camera-01, h264 640x360
 ```
 
+### Wi-Fi 掉线判定
+
+摄像头 Wi-Fi 信号应尽量保持在 `-67 dBm` 以上。实测信号约 `-76 dBm` 时会出现
+AP 主动断开、RTMP 写失败和推流进程自动重启。典型日志：
+
+```text
+connection disconnected (reason 7=CLASS3_FRAME_FROM_NONASSOC_STA)
+rtmpsink0: Could not write to resource
+```
+
+省电模式关闭和永久自动重连已经启用。如果仍然频繁掉线，应优先移动摄像头靠近
+热点、改用 5GHz Wi-Fi，或连接有线以太网。
+
 ## 9. 录像
 
 录像目录：
