@@ -133,6 +133,9 @@ sudo setvdserver --show
 640x360 / 10fps / 300kbps
 ```
 
+画面左上角叠加摄像头本机时间，格式为 `YYYY-MM-DD HH:MM:SS`。摄像头通过
+`systemd-timesyncd` 连接互联网 NTP，当前时区为 `Asia/Shanghai`。
+
 配置文件：
 
 ```text
