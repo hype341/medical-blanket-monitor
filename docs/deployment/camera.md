@@ -232,7 +232,17 @@ camera healthcheck passed: camera-01, h264 640x360
 /var/lib/mediamtx/recordings/camera-01
 ```
 
-默认保留 24 小时。磁盘不足时，优先确认清理定时器：
+录像保留时长不是固定 24 小时。维护脚本根据当前码率、剩余存储和录像大小动态
+计算保留时长，最长 24 小时、最短 1 小时，并始终为系统预留约 15% 的磁盘空间。
+空间不足时优先删除最旧的完整录像。
+
+当前动态结果记录在：
+
+```text
+/var/lib/blanket-camera/retention-status
+```
+
+磁盘不足时，优先确认清理定时器：
 
 ```bash
 systemctl status blanket-recordings-cleanup.timer

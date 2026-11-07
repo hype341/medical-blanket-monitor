@@ -6,3 +6,6 @@ Type=oneshot
 ExecStart=/usr/local/bin/blanket-camera-maintenance
 Nice=10
 Environment=LOW_MEMORY_PERCENT=50
+Environment=RECORDING_DISK_RESERVE_PERCENT=15
+Environment=RECORDING_MAX_HOURS=24
+Environment=RECORDING_MIN_HOURS=1
