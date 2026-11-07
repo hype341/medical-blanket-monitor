@@ -3,7 +3,7 @@ Description=Run medical blanket camera maintenance regularly
 
 [Timer]
 OnBootSec=5min
-OnUnitActiveSec=10min
+OnUnitActiveSec=5min
 AccuracySec=1min
 Persistent=true
 

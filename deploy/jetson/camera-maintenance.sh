@@ -3,7 +3,7 @@ set -euo pipefail
 
 RECORDINGS_DIR="${RECORDINGS_DIR:-/var/lib/mediamtx/recordings}"
 LOG_VACUUM_SIZE="${LOG_VACUUM_SIZE:-100M}"
-LOW_MEMORY_PERCENT="${LOW_MEMORY_PERCENT:-15}"
+LOW_MEMORY_PERCENT="${LOW_MEMORY_PERCENT:-50}"
 
 if [[ -d "${RECORDINGS_DIR}" ]]; then
   find "${RECORDINGS_DIR}" -type f -name '*.mp4' -size 0 -mmin +1 -delete
@@ -21,6 +21,9 @@ if [[ -n "${mem_total_kb}" && -n "${mem_available_kb}" ]]; then
     sync
     echo "available memory ${available_percent}% is below ${LOW_MEMORY_PERCENT}%; dropping page cache"
     echo 1 >/proc/sys/vm/drop_caches
+    mem_available_kb="$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)"
+    available_after=$((mem_available_kb * 100 / mem_total_kb))
+    echo "available memory after cleanup: ${available_after}%"
   else
     echo "available memory ${available_percent}%"
   fi

@@ -113,6 +113,7 @@ mqttConnected: true
 | 视频推流节点变化 | 编辑摄像头 `/etc/blanket/camera-stream.env` 并重启 `camera-stream` |
 | Wi-Fi 名称变化 | 摄像头重新连接 Wi-Fi，并执行安装脚本关闭网卡省电模式 |
 | 生产域名启用 | 配置 HTTPS、WSS，并把 MediaMTX 播放地址改为 HTTPS 域名 |
+| 摄像头内存维护 | 每 5 分钟检查，可用内存低于 50% 时自动回收页缓存 |
 
 ## 8. 重要目录
 

@@ -243,11 +243,11 @@ systemctl list-timers
 
 ## 10. 内存维护
 
-`blanket-camera-maintenance.timer` 每 10 分钟执行一次：
+`blanket-camera-maintenance.timer` 每 5 分钟执行一次：
 
 - 清理空录像、临时录像和超过 24 小时的过期录像。
 - 将系统日志压缩到约 100MB。
-- 可用内存低于 15% 时清理系统页缓存。
+- 可用内存低于 50% 时清理系统页缓存，恢复至少一半可用内存。
 - 不强制结束正在录像或推流的进程。
 
 检查：

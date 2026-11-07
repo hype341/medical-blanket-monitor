@@ -5,3 +5,4 @@ Description=Medical blanket camera memory and temporary-file maintenance
 Type=oneshot
 ExecStart=/usr/local/bin/blanket-camera-maintenance
 Nice=10
+Environment=LOW_MEMORY_PERCENT=50
