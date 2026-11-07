@@ -1,14 +1,15 @@
-# MQTT Deployment
+# MQTT 部署
+
+完整交接说明见 [MQTT 接入与交接](../../docs/deployment/mqtt.md)。
 
 ## Network
 
-- Hotspot/ESP32 endpoint: `10.208.236.217:1883`
-- VMware broker endpoint: `192.168.86.128:1883`
-- MQTT WebSocket: `ws://10.208.236.217:8083/mqtt`
+- Broker TCP: `mqtt://172.20.10.12:1883`
+- WebSocket: `ws://172.20.10.12:8083/mqtt`
+- Dashboard: `http://172.20.10.12:18083/`
 
-Windows port forwarding maps the hotspot address to the VMware EMQX instance.
-Run `deploy/windows/setup-mqtt-forward.ps1` from an elevated PowerShell if the
-forwarding rules need to be recreated.
+Java 后端通过 `tcp://127.0.0.1:1883` 连接本机 EMQX。其他设备直接使用
+`172.20.10.12:1883`，不再依赖 Windows 端口转发。
 
 ## Accounts and ACLs
 
@@ -35,7 +36,7 @@ topic whenever a bed is created.
 4. Browsers and third-party consumers can read it from:
 
 ```text
-http://10.208.236.217/api/public/sensors/{bedId}
+http://172.20.10.12/api/public/sensors/{bedId}
 ```
 
 File writes are coalesced every 100 ms so high-rate publishing does not block
@@ -49,7 +50,7 @@ before saving the latest payload.
 Server time is also available from:
 
 ```text
-HTTP: http://10.208.236.217/api/public/time
+HTTP: http://172.20.10.12/api/public/time
 MQTT: medical-blanket/v1/system/time
 ```
 

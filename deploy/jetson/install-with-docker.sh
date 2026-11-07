@@ -34,8 +34,11 @@ install -m 755 camera-stream.sh /usr/local/bin/camera-stream.sh
 install -m 755 setvdserver.sh /usr/local/bin/setvdserver
 install -m 644 camera-stream.service /etc/systemd/system/camera-stream.service
 install -m 755 mediamtx-recordings-cleanup.sh /usr/local/bin/mediamtx-recordings-cleanup.sh
+install -m 755 camera-maintenance.sh /usr/local/bin/blanket-camera-maintenance
 install -m 644 blanket-recordings-cleanup.service /etc/systemd/system/blanket-recordings-cleanup.service
 install -m 644 blanket-recordings-cleanup.timer /etc/systemd/system/blanket-recordings-cleanup.timer
+install -m 644 blanket-camera-maintenance.service /etc/systemd/system/blanket-camera-maintenance.service
+install -m 644 blanket-camera-maintenance.timer /etc/systemd/system/blanket-camera-maintenance.timer
 
 if [[ ! -f /etc/blanket/camera-stream.env ]]; then
   install -d -m 755 /etc/blanket
@@ -46,6 +49,8 @@ CAMERA_WIDTH=1280
 CAMERA_HEIGHT=720
 CAMERA_FPS=30
 CAMERA_BITRATE=2000000
+PLATFORM_SERVER_HOST=172.20.10.12
+PLATFORM_SERVER_PORT=80
 MEDIAMTX_HOST=127.0.0.1
 MEDIAMTX_RTMP_PORT=1935
 EOF
@@ -63,4 +68,4 @@ if [[ -n "${WIFI_CONNECTION}" ]]; then
 fi
 
 systemctl daemon-reload
-systemctl enable --now camera-stream.service blanket-recordings-cleanup.timer
+systemctl enable --now camera-stream.service blanket-recordings-cleanup.timer blanket-camera-maintenance.timer

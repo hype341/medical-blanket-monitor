@@ -140,9 +140,9 @@ def config_table(styles):
     rows = [
         ("GitHub 仓库", "https://github.com/hype341/medical-blanket-monitor"),
         ("本地目录", r"D:\codex\blanket"),
-        ("网站服务器", "h@172.20.10.3"),
+        ("网站服务器", "h@172.20.10.12"),
         ("摄像头节点", "lg@172.20.10.5"),
-        ("网站", "http://172.20.10.3/"),
+        ("网站", "http://172.20.10.12/"),
         ("网站目录", "/var/www/blanket"),
         ("部署私钥", r"%USERPROFILE%\.ssh\blanket_deploy_ed25519"),
         ("服务器发布命令", "/usr/local/bin/blanket-deploy"),
@@ -317,8 +317,8 @@ def build_pdf():
             [
                 Paragraph("部署后检查", styles["h1"]),
                 code_box(
-                    "Invoke-WebRequest http://172.20.10.3/\n"
-                    "Invoke-RestMethod http://172.20.10.3/api/health",
+                    "Invoke-WebRequest http://172.20.10.12/\n"
+                    "Invoke-RestMethod http://172.20.10.12/api/health",
                     styles,
                 ),
                 Spacer(1, 4 * mm),

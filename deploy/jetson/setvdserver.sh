@@ -3,27 +3,23 @@ set -euo pipefail
 
 ENV_FILE="${CAMERA_ENV_FILE:-/etc/blanket/camera-stream.env}"
 SERVICE_NAME="camera-stream.service"
-SERVER=""
-PORT=""
-MEDIA_PATH=""
-RESTART_SERVICE=1
+PLATFORM_SERVER=""
+PLATFORM_PORT=""
 
 usage() {
   cat <<'EOF'
 用法：
-  sudo setvdserver <服务器IP或域名> [选项]
+  sudo setvdserver <医用平台服务器IP或域名> [选项]
   sudo setvdserver --show
 
 选项：
-  --port <端口>       MediaMTX RTMP 端口，默认保留当前值或 1935
-  --path <路径>       摄像头媒体路径，默认保留当前值或 camera-01
-  --no-restart        只保存配置，不重启 camera-stream 服务
-  --show              显示当前推流目标和服务状态
-  -h, --help          显示帮助
+  --platform-port <端口>  医用平台 HTTP 端口，默认保留当前值或 80
+  --show                  显示平台服务和视频推流目标
+  -h, --help              显示帮助
 
 示例：
-  sudo setvdserver 172.20.10.3
-  sudo setvdserver monitor.example.com --port 1935 --path camera-01
+  sudo setvdserver 172.20.10.12
+  sudo setvdserver monitor.example.com --platform-port 80
 EOF
 }
 
@@ -75,16 +71,25 @@ replace_value() {
 }
 
 show_target() {
-  local server
-  local port
+  local platform_server
+  local platform_port
+  local media_server
+  local media_port
   local path
   local active
-  server="$(current_value MEDIAMTX_HOST 127.0.0.1)"
-  port="$(current_value MEDIAMTX_RTMP_PORT 1935)"
+  platform_server="$(current_value PLATFORM_SERVER_HOST 未设置)"
+  platform_port="$(current_value PLATFORM_SERVER_PORT 80)"
+  media_server="$(current_value MEDIAMTX_HOST 127.0.0.1)"
+  media_port="$(current_value MEDIAMTX_RTMP_PORT 1935)"
   path="$(current_value CAMERA_PATH camera-01)"
   active="$(systemctl is-active "${SERVICE_NAME}" 2>/dev/null || true)"
   printf '配置文件：%s\n' "${ENV_FILE}"
-  printf '推流目标：rtmp://%s:%s/%s\n' "${server}" "${port}" "${path}"
+  if [[ "${platform_server}" == "未设置" ]]; then
+    printf '医用平台：未设置\n'
+  else
+    printf '医用平台：http://%s:%s\n' "${platform_server}" "${platform_port}"
+  fi
+  printf '视频推流：rtmp://%s:%s/%s\n' "${media_server}" "${media_port}" "${path}"
   printf '服务状态：%s\n' "${active:-unknown}"
 }
 
@@ -144,27 +149,17 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   exit 0
 fi
 
-SERVER="$1"
+PLATFORM_SERVER="$1"
 shift
-validate_server "${SERVER}"
+validate_server "${PLATFORM_SERVER}"
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    --port)
-      [[ "$#" -ge 2 ]] || fail "--port 缺少端口参数"
-      PORT="$2"
-      validate_port "${PORT}"
+    --platform-port)
+      [[ "$#" -ge 2 ]] || fail "--platform-port 缺少端口参数"
+      PLATFORM_PORT="$2"
+      validate_port "${PLATFORM_PORT}"
       shift 2
-      ;;
-    --path)
-      [[ "$#" -ge 2 ]] || fail "--path 缺少媒体路径参数"
-      MEDIA_PATH="$2"
-      validate_path "${MEDIA_PATH}"
-      shift 2
-      ;;
-    --no-restart)
-      RESTART_SERVICE=0
-      shift
       ;;
     -h|--help)
       usage
@@ -177,10 +172,8 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 require_root
-PORT="${PORT:-$(current_value MEDIAMTX_RTMP_PORT 1935)}"
-MEDIA_PATH="${MEDIA_PATH:-$(current_value CAMERA_PATH camera-01)}"
-validate_port "${PORT}"
-validate_path "${MEDIA_PATH}"
+PLATFORM_PORT="${PLATFORM_PORT:-$(current_value PLATFORM_SERVER_PORT 80)}"
+validate_port "${PLATFORM_PORT}"
 
 install -d -m 755 "$(dirname "${ENV_FILE}")"
 if [[ ! -f "${ENV_FILE}" ]]; then
@@ -189,25 +182,11 @@ fi
 backup_file="${ENV_FILE}.bak-$(date +%Y%m%d-%H%M%S)"
 cp -a "${ENV_FILE}" "${backup_file}"
 
-replace_value MEDIAMTX_HOST "${SERVER}"
-replace_value MEDIAMTX_RTMP_PORT "${PORT}"
-replace_value CAMERA_PATH "${MEDIA_PATH}"
+replace_value PLATFORM_SERVER_HOST "${PLATFORM_SERVER}"
+replace_value PLATFORM_SERVER_PORT "${PLATFORM_PORT}"
 
-echo "已保存推流目标：rtmp://${SERVER}:${PORT}/${MEDIA_PATH}"
+echo "已保存医用平台：http://${PLATFORM_SERVER}:${PLATFORM_PORT}"
 echo "配置备份：${backup_file}"
-test_target "${SERVER}" "${PORT}" || true
-
-if [[ "${RESTART_SERVICE}" -eq 1 ]]; then
-  systemctl daemon-reload
-  systemctl restart "${SERVICE_NAME}"
-  sleep 1
-  if ! systemctl is-active --quiet "${SERVICE_NAME}"; then
-    echo "错误：${SERVICE_NAME} 启动失败。可执行以下命令恢复上一份配置：" >&2
-    echo "  sudo cp -a ${backup_file} ${ENV_FILE}" >&2
-    echo "  sudo systemctl restart ${SERVICE_NAME}" >&2
-    exit 1
-  fi
-  echo "摄像头服务已重启：${SERVICE_NAME}"
-fi
+test_target "${PLATFORM_SERVER}" "${PLATFORM_PORT}" || true
 
 show_target

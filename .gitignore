@@ -41,6 +41,10 @@ backend/data/
 package-lock.json
 yarn.lock
 
+# Python cache
+__pycache__/
+*.pyc
+
 # Local history
 .history
 

@@ -278,21 +278,34 @@ npx skills add https://github.com/youlaitech/youlai-skills --skill vue3-element-
 
 ## 项目部署
 
-当前本地服务器已经配置专用 SSH 部署密钥、受限发布命令和自动备份。直接双击
-`deploy.cmd` 或在项目根目录执行：
+当前仓库提供服务器、摄像头和同时发布三个一键入口：
+
+| 场景 | 命令 |
+| --- | --- |
+| 服务器（前端 + Java 后端） | `.\deploy-server.cmd` |
+| 摄像头（GStreamer + MediaMTX） | `.\deploy-camera.cmd` |
+| 全部发布 | `.\deploy-all.cmd` |
+
+服务器与摄像头均使用专用 SSH 密钥、受限 root 发布命令和部署前自动备份。
 
 ```powershell
-.\deploy.cmd
+.\deploy-server.cmd
 ```
 
-该命令会完成类型检查、生产构建、上传、备份、Nginx 校验和失败自动回滚。
+服务器命令会完成类型检查、生产构建、后端测试、上传、备份、Nginx 校验和失败
+自动回滚。摄像头命令会更新 GStreamer、MediaMTX、录像服务并执行 RTSP 健康检查。
 只上传已构建文件、不重新构建：
 
 ```powershell
-.\deploy.cmd -SkipBuild
+.\deploy-server.cmd -SkipBuild
 ```
 
-部署说明见 [docs/one-click-deploy.md](docs/one-click-deploy.md)。
+完整交接文档：
+
+- [项目总交接](docs/HANDOVER.md)
+- [服务器部署与运维](docs/deployment/server.md)
+- [摄像头部署与运维](docs/deployment/camera.md)
+- [MQTT 接入与交接](docs/deployment/mqtt.md)
 
 只生成构建文件时执行：
 

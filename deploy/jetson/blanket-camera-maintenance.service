@@ -1,0 +1,7 @@
+[Unit]
+Description=Medical blanket camera memory and temporary-file maintenance
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/blanket-camera-maintenance
+Nice=10

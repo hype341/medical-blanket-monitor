@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$brokerAddress = "172.20.10.3"
+$brokerAddress = "172.20.10.12"
 $ports = @(80, 1883, 8083)
 
 foreach ($port in $ports) {

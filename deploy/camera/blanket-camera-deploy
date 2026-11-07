@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+stage="${1:-}"
+platform_server="${2:-}"
+platform_port="${3:-80}"
+case "$stage" in
+  /tmp/blanket-camera-release-*) ;;
+  *)
+    echo "invalid camera release directory" >&2
+    exit 2
+    ;;
+esac
+
+stage="$(realpath -e "$stage")"
+case "$stage" in
+  /tmp/blanket-camera-release-*) ;;
+  *)
+    echo "camera release directory escaped /tmp" >&2
+    exit 2
+    ;;
+esac
+
+required_files=(
+  install-with-docker.sh
+  camera-stream.sh
+  camera-stream.service
+  camera-stream.env.example
+  setvdserver.sh
+  mediamtx-recordings-cleanup.sh
+  camera-maintenance.sh
+  blanket-recordings-cleanup.service
+  blanket-recordings-cleanup.timer
+  blanket-camera-maintenance.service
+  blanket-camera-maintenance.timer
+  camera-healthcheck.py
+  blanket-camera-deploy.helper
+)
+for file in "${required_files[@]}"; do
+  test -f "$stage/$file" || {
+    echo "camera release is missing $file" >&2
+    exit 1
+  }
+done
+
+backup_root=/var/backups/blanket-camera
+stamp="$(date +%Y%m%d-%H%M%S)"
+backup_file="$backup_root/camera-$stamp.tar.gz"
+mkdir -p "$backup_root"
+
+backup_paths=(
+  etc/blanket/camera-stream.env
+  etc/systemd/system/camera-stream.service
+  etc/systemd/system/blanket-recordings-cleanup.service
+  etc/systemd/system/blanket-recordings-cleanup.timer
+  etc/systemd/system/blanket-camera-maintenance.service
+  etc/systemd/system/blanket-camera-maintenance.timer
+  opt/mediamtx/mediamtx.yml
+  usr/local/bin/camera-stream.sh
+  usr/local/bin/setvdserver
+  usr/local/bin/mediamtx-recordings-cleanup.sh
+  usr/local/bin/blanket-camera-maintenance
+  usr/local/bin/blanket-camera-healthcheck
+)
+existing_paths=()
+for path in "${backup_paths[@]}"; do
+  if [[ -e "/$path" ]]; then
+    existing_paths+=("$path")
+  fi
+done
+if [[ "${#existing_paths[@]}" -gt 0 ]]; then
+  tar -C / -czf "$backup_file" "${existing_paths[@]}"
+else
+  tar -C / -czf "$backup_file" --files-from /dev/null
+fi
+ls -1t "$backup_root"/camera-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+
+rollback() {
+  echo "部署失败，正在恢复摄像头上一版配置..." >&2
+  tar -C / -xzf "$backup_file"
+  systemctl daemon-reload
+  docker restart mediamtx >/dev/null 2>&1 || true
+  sleep 2
+  systemctl restart camera-stream.service >/dev/null 2>&1 || true
+  echo "已恢复：$backup_file" >&2
+}
+
+(
+  cd "$stage"
+  bash ./install-with-docker.sh
+)
+
+install -m 755 "$stage/camera-healthcheck.py" /usr/local/bin/blanket-camera-healthcheck
+install -m 755 "$stage/setvdserver.sh" /usr/local/bin/setvdserver
+
+mediamtx_config=/opt/mediamtx/mediamtx.yml
+if [[ -f "$mediamtx_config" ]]; then
+  sed -i 's/^  record: false/  record: true/' "$mediamtx_config"
+  sed -i 's/^playback: false/playback: true/' "$mediamtx_config"
+  sed -i 's/^  recordSegmentDuration: 1h/  recordSegmentDuration: 1m/' "$mediamtx_config"
+  sed -i 's/^  recordDeleteAfter: 1d/  recordDeleteAfter: 24h/' "$mediamtx_config"
+  sed -i 's/^hlsVariant: lowLatency/hlsVariant: fmp4/' "$mediamtx_config"
+  sed -i 's/^hlsAlwaysRemux: false/hlsAlwaysRemux: true/' "$mediamtx_config"
+  sed -i 's/^hlsSegmentDuration: .*/hlsSegmentDuration: 1s/' "$mediamtx_config"
+else
+  rollback
+  exit 1
+fi
+
+docker restart mediamtx
+sleep 3
+systemctl restart camera-stream.service
+
+health_ok=0
+for _ in $(seq 1 15); do
+  if /usr/local/bin/blanket-camera-healthcheck camera-01; then
+    health_ok=1
+    break
+  fi
+  sleep 2
+done
+
+if [[ "$health_ok" -ne 1 ]]; then
+  rollback
+  exit 1
+fi
+
+if [[ -n "$platform_server" ]]; then
+  /usr/local/bin/setvdserver "$platform_server" --platform-port "$platform_port"
+fi
+
+install -o root -g root -m 755 \
+  "$stage/blanket-camera-deploy.helper" \
+  /usr/local/bin/blanket-camera-deploy
+systemctl enable --now blanket-recordings-cleanup.timer blanket-camera-maintenance.timer >/dev/null
+echo "camera deployment completed from $stage"
+echo "backup: $backup_file"
+echo "push target:"
+/usr/local/bin/setvdserver --show
