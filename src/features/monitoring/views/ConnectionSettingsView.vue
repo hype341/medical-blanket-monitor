@@ -604,7 +604,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import DocumentPreview from "../components/DocumentPreview.vue";
 import { generateMqttDocumentation } from "../documentation";
@@ -638,6 +638,8 @@ const createdBlanket = ref<{
   dataTopic: string;
   alarmTopic: string;
 } | null>(null);
+let previewTimer: ReturnType<typeof setInterval> | null = null;
+let previewFetching = false;
 const deviceTimeUrl = computed(() => {
   try {
     return `http://${new URL(form.brokerUrl).hostname}/api/public/time`;
@@ -756,21 +758,38 @@ const blanketCreateBedOptions = computed(() =>
 
 async function loadDataPreviews(): Promise<void> {
   const bedId = selectedAccessRow.value?.bedId;
-  if (!bedId) return;
-  const [hex, raw, full] = await Promise.allSettled([
-    getSensorHex(bedId),
-    getSensorRawHex(bedId),
-    fetch(`/api/public/sensors/${encodeURIComponent(bedId)}`, { cache: "no-store" }).then(
-      async (response) => (response.ok ? JSON.stringify(await response.json(), null, 2) : ""),
-    ),
-  ]);
-  if (hex.status === "fulfilled" && hex.value) dataPreview.value = hex.value;
-  if (raw.status === "fulfilled" && raw.value) rawDataPreview.value = raw.value;
-  if (full.status === "fulfilled" && full.value) fullDataPreview.value = full.value;
+  if (!bedId || previewFetching) return;
+  previewFetching = true;
+  try {
+    const [hex, raw, full] = await Promise.allSettled([
+      getSensorHex(bedId),
+      getSensorRawHex(bedId),
+      fetch(`/api/public/sensors/${encodeURIComponent(bedId)}`, { cache: "no-store" }).then(
+        async (response) => (response.ok ? JSON.stringify(await response.json(), null, 2) : ""),
+      ),
+    ]);
+    if (hex.status === "fulfilled" && hex.value) dataPreview.value = hex.value;
+    if (raw.status === "fulfilled" && raw.value) rawDataPreview.value = raw.value;
+    if (full.status === "fulfilled" && full.value) fullDataPreview.value = full.value;
+  } finally {
+    previewFetching = false;
+  }
 }
 
-onMounted(loadDataPreviews);
+onMounted(() => {
+  document.addEventListener("visibilitychange", handlePreviewVisibility);
+  void loadDataPreviews();
+  previewTimer = setInterval(() => void loadDataPreviews(), 1_000);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", handlePreviewVisibility);
+  if (previewTimer) clearInterval(previewTimer);
+});
 watch(selectedAccessBedId, () => void loadDataPreviews());
+
+function handlePreviewVisibility(): void {
+  if (document.visibilityState === "visible") void loadDataPreviews();
+}
 
 function openBlanketCreator(): void {
   blanketCreateName.value = "";

@@ -27,10 +27,25 @@ backup_file="$backup_root/website-$(date +%Y%m%d-%H%M%S).tar.gz"
 tar -C /var/www/blanket -czf "$backup_file" .
 ls -1t "$backup_root"/website-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
 
+backend_jar=/opt/blanket/blanket-backend.jar
+backend_backup=""
+if [ -f "$stage/blanket-backend.jar" ]; then
+  backend_backup="$backup_root/backend-$(date +%Y%m%d-%H%M%S).jar"
+  cp -a "$backend_jar" "$backend_backup"
+  install -o www-data -g www-data -m 644 "$stage/blanket-backend.jar" "$backend_jar"
+  ls -1t "$backup_root"/backend-*.jar 2>/dev/null | tail -n +11 | xargs -r rm -f
+  systemctl restart blanket-backend
+fi
+
 cp -a "$stage/." /var/www/blanket/
+rm -f /var/www/blanket/blanket-backend.jar
 chown -R www-data:www-data /var/www/blanket
 if ! nginx -t; then
   tar -C /var/www/blanket -xzf "$backup_file"
+  if [ -n "$backend_backup" ]; then
+    install -o www-data -g www-data -m 644 "$backend_backup" "$backend_jar"
+    systemctl restart blanket-backend
+  fi
   chown -R www-data:www-data /var/www/blanket
   nginx -t
   systemctl reload nginx
@@ -38,5 +53,30 @@ if ! nginx -t; then
   exit 1
 fi
 systemctl reload nginx
+
+if [ -n "$backend_backup" ]; then
+  backend_ok=0
+  for _ in $(seq 1 20); do
+    if curl -fsS http://127.0.0.1:8080/api/health | grep -q '"status":"UP"'; then
+      backend_ok=1
+      break
+    fi
+    sleep 1
+  done
+  if [ "$backend_ok" -ne 1 ]; then
+    tar -C /var/www/blanket -xzf "$backup_file"
+    install -o www-data -g www-data -m 644 "$backend_backup" "$backend_jar"
+    systemctl restart blanket-backend
+    chown -R www-data:www-data /var/www/blanket
+    nginx -t
+    systemctl reload nginx
+    echo "backend deployment failed; restored frontend and backend" >&2
+    exit 1
+  fi
+fi
+
 echo "website deployed from $stage"
 echo "backup: $backup_file"
+if [ -n "$backend_backup" ]; then
+  echo "backend backup: $backend_backup"
+fi

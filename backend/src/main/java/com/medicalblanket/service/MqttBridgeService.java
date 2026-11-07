@@ -14,6 +14,7 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -42,8 +43,31 @@ public class MqttBridgeService {
 
     @PostConstruct
     public void start() {
+        ensureConnected();
+    }
+
+    @Scheduled(fixedDelayString = "${blanket.mqtt.reconnect-ms:5000}")
+    public void ensureConnected() {
         if (!properties.isEnabled()) return;
+        if (clientsConnected()) {
+            connected = true;
+            return;
+        }
+        synchronized (this) {
+            if (clientsConnected()) {
+                connected = true;
+                return;
+            }
+            reconnectAll();
+        }
+    }
+
+    private void reconnectAll() {
         try {
+            close(observer);
+            close(alarmObserver);
+            close(publisher);
+            connected = false;
             observer = connect(
                     properties.getObserverClientId(),
                     properties.getObserverUsername(),
@@ -109,12 +133,22 @@ public class MqttBridgeService {
             log.info("Spring MQTT bridge connected to {}", properties.getUrl());
         } catch (Exception error) {
             log.error("Spring MQTT bridge could not connect", error);
+            connected = false;
+            close(observer);
+            close(alarmObserver);
+            close(publisher);
+            observer = null;
+            alarmObserver = null;
+            publisher = null;
         }
     }
 
     public boolean isConnected() {
-        return connected
-                && observer != null && observer.isConnected()
+        return connected && clientsConnected();
+    }
+
+    private boolean clientsConnected() {
+        return observer != null && observer.isConnected()
                 && alarmObserver != null && alarmObserver.isConnected()
                 && publisher != null && publisher.isConnected();
     }
