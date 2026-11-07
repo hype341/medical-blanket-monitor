@@ -10,13 +10,13 @@
 | 组件 | 当前地址 | 说明 |
 | --- | --- | --- |
 | 平台网页 | http://172.20.10.12/ | 前端、API 和 MQTT 所在服务器 |
-| 摄像头节点 | `172.20.10.5` | Jetson Nano + MediaMTX |
+| 摄像头节点 | `172.20.10.10` | Jetson Nano + MediaMTX |
 | MQTT TCP | `mqtt://172.20.10.12:1883` | ESP32 或外部设备接入 |
 | MQTT WebSocket | `ws://172.20.10.12:8083/mqtt` | 浏览器实时订阅 |
 | EMQX Dashboard | http://172.20.10.12:18083/ | 生产环境建议限制访问来源 |
-| 摄像头 HLS | http://172.20.10.5:8888/camera-01/index.m3u8 | 浏览器兼容线路 |
-| 摄像头 WebRTC | http://172.20.10.5:8889/camera-01 | 低延迟线路 |
-| 摄像头回放 API | http://172.20.10.5:9996/ | MediaMTX 录像索引 |
+| 摄像头 HLS | http://172.20.10.10:8888/camera-01/index.m3u8 | 浏览器兼容线路 |
+| 摄像头 WebRTC | http://172.20.10.10:8889/camera-01 | 低延迟线路 |
+| 摄像头回放 API | http://172.20.10.10:9996/ | MediaMTX 录像索引 |
 | GitHub | https://github.com/hype341/medical-blanket-monitor | 源码和部署脚本 |
 
 服务器 IP 变化时，网页 MQTT 地址会自动取当前网页地址；摄像头默认节点的修改和
@@ -89,8 +89,8 @@ EMQX 凭据不在 Git 仓库中，详见本地 `private/服务器账号与访问
 ```powershell
 Invoke-RestMethod http://172.20.10.12/api/health
 Invoke-WebRequest http://172.20.10.12/
-Test-NetConnection 172.20.10.5 -Port 8888
-Test-NetConnection 172.20.10.5 -Port 9996
+Test-NetConnection 172.20.10.10 -Port 8888
+Test-NetConnection 172.20.10.10 -Port 9996
 Test-NetConnection 172.20.10.12 -Port 1883
 ```
 

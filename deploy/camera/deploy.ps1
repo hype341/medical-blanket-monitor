@@ -1,5 +1,5 @@
 param(
-    [string]$ServerHost = "172.20.10.5",
+    [string]$ServerHost = "172.20.10.10",
     [string]$ServerUser = "lg",
     [string]$PlatformServerHost = "172.20.10.12",
     [int]$PlatformServerPort = 80,

@@ -4,7 +4,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 地址 | `172.20.10.5` |
+| 地址 | `172.20.10.10` |
 | SSH 用户 | `lg` |
 | 设备 | Jetson Nano |
 | 摄像头 | IMX219 |
@@ -192,16 +192,16 @@ recordDeleteAfter: 24h
 
 ```text
 HLS:
-http://172.20.10.5:8888/camera-01/index.m3u8
+http://172.20.10.10:8888/camera-01/index.m3u8
 
 WebRTC:
-http://172.20.10.5:8889/camera-01
+http://172.20.10.10:8889/camera-01
 
 RTSP:
-rtsp://172.20.10.5:8554/camera-01
+rtsp://172.20.10.10:8554/camera-01
 
 回放索引:
-http://172.20.10.5:9996/list?path=camera-01
+http://172.20.10.10:9996/list?path=camera-01
 ```
 
 ## 8. 服务和日志

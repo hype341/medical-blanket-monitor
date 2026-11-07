@@ -1,7 +1,7 @@
 import type { Camera } from "./types";
 
 export const DEFAULT_MEDIA_NODE_HOST =
-  import.meta.env.VITE_MEDIA_NODE_HOST ?? "172.20.10.5";
+  import.meta.env.VITE_MEDIA_NODE_HOST ?? "172.20.10.10";
 const DEFAULT_WEBRTC_BASE =
   import.meta.env.VITE_MEDIA_WEBRTC_BASE_URL ?? `http://${DEFAULT_MEDIA_NODE_HOST}:8889`;
 const DEFAULT_HLS_BASE =
