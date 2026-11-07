@@ -313,7 +313,7 @@ function openEditor(cameraId?: string): void {
 function downloadCameraTemplate(): void {
   const content =
     "name,cameraKey,mediaPath,mediaServerUrl,vendor,model\n" +
-    "301病房摄像头,camera-301,camera-301,http://10.208.236.131,通用,IMX219\n";
+    "301病房摄像头,camera-301,camera-301,http://172.20.10.10,通用,IMX219\n";
   const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
   const anchor = document.createElement("a");
   anchor.href = url;

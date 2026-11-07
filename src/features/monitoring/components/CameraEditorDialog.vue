@@ -23,7 +23,7 @@
       <el-form-item label="流媒体节点地址（可选）">
         <el-input
           v-model.trim="form.mediaServerUrl"
-          placeholder="http://10.208.236.131，留空使用默认节点"
+          placeholder="http://172.20.10.10，留空使用默认节点"
           maxlength="160"
         />
         <small class="camera-editor__field-hint">

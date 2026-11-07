@@ -220,11 +220,28 @@
           <small>凭证不会下发给摄像头</small>
         </header>
         <el-form label-position="top">
+          <el-form-item label="服务器地址自动获取">
+            <el-switch
+              :model-value="form.autoEndpoint !== false"
+              @update:model-value="setAutoEndpoint"
+            />
+            <small class="connection-field-hint">
+              默认使用当前访问地址 {{ runtimeMqttEndpoints.brokerUrl }}
+            </small>
+          </el-form-item>
           <el-form-item label="MQTT Broker">
-            <el-input v-model.trim="form.brokerUrl" placeholder="mqtt://host:1883" />
+            <el-input
+              v-model.trim="form.brokerUrl"
+              placeholder="mqtt://host:1883"
+              :disabled="form.autoEndpoint !== false"
+            />
           </el-form-item>
           <el-form-item label="WebSocket">
-            <el-input v-model.trim="form.websocketUrl" placeholder="ws://host:8083/mqtt" />
+            <el-input
+              v-model.trim="form.websocketUrl"
+              placeholder="ws://host:8083/mqtt"
+              :disabled="form.autoEndpoint !== false"
+            />
           </el-form-item>
           <el-form-item label="Client ID">
             <el-input v-model.trim="form.clientId" />
@@ -620,9 +637,11 @@ import {
 } from "../messaging";
 import { printMarkdownDocument } from "@/utils/document-export";
 import { getSensorHex, getSensorRawHex } from "../stream-api";
+import { getRuntimeMqttEndpoints } from "../runtime-endpoints";
 
 const store = useMonitoringStore();
 const form = reactive<MqttSettings>({ ...store.mqttSettings });
+const runtimeMqttEndpoints = getRuntimeMqttEndpoints();
 const showPassword = ref(false);
 const dataDisplayMode = ref<"data" | "raw" | "full">("data");
 const dataPreview = ref("等待传感器数据");
@@ -828,6 +847,13 @@ function save(): void {
   }
 }
 
+function setAutoEndpoint(value: string | number | boolean): void {
+  form.autoEndpoint = Boolean(value);
+  if (form.autoEndpoint) {
+    Object.assign(form, getRuntimeMqttEndpoints());
+  }
+}
+
 async function copyTopic(topic: string | null, label = "主题"): Promise<void> {
   if (!topic) return;
   try {
@@ -970,6 +996,14 @@ function downloadText(fileName: string, content: string): void {
   color: #2d6d5e !important;
   background: #edf7f2;
   border: 1px solid #c4ddd5;
+}
+
+.connection-field-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 9px;
+  line-height: 1.5;
+  color: #71877f;
 }
 
 .external-subscription {

@@ -1,13 +1,16 @@
 import type { Camera } from "./types";
 
+export const DEFAULT_MEDIA_NODE_HOST =
+  import.meta.env.VITE_MEDIA_NODE_HOST ?? "172.20.10.10";
 const DEFAULT_WEBRTC_BASE =
-  import.meta.env.VITE_MEDIA_WEBRTC_BASE_URL ?? "http://10.208.236.131:8889";
+  import.meta.env.VITE_MEDIA_WEBRTC_BASE_URL ?? `http://${DEFAULT_MEDIA_NODE_HOST}:8889`;
 const DEFAULT_HLS_BASE =
-  import.meta.env.VITE_MEDIA_HLS_BASE_URL ?? "http://10.208.236.131:8888";
+  import.meta.env.VITE_MEDIA_HLS_BASE_URL ?? `http://${DEFAULT_MEDIA_NODE_HOST}:8888`;
 const DEFAULT_RTSP_BASE =
-  import.meta.env.VITE_MEDIA_RTSP_BASE_URL ?? "rtsp://10.208.236.131:8554";
+  import.meta.env.VITE_MEDIA_RTSP_BASE_URL ?? `rtsp://${DEFAULT_MEDIA_NODE_HOST}:8554`;
 const DEFAULT_PLAYBACK_API_BASE =
-  import.meta.env.VITE_MEDIA_PLAYBACK_API_BASE_URL ?? "http://10.208.236.131:9996";
+  import.meta.env.VITE_MEDIA_PLAYBACK_API_BASE_URL ??
+  `http://${DEFAULT_MEDIA_NODE_HOST}:9996`;
 
 export interface CameraMediaEndpoints {
   mediaPath: string;

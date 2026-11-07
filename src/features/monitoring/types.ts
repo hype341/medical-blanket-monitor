@@ -244,4 +244,5 @@ export interface MqttSettings {
   alarmTitleTemplate: string;
   alarmDetailTemplate: string;
   qos: 0 | 1 | 2;
+  autoEndpoint?: boolean;
 }

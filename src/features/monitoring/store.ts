@@ -3,6 +3,8 @@ import { defineStore } from "pinia";
 import { ElNotification } from "element-plus";
 import { createMonitoringFixture } from "./mock-data";
 import { canManageRole, defaultModulesForRole } from "./permissions";
+import { getRuntimeMqttEndpoints } from "./runtime-endpoints";
+import { DEFAULT_MEDIA_NODE_HOST } from "./media-endpoints";
 import type { AlarmEnvelope } from "./recording";
 import { buildBedMonitorSummaries, getBedMonitorSummary } from "./selectors";
 import { normalizeHexData } from "./processing";
@@ -54,8 +56,8 @@ const DATA_SCHEMA_VERSION = 1;
 const DEFAULT_PLATFORM_NAME = "医用智能毯安全监护平台";
 const DEFAULT_STAFF_TAGS = ["责任护士", "夜班", "实习"];
 const DEFAULT_MQTT_SETTINGS: MqttSettings = {
-  brokerUrl: "mqtt://10.208.236.217:1883",
-  websocketUrl: "ws://10.208.236.217:8083/mqtt",
+  ...getRuntimeMqttEndpoints(),
+  autoEndpoint: true,
   clientId: "medical-blanket-platform",
   username: "blanket-service",
   password: "demo-mqtt-secret",
@@ -106,12 +108,45 @@ function loadMonitoringData(): MonitoringData | null {
     const stored = JSON.parse(localStorage.getItem(MONITORING_DATA_KEY) ?? "null") as unknown;
     if (!stored || typeof stored !== "object") return null;
     const payload = stored as Partial<StoredMonitoringData>;
-    return payload.schemaVersion === DATA_SCHEMA_VERSION && isMonitoringData(payload.data)
-      ? structuredClone(payload.data)
-      : null;
+    if (payload.schemaVersion !== DATA_SCHEMA_VERSION || !isMonitoringData(payload.data)) {
+      return null;
+    }
+    const data = structuredClone(payload.data);
+    migrateLegacyMediaHosts(data);
+    return data;
   } catch {
     return null;
   }
+}
+
+function migrateLegacyMediaHosts(data: MonitoringData): void {
+  const replaceLegacyHost = (value: string | undefined): string | undefined => {
+    if (!value) return value;
+    try {
+      const url = new URL(value);
+      if (url.hostname === "10.208.236.131") {
+        url.hostname = DEFAULT_MEDIA_NODE_HOST;
+        return url.toString().replace(/\/$/, "");
+      }
+    } catch {
+      return value;
+    }
+    return value;
+  };
+
+  data.cameras.forEach((camera) => {
+    camera.mediaServerUrl = replaceLegacyHost(camera.mediaServerUrl);
+    if (!camera.playback) return;
+    camera.playback.webrtcUrl = camera.playback.webrtcUrl
+      ? (replaceLegacyHost(camera.playback.webrtcUrl) ?? null)
+      : null;
+    camera.playback.hlsUrl = camera.playback.hlsUrl
+      ? (replaceLegacyHost(camera.playback.hlsUrl) ?? null)
+      : null;
+    camera.playback.flvUrl = camera.playback.flvUrl
+      ? (replaceLegacyHost(camera.playback.flvUrl) ?? null)
+      : null;
+  });
 }
 
 function loadMonitoringPolicy(): MonitoringPolicy {
@@ -138,6 +173,9 @@ function loadMqttSettings(): MqttSettings {
     const value = JSON.parse(localStorage.getItem(MQTT_SETTINGS_KEY) ?? "null") as unknown;
     if (!value || typeof value !== "object") return { ...DEFAULT_MQTT_SETTINGS };
     const restored = { ...DEFAULT_MQTT_SETTINGS, ...(value as Partial<MqttSettings>) };
+    if (restored.autoEndpoint !== false) {
+      Object.assign(restored, getRuntimeMqttEndpoints(), { autoEndpoint: true });
+    }
     if (restored.alarmTopic === "medical-blanket/v1/+/+/+/+/alarm") {
       restored.alarmTopic = DEFAULT_MQTT_SETTINGS.alarmTopic;
     }
@@ -845,8 +883,16 @@ export const useMonitoringStore = defineStore("monitoring", () => {
     }
     mqttSettings.value = {
       ...settings,
-      brokerUrl: settings.brokerUrl.trim(),
-      websocketUrl: settings.websocketUrl.trim(),
+      ...(settings.autoEndpoint !== false ? getRuntimeMqttEndpoints() : {}),
+      autoEndpoint: settings.autoEndpoint !== false,
+      brokerUrl: (settings.autoEndpoint !== false
+        ? getRuntimeMqttEndpoints().brokerUrl
+        : settings.brokerUrl
+      ).trim(),
+      websocketUrl: (settings.autoEndpoint !== false
+        ? getRuntimeMqttEndpoints().websocketUrl
+        : settings.websocketUrl
+      ).trim(),
       clientId: settings.clientId.trim(),
       username: settings.username.trim(),
       password: settings.password,
@@ -874,6 +920,7 @@ export const useMonitoringStore = defineStore("monitoring", () => {
         alarmTitleTemplate: mqttSettings.value.alarmTitleTemplate,
         alarmDetailTemplate: mqttSettings.value.alarmDetailTemplate,
         qos: mqttSettings.value.qos,
+        autoEndpoint: mqttSettings.value.autoEndpoint,
       },
       staffTags: [...staffTags.value],
       staffCredentials: exportStaffCredentials(),

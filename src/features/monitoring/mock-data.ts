@@ -141,8 +141,8 @@ const cameras: Camera[] = [
     playback: {
       cameraId: "camera-01",
       preferredProtocol: "webrtc",
-      webrtcUrl: "http://10.208.236.131:8889/camera-01/whep",
-      hlsUrl: "http://10.208.236.131:8888/camera-01/index.m3u8",
+      webrtcUrl: "http://172.20.10.10:8889/camera-01/whep",
+      hlsUrl: "http://172.20.10.10:8888/camera-01/index.m3u8",
       flvUrl: null,
       expiresAt: "2099-12-31T23:59:59+08:00",
     },
