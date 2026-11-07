@@ -64,8 +64,11 @@ const activeProtocol = ref<PlaybackProtocol | null>(null);
 let generation = 0;
 let stopActiveMedia: (() => void) | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let playbackWatchdogTimer: ReturnType<typeof setInterval> | null = null;
 let reconnectAttempt = 0;
 const reconnectDelay = ref(0);
+let lastVideoTime = Number.NaN;
+let lastVideoProgressAt = 0;
 
 const activeProtocolLabel = computed(() => {
   if (state.value === "loading") return "正在连接";
@@ -101,6 +104,7 @@ const stateCopy = computed(() => {
 });
 
 function releaseMedia(): void {
+  stopPlaybackWatchdog();
   stopActiveMedia?.();
   stopActiveMedia = null;
 
@@ -112,10 +116,50 @@ function releaseMedia(): void {
   video.load();
 }
 
+function stopPlaybackWatchdog(): void {
+  if (playbackWatchdogTimer) clearInterval(playbackWatchdogTimer);
+  playbackWatchdogTimer = null;
+  lastVideoTime = Number.NaN;
+  lastVideoProgressAt = 0;
+}
+
+function startPlaybackWatchdog(): void {
+  stopPlaybackWatchdog();
+  lastVideoProgressAt = Date.now();
+  playbackWatchdogTimer = setInterval(() => {
+    const video = videoRef.value;
+    if (state.value !== "playing" || !video || document.visibilityState !== "visible") {
+      return;
+    }
+    if (Number.isNaN(lastVideoTime)) {
+      lastVideoTime = video.currentTime;
+      lastVideoProgressAt = Date.now();
+      return;
+    }
+    if (!video.paused && Math.abs(video.currentTime - lastVideoTime) > 0.05) {
+      lastVideoTime = video.currentTime;
+      lastVideoProgressAt = Date.now();
+      return;
+    }
+    if (Date.now() - lastVideoProgressAt >= 8_000) {
+      reconnectActivePlayback();
+    }
+  }, 2_000);
+}
+
 function clearReconnect(): void {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
   reconnectDelay.value = 0;
+}
+
+function reconnectActivePlayback(): void {
+  if (!props.playback || document.visibilityState !== "visible") return;
+  generation += 1;
+  releaseMedia();
+  state.value = "error";
+  emit("status", "OFFLINE");
+  scheduleReconnect();
 }
 
 function scheduleReconnect(): void {
@@ -137,15 +181,41 @@ async function playWebRtc(url: string, isCurrent: () => boolean): Promise<void> 
 
   const peer = new RTCPeerConnection();
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 6_000);
+  const timeout = window.setTimeout(() => controller.abort(), 4_000);
+  let disconnectedTimer: ReturnType<typeof setTimeout> | null = null;
+  let connectionActive = true;
   peer.addTransceiver("video", { direction: "recvonly" });
   peer.addTransceiver("audio", { direction: "recvonly" });
   peer.ontrack = (event) => {
     video.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+    event.track.addEventListener(
+      "ended",
+      () => {
+        if (connectionActive && isCurrent()) reconnectActivePlayback();
+      },
+      { once: true },
+    );
+  };
+  peer.oniceconnectionstatechange = () => {
+    if (!connectionActive || !isCurrent()) return;
+    if (peer.iceConnectionState === "failed") {
+      reconnectActivePlayback();
+      return;
+    }
+    if (peer.iceConnectionState === "disconnected") {
+      if (disconnectedTimer) clearTimeout(disconnectedTimer);
+      disconnectedTimer = setTimeout(() => {
+        if (peer.iceConnectionState !== "connected" && peer.iceConnectionState !== "completed") {
+          reconnectActivePlayback();
+        }
+      }, 4_000);
+    }
   };
 
   stopActiveMedia = () => {
+    connectionActive = false;
     window.clearTimeout(timeout);
+    if (disconnectedTimer) clearTimeout(disconnectedTimer);
     controller.abort();
     peer.close();
   };
@@ -172,25 +242,47 @@ async function playHls(url: string, isCurrent: () => boolean): Promise<void> {
   const video = videoRef.value;
   if (!video) throw new Error("video element unavailable");
 
-  if (video.canPlayType("application/vnd.apple.mpegurl")) {
+  const { default: Hls } = await import("hls.js");
+  if (!Hls.isSupported()) {
+    if (!video.canPlayType("application/vnd.apple.mpegurl")) {
+      throw new Error("HLS is not supported");
+    }
     video.src = url;
     await video.play();
     return;
   }
 
-  const { default: Hls } = await import("hls.js");
-  if (!Hls.isSupported()) throw new Error("HLS is not supported");
-
   const hls = new Hls({
     lowLatencyMode: true,
-    backBufferLength: 30,
+    backBufferLength: 10,
+    liveSyncDurationCount: 3,
+    maxBufferLength: 8,
   });
+  let manifestSettled = false;
   stopActiveMedia = () => hls.destroy();
   hls.on(Hls.Events.ERROR, (_event, data) => {
-    if (data.fatal && isCurrent()) scheduleNextCandidate();
+    if (data.fatal && manifestSettled && isCurrent()) scheduleNextCandidate();
+  });
+  const manifestReady = new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      manifestSettled = true;
+      reject(new Error("HLS manifest timeout"));
+    }, 10_000);
+    hls.once(Hls.Events.MANIFEST_PARSED, () => {
+      manifestSettled = true;
+      window.clearTimeout(timeout);
+      resolve();
+    });
+    hls.once(Hls.Events.ERROR, (_event, data) => {
+      if (!data.fatal) return;
+      manifestSettled = true;
+      window.clearTimeout(timeout);
+      reject(new Error(data.details));
+    });
   });
   hls.loadSource(url);
   hls.attachMedia(video);
+  await manifestReady;
   await video.play();
 }
 
@@ -253,6 +345,7 @@ async function tryCandidate(token: number): Promise<void> {
       clearReconnect();
       state.value = "playing";
       emit("status", "ONLINE");
+      startPlaybackWatchdog();
     }
   } catch {
     if (isCurrent()) scheduleNextCandidate();
@@ -312,15 +405,21 @@ watch(
 
 function handleVisibility(): void {
   if (document.visibilityState === "visible") {
-    if (state.value === "error") void preparePlayback();
+    if (state.value === "error") {
+      void preparePlayback();
+    } else if (state.value === "playing") {
+      startPlaybackWatchdog();
+    }
   } else {
     clearReconnect();
+    stopPlaybackWatchdog();
   }
 }
 
 onBeforeUnmount(() => {
   generation += 1;
   clearReconnect();
+  stopPlaybackWatchdog();
   document.removeEventListener("visibilitychange", handleVisibility);
   releaseMedia();
 });

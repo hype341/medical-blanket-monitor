@@ -14,6 +14,8 @@ if [[ ! -f /opt/mediamtx/mediamtx.yml ]]; then
   sed -i 's/^playback: false/playback: true/' /opt/mediamtx/mediamtx.yml
   sed -i 's/^  recordSegmentDuration: 1h/  recordSegmentDuration: 1m/' /opt/mediamtx/mediamtx.yml
   sed -i 's/^  recordDeleteAfter: 1d/  recordDeleteAfter: 24h/' /opt/mediamtx/mediamtx.yml
+  sed -i 's/^hlsVariant: lowLatency/hlsVariant: fmp4/' /opt/mediamtx/mediamtx.yml
+  sed -i 's/^hlsAlwaysRemux: false/hlsAlwaysRemux: true/' /opt/mediamtx/mediamtx.yml
 fi
 
 if docker inspect mediamtx >/dev/null 2>&1; then
@@ -49,7 +51,9 @@ MEDIAMTX_RTMP_PORT=1935
 EOF
 fi
 
-if [[ -n "${WIFI_CONNECTION:-}" ]]; then
+WIFI_CONNECTION="${WIFI_CONNECTION:-$(nmcli -t -f NAME,TYPE connection show --active |
+  awk -F: '$2 == "802-11-wireless" {print $1; exit}')}"
+if [[ -n "${WIFI_CONNECTION}" ]]; then
   nmcli connection modify "${WIFI_CONNECTION}" \
     connection.autoconnect yes \
     connection.autoconnect-priority 100 \

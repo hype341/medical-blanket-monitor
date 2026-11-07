@@ -39,6 +39,10 @@ sudo setvdserver monitor.example.com --no-restart
 `camera-stream.env.bak-日期-时间` 备份。服务器暂时不可连接时配置仍会保存，
 摄像头服务会持续自动重连。
 
+默认 HLS 使用标准 fMP4 分片，优先保证桌面浏览器持续刷新和断流重连稳定。
+安装脚本会自动把当前 Wi-Fi 连接设为开机自动连接，并关闭无线网卡省电模式；
+省电模式会造成视频分片停顿和 WebRTC 丢帧。
+
 ## 重新安装摄像头服务
 
 在 `deploy/jetson` 目录执行：
